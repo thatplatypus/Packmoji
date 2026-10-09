@@ -25,6 +25,7 @@ Packmoji has to build packages with `emojicodec`, and a package manager that gue
 | Can the compiler link a program? | Not dependably in the release. Its link line names the imported archives in the reverse of the order they were first met, so a package that imports a package comes after the one it needs, and a linker that reads an archive once finds nothing to take. The result of the linker and of the archiver is not looked at, so the compiler ends with status 0 either way. Grapevine and Blazemoji both compile with `-c` and link by hand, with every archive in one linker group. | `Compiler.cpp:79-97`; Grapevine's `build.sh` and its defect 44; Blazemoji's `LocalToolchain.cs:283-321` |
 | How is the compiler's version found? | There is no `--version`: it is answered with "Flag could not be matched". `--help` prints "Emojicode Compiler 1.0 beta 2." | `Options.cpp:27`; seen in a run |
 | What does the exit status mean? | 0 for `--help`, and 0 as well for arguments it cannot use. 1 for a compile error. 70 for an internal crash. And 0 when LLVM's verifier refuses the code that was generated, with `Detected in:` in the output. | `Options.cpp:71-83`; `main.cpp:79-95`. The statuses 0 and 1 were seen in a run. The crash's status is read from the source, and the verifier's case is Grapevine's defect 09: neither was seen here |
+| How do the compiler's own documents say to install a package? | With Yarn, told to install into `./packages`, the one folder the compiler searches with no flag. A package is published as source, with no object or interface file, and is compiled when it is installed, by a script of its own that leaves `🏛` and `lib<name>.a` beside its sources. After that `emojicodec main.emojic` finds it. | "Managing Emojicode Packages with Yarn", `src/guides/yarn.md` in `emojicode/emojicode.github.io`, read on 2026-10-09 |
 | Where does the compiler run? | The released binaries are for x86-64. On Apple Silicon they run in a container, under emulation. | Grapevine's `Dockerfile`; Blazemoji's CI |
 
 ## Decision
@@ -32,9 +33,10 @@ Packmoji has to build packages with `emojicodec`, and a package manager that gue
 1. **The compiler's version is read from the `--help` banner.** "1.0 beta 2" is the version `1.0.0-beta.2`. A compiler whose banner cannot be read is refused, with a diagnostic, and never guessed at.
 2. **The compiler is never asked to link or to archive.** `pmj` compiles each package and each program to an object with `-c`, makes each archive itself, and links a program itself with every package archive in one group, as Grapevine and Blazemoji do.
 3. **A compile has succeeded only when three things are true:** the status is 0, the output does not hold `Detected in:`, and the object file exists.
-4. **Each dependency is built into a directory of its own name** holding `🏛` and `lib<name>.a`, and the directory above them is given with `-S`. The compiler is run from a directory that has no `packages` folder, so that nothing stale is found first.
+4. **Each dependency is built into a directory of its own name** holding `🏛` and `lib<name>.a`. Where that directory is, is for the build milestone to settle between two places: `target/packages`, given to the compiler with `-S`, or `./packages`, which the compiler searches by itself and which its own Yarn guide uses, so that a compile run by hand finds the packages too. Whichever it is, `pmj` overwrites and removes only what it put there, and removes what the lockfile no longer names, so that nothing stale is found.
 5. **Native sources are compiled with `$CXX`, or `c++`,** with the compiler's own `include` directory on the include path, and their objects go into the package's archive.
-6. **Everything in 1 to 5 sits behind one interface, `ICompilerDriver`,** which the build milestone defines.
+6. **Every path given to the compiler or to the C++ compiler is absolute,** so that no file's name can be taken for an option. The manifest refuses a path that begins with `-` or `@`, but the name of a file that a pattern matches is checked nowhere else.
+7. **Everything in 1 to 6 sits behind one interface, `ICompilerDriver`,** which the build milestone defines.
 
 Four rules of the file formats follow from the findings, and are in force now:
 
@@ -48,6 +50,7 @@ Four rules of the file formats follow from the findings, and are in force now:
 - **Let the compiler link.** It is less code, and it fails for any package that imports a package, silently.
 - **Require the owner's fork, which fixes the link order and the exit status.** A registry is for everyone who has the released compiler. The fork is a second implementation of `ICompilerDriver`, or a check for what a compiler can do, not a requirement.
 - **Trust the exit status alone.** Three of the compiler's ways of failing end with status 0.
+- **Use Yarn itself, as the compiler's documents suggest.** It brings a second manifest and names without scopes, it runs a script from each package at install, which is someone else's code run with the user's rights, and it does not build a package that imports a package in the order that needs. What is taken from it is the folder, as one of the two places in decision 4.
 
 ## Consequences
 

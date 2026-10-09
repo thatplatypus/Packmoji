@@ -75,7 +75,7 @@ Only `package` and its first four keys are required. This is a whole manifest:
 | `package.version` | string | yes | A version: see [Versions](#versions) |
 | `package.kind` | string | yes | `"library"`, which others depend on, or `"app"`, which is run |
 | `package.emojicode` | string | yes | The oldest compiler the package builds with: see [The compiler requirement](#the-compiler-requirement) |
-| `package.description` | string | no | One line of 1 to 200 characters, with no space at either end |
+| `package.description` | string | no | One line of 1 to 200 characters, with no space at either end and no character that cannot be seen |
 | `package.license` | string | no | An SPDX license expression: see [License](#license) |
 | `package.repository` | string | no | Where the package's releases are: see [Repositories](#repositories). Default `github.com/<scope>/<name>` |
 | `dependencies` | object | no | Each key is a full package name and each value a requirement: see [Requirements](#requirements) |
@@ -119,7 +119,10 @@ A path is written with `/` between its parts and stays inside the package.
 
 - No part is empty, so there is no leading `/`, no trailing `/` and no `//`.
 - No part is `.` or `..`.
+- No part begins with `-` or `@`, which a compiler would take for an option or for a file of options.
+- No part begins or ends with a space, and none ends with a dot. Some platforms drop both.
 - There is no `\`, no `:` and no control character.
+- There is no character that cannot be seen or that reorders text, such as a zero width space or a right-to-left override. The joiner and the tags that emoji are built with are the exception, so a file may be named with any emoji.
 - A path is at most 255 characters.
 
 A pattern is a path that may also hold these:
@@ -282,6 +285,7 @@ A lockfile must agree with itself:
 
 - A package has one entry, and no two entries share a bare name.
 - Every entry in a `dependencies` list is a package in `packages`, at exactly that version, and is not the package itself.
+- No package is named twice in `root`, in one list or across the two.
 - Every entry in `root` is answered by a package in `packages` whose version satisfies it.
 - Every package in `packages` is led to from `root`.
 - `releaseTag` and `asset` are the ones that belong to the entry's name and version.
@@ -298,7 +302,8 @@ A lockfile must agree with itself:
 - They are strict JSON: no comments and no trailing commas.
 - A key may appear once in an object.
 - Either kind of line end is accepted.
-- `pmj` reports every problem it finds in a file at once, each with its line and column. A column counts characters, so an emoji is one column.
+- `pmj` reports the problems it finds in a file at once, each with its line and column, and not only the first. It lists up to a hundred and says how many more there are.
+- A column counts characters, so an emoji is one column.
 
 **Writing**
 
@@ -309,6 +314,8 @@ A lockfile must agree with itself:
 ## Diagnostics
 
 Every problem `pmj` reports has a code, and says what failed, why, and what to do next. A code never changes its meaning, so a tool can rely on it.
+
+A diagnostic often repeats text from the file, and the file may be someone else's. That text is made fit to print: a control character, or one that cannot be seen or that reorders text, is shown as its number, as in `\u{001B}`, and text of more than a thousand characters is cut.
 
 | Code | Raised when |
 |---|---|
@@ -324,12 +331,12 @@ Every problem `pmj` reports has a code, and says what failed, why, and what to d
 | `requirement.invalid` | A requirement is not two or three numbers |
 | `compiler.invalid` | `package.emojicode` is not `>=` and a version |
 | `kind.invalid` | `package.kind` is neither `library` nor `app` |
-| `description.invalid` | `package.description` is empty, too long, more than one line, or has a space at an end |
+| `description.invalid` | `package.description` is empty, too long, more than one line, has a space at an end, or holds a character that cannot be seen |
 | `license.invalid` | `package.license` is not an SPDX license expression |
 | `repository.invalid` | A repository is not `github.com/<owner>/<repo>` in lowercase |
 | `repository.owner-mismatch` | A repository's owner is not the package's scope |
 | `dependency.self` | A package depends on itself |
-| `dependency.duplicate` | A package is in both `dependencies` and `devDependencies` |
+| `dependency.duplicate` | A package is in both `dependencies` and `devDependencies`, or is named twice in a lockfile's `root` |
 | `dependency.name-collision` | Two packages in one manifest share a bare name |
 | `path.invalid` | A path leaves the package or is not written as described above |
 | `glob.invalid` | A pattern is not written as described above |
