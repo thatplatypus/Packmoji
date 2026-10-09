@@ -7,7 +7,7 @@ namespace Packmoji.Core.Tests.TestSupport
     {
         /// <summary>
         /// Holds a diagnostic to the rule every Packmoji error follows: it says what failed, why, and
-        /// what to do next, and it holds no em dash.
+        /// what to do next, it holds no em dash, and nothing in it could drive or deceive a terminal.
         /// </summary>
         public static Diagnostic ShouldBeComplete(this Diagnostic? diagnostic)
         {
@@ -17,6 +17,7 @@ namespace Packmoji.Core.Tests.TestSupport
             diagnostic.Reason.ShouldNotBeNullOrWhiteSpace();
             diagnostic.Fix.ShouldNotBeNullOrWhiteSpace();
             (diagnostic.Message + diagnostic.Reason + diagnostic.Fix).ShouldNotContain(char.ConvertFromUtf32(0x2014));
+            TextSafety.HasUnsafe(diagnostic.Message + diagnostic.Reason + diagnostic.Fix).ShouldBeFalse();
             return diagnostic;
         }
     }
