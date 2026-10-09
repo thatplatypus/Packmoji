@@ -32,6 +32,23 @@ namespace Packmoji.Core.Diagnostics
             }
         }
 
+        /// <summary>
+        /// Adds a diagnostic that is made only if there is room for it. Saying how a graph came to a
+        /// problem takes a walk through the graph, and a walk for a diagnostic that would only be
+        /// counted is work a hostile graph could ask for ten thousand times.
+        /// </summary>
+        public void Add(Func<Diagnostic> make)
+        {
+            if (_kept.Count < Limit)
+            {
+                _kept.Add(make());
+            }
+            else
+            {
+                Omitted++;
+            }
+        }
+
         public void Clear()
         {
             _kept.Clear();
