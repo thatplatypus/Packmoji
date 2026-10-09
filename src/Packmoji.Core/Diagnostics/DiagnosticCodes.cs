@@ -6,6 +6,7 @@ namespace Packmoji.Core.Diagnostics
     /// </summary>
     public static class DiagnosticCodes
     {
+        public const string FileTooLarge = "file.too-large";
         public const string JsonSyntax = "json.syntax";
         public const string JsonDuplicateKey = "json.duplicate-key";
         public const string JsonWrongType = "json.wrong-type";
@@ -41,8 +42,17 @@ namespace Packmoji.Core.Diagnostics
         public const string LockDanglingDependency = "lock.dangling-dependency";
         public const string LockRootUnsatisfied = "lock.root-unsatisfied";
         public const string LockUnreachable = "lock.unreachable";
+        public const string LockMismatch = "lock.mismatch";
         public const string PinInvalid = "pin.invalid";
         public const string Sha256Invalid = "sha256.invalid";
         public const string VerifiedInvalid = "verified.invalid";
+        public const string ResolveVersionMissing = "resolve.version-missing";
+        public const string ResolveYanked = "resolve.yanked";
+        public const string ResolveYankedLocked = "resolve.yanked-locked";
+        public const string ResolveQuarantined = "resolve.quarantined";
+        public const string ResolveLineConflict = "resolve.line-conflict";
+        public const string ResolveNameCollision = "resolve.name-collision";
+        public const string ResolveCycle = "resolve.cycle";
+        public const string ResolveGraphTooLarge = "resolve.graph-too-large";
     }
 }

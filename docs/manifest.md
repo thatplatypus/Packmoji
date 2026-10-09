@@ -317,8 +317,11 @@ Every problem `pmj` reports has a code, and says what failed, why, and what to d
 
 A diagnostic often repeats text from the file, and the file may be someone else's. That text is made fit to print: a control character, or one that cannot be seen or that reorders text, is shown as its number, as in `\u{001B}`, and text of more than a thousand characters is cut.
 
+Nearly every code is an error, which stops what `pmj` was doing. One is a warning, `resolve.yanked-locked`: it is reported, and the work goes on.
+
 | Code | Raised when |
 |---|---|
+| `file.too-large` | A manifest is over 1 MiB, or a lockfile is over 4 MiB |
 | `json.syntax` | A file is not strict JSON, is not UTF-8, is empty, or holds merge conflict markers |
 | `json.duplicate-key` | A key appears twice in one object |
 | `json.wrong-type` | A value is of the wrong kind, such as a number where a string belongs |
@@ -354,6 +357,15 @@ A diagnostic often repeats text from the file, and the file may be someone else'
 | `lock.dangling-dependency` | An entry depends on a package or a version the lockfile does not hold |
 | `lock.root-unsatisfied` | Nothing in the lockfile answers an entry of `root` |
 | `lock.unreachable` | Nothing leads to an entry |
+| `lock.mismatch` | A lockfile's digest or repository for a version is not what is published |
 | `pin.invalid` | A `<full name>@<version>` string in a lockfile has no `@` between its two parts |
 | `sha256.invalid` | A digest is not 64 hexadecimal digits in lowercase |
 | `verified.invalid` | `verified` is neither `checksum` nor `attestation` |
+| `resolve.version-missing` | A version that a requirement names was never published |
+| `resolve.yanked` | The version a build would use has been yanked, and the lockfile does not already hold it |
+| `resolve.yanked-locked` | A version the lockfile holds has been yanked. This is the warning |
+| `resolve.quarantined` | The version a build would use, or one the lockfile holds, is quarantined |
+| `resolve.line-conflict` | One package is asked for on two compatibility lines |
+| `resolve.name-collision` | Two packages of one build, or one of them and the project itself, share a bare name |
+| `resolve.cycle` | Packages depend on one another in a circle, in a graph being resolved or in a lockfile being read |
+| `resolve.graph-too-large` | A graph of dependencies has more than 10,000 versions in it |
