@@ -2,7 +2,9 @@ namespace Packmoji.Core.Manifests
 {
     /// <summary>
     /// What a path in a manifest may be. A path stays inside the package and is spelled one way on
-    /// every platform, because what it selects is packed into an archive that other machines unpack.
+    /// every platform, because what it selects is packed into an archive that other machines unpack,
+    /// and it is handed to a compiler as an argument, where it must not be mistaken for an option. A
+    /// published manifest can never be made stricter, so these rules are strict from the start.
     /// </summary>
     internal static class PathRules
     {
@@ -36,11 +38,6 @@ namespace Packmoji.Core.Manifests
                     return "it holds a colon";
                 }
 
-                if (char.IsControl(c))
-                {
-                    return "it holds a control character";
-                }
-
                 if (c is '[' or ']' or '{' or '}')
                 {
                     return glob ? "character classes and braces are not supported in a pattern" : "it holds a character that only a pattern could use";
@@ -50,6 +47,11 @@ namespace Packmoji.Core.Manifests
                 {
                     return "it holds a wildcard, and this must name one file or directory";
                 }
+            }
+
+            if (TextSafety.HasUnsafe(text))
+            {
+                return "it holds a control character, or a character that cannot be seen or that reorders text";
             }
 
             if (glob && text[0] == '!')
@@ -72,6 +74,22 @@ namespace Packmoji.Core.Manifests
                 if (part.Contains("**", StringComparison.Ordinal) && part != "**")
                 {
                     return "** must be a whole part of the pattern, as in src/**/x";
+                }
+
+                if (part[0] is '-' or '@')
+                {
+                    return "a part of it begins with - or @, which a compiler would take for an option or for a file of options";
+                }
+
+                if (part[0] == ' ' || part[^1] == ' ')
+                {
+                    return "a part of it begins or ends with a space";
+                }
+
+                // Windows drops a dot or a space from the end of a name, so ".. " would be ".." there.
+                if (part[^1] == '.')
+                {
+                    return "a part of it ends with a dot, which some platforms drop";
                 }
             }
 

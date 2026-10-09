@@ -29,9 +29,9 @@ namespace Packmoji.Core.Manifests
             {
                 problem = $"it is longer than {MaxDescriptionLength} characters";
             }
-            else if (text.Any(char.IsControl))
+            else if (TextSafety.HasUnsafe(text))
             {
-                problem = "it holds a line break or another control character";
+                problem = "it holds a line break, a control character, or a character that cannot be seen or that reorders text";
             }
             else if (char.IsWhiteSpace(text[0]) || char.IsWhiteSpace(text[^1]))
             {

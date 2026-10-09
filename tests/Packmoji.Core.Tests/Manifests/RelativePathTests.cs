@@ -16,7 +16,6 @@ namespace Packmoji.Core.Tests.Manifests
         [InlineData("a/b/c/d.txt")]
         [InlineData("with space/file name.txt")]
         [InlineData(".hidden/x")]
-        [InlineData("...")]
         [InlineData("!important")]
         public void A_path_inside_the_package_is_accepted(string text)
         {
