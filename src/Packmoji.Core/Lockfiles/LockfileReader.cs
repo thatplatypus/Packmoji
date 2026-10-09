@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using Packmoji.Core.Diagnostics;
+using Packmoji.Core.Graphs;
 using Packmoji.Core.Identity;
 using Packmoji.Core.Json;
 using Packmoji.Core.Manifests;
@@ -122,6 +123,13 @@ namespace Packmoji.Core.Lockfiles
             // A lockfile that does not hold together is checked only once every part of it has been
             // read: a part that could not be read would otherwise look like a part that is missing.
             CheckConsistency(dependencies.Concat(devDependencies).ToList(), entries, diagnostics);
+            if (diagnostics.Count == 0)
+            {
+                // A circle is looked for only in a lockfile that otherwise holds together: each package
+                // then has one entry, and everything an entry depends on is an entry too.
+                CheckCircles(entries, diagnostics);
+            }
+
             if (diagnostics.Count > 0)
             {
                 return null;
@@ -429,6 +437,37 @@ namespace Packmoji.Core.Lockfiles
                     "neither the manifest's requirements nor any package they lead to depends on it",
                     RegenerateFix,
                     entry.Location));
+            }
+        }
+
+        private static void CheckCircles(List<Entry> entries, DiagnosticList diagnostics)
+        {
+            var byName = entries.ToDictionary(entry => entry.Package.Name);
+            var circles = CycleFinder.Find(entries.ToDictionary(
+                entry => entry.Package.Name,
+                entry => (IReadOnlyList<PackageName>)entry.Package.Dependencies.Select(dependency => dependency.Name).ToList()));
+
+            foreach (var circle in circles)
+            {
+                // The circle is closed where its last package depends on its first.
+                var last = byName[circle[^1]];
+                var closing = 0;
+                while (last.Package.Dependencies[closing].Name != circle[0])
+                {
+                    closing++;
+                }
+
+                var steps = Chain.Text(circle.Count + 1, index =>
+                {
+                    var package = byName[circle[index % circle.Count]].Package;
+                    return $"{package.Name}@{package.Version}";
+                });
+                diagnostics.Add(new Diagnostic(
+                    DiagnosticCodes.ResolveCycle,
+                    $"\"{circle[0]}\" depends on itself through other packages.",
+                    $"Emojicode cannot build packages that need one another in a circle: {steps}",
+                    RegenerateFix,
+                    last.PinLocations[closing]));
             }
         }
 

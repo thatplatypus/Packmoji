@@ -289,6 +289,7 @@ A lockfile must agree with itself:
 - Every entry in `root` is answered by a package in `packages` whose version satisfies it.
 - Every package in `packages` is led to from `root`.
 - `releaseTag` and `asset` are the ones that belong to the entry's name and version.
+- No package depends on itself through other packages. Emojicode cannot build such a circle, and `pmj` never writes one.
 
 ### The canonical form
 
