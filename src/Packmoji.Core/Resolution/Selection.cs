@@ -22,6 +22,12 @@ namespace Packmoji.Core.Resolution
         public IReadOnlyList<Package> Packages { get; }
 
         /// <summary>
+        /// Whether every package has a selected version that was published. Until then there is no
+        /// one graph of selected versions, and so nothing to look for a circle in.
+        /// </summary>
+        public bool IsComplete => Packages.All(package => package.Selected?.Published is not null);
+
+        /// <summary>
         /// The packages a build would use, in order of full name: those the project asks for, and
         /// those their selected versions lead to. A package that only a superseded version asks for
         /// has a selected version and is not among these, since nothing that is built depends on it.

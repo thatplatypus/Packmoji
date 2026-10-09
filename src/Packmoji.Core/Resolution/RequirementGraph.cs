@@ -25,6 +25,7 @@ namespace Packmoji.Core.Resolution
 
         private readonly Dictionary<(PackageName Name, SemanticVersion Version), Node> _byVersion = [];
         private readonly List<Node> _nodes = [];
+        private readonly List<Requirement> _onProject = [];
 
         private RequirementGraph(PackageName project)
         {
@@ -36,13 +37,26 @@ namespace Packmoji.Core.Resolution
         /// <summary>Every version that a requirement names, in the order they were found.</summary>
         public IReadOnlyList<Node> Nodes => _nodes;
 
+        /// <summary>
+        /// The requirements that name the project itself, in the order they were found and at most one
+        /// for each version that makes one. The project is what is being built, so no version of it is
+        /// ever asked of the source, and each of these is a circle.
+        /// </summary>
+        public IReadOnlyList<Requirement> OnProject => _onProject;
+
+        /// <summary>
+        /// The requirement that would have led to one version more than a graph may hold. Null for a
+        /// graph that was looked through to its end. One that was not is good for nothing but saying so.
+        /// </summary>
+        public Requirement? Overflow { get; private set; }
+
         public static async Task<RequirementGraph> BuildAsync(Manifest manifest, IPackageSource source, CancellationToken cancellationToken)
         {
             var graph = new RequirementGraph(manifest.Package.Name);
             var waiting = new Queue<Node>();
             graph.Follow(null, (manifest.Dependencies ?? []).Concat(manifest.DevDependencies ?? []), waiting);
 
-            while (waiting.TryDequeue(out var node))
+            while (graph.Overflow is null && waiting.TryDequeue(out var node))
             {
                 if (await source.AskAsync(node.Name, node.Version, cancellationToken) is { } published)
                 {
@@ -81,12 +95,30 @@ namespace Packmoji.Core.Resolution
                 .ThenBy(dependency => dependency.Requirement.Minimum)
                 .ThenBy(dependency => dependency.Requirement.Text, StringComparer.Ordinal);
 
+            var asksForProject = false;
             foreach (var dependency in inOrder)
             {
+                if (dependency.Name == Project)
+                {
+                    if (!asksForProject)
+                    {
+                        _onProject.Add(new Requirement(asker, dependency));
+                        asksForProject = true;
+                    }
+
+                    continue;
+                }
+
                 var key = (dependency.Name, dependency.Requirement.Minimum);
                 if (_byVersion.ContainsKey(key))
                 {
                     continue;
+                }
+
+                if (_nodes.Count == MaxNodes)
+                {
+                    Overflow = new Requirement(asker, dependency);
+                    return;
                 }
 
                 var node = new Node(new Requirement(asker, dependency));

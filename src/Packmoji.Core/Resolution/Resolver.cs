@@ -1,4 +1,6 @@
 using Packmoji.Core.Diagnostics;
+using Packmoji.Core.Graphs;
+using Packmoji.Core.Identity;
 using Packmoji.Core.Lockfiles;
 using Packmoji.Core.Manifests;
 
@@ -24,10 +26,24 @@ namespace Packmoji.Core.Resolution
             ArgumentNullException.ThrowIfNull(source);
 
             var graph = await RequirementGraph.BuildAsync(manifest, source, cancellationToken);
+            if (graph.Overflow is { } overflow)
+            {
+                // Nothing else can be said of a graph that was not looked through to its end.
+                return ResolveResult.Stopped(ResolveDiagnostics.GraphTooLarge(graph, overflow));
+            }
+
             var selection = Selection.Of(graph, manifest);
             var locked = (existing?.Packages ?? []).ToLookup(package => (package.Name, package.Version));
             var errors = new DiagnosticList();
             var warnings = new DiagnosticList();
+
+            // What stops a resolution is reported in one order, whatever was found first: the order
+            // of the passes below, and within each of them by name.
+            var asked = (manifest.Dependencies ?? []).Concat(manifest.DevDependencies ?? []).Select(dependency => dependency.Name).ToList();
+            foreach (var name in asked.GroupBy(name => name).Where(named => named.Count() > 1).Select(named => named.Key).Order())
+            {
+                errors.Add(() => ResolveDiagnostics.RootDuplicate(graph.Project, name));
+            }
 
             foreach (var node in graph.Nodes.Where(node => node.Published is null).OrderBy(node => node.Name).ThenBy(node => node.Version))
             {
@@ -56,6 +72,31 @@ namespace Packmoji.Core.Resolution
             foreach (var package in selection.Packages.Where(package => package.Selected is null))
             {
                 errors.Add(() => ResolveDiagnostics.LineConflict(graph, package));
+            }
+
+            foreach (var named in selection.Packages.GroupBy(package => package.Name.Name, StringComparer.Ordinal))
+            {
+                if (named.Count() > 1 || named.Key == graph.Project.Name)
+                {
+                    errors.Add(() => ResolveDiagnostics.NameCollision(graph, named.ToList()));
+                }
+            }
+
+            foreach (var requirement in graph.OnProject)
+            {
+                errors.Add(() => ResolveDiagnostics.CycleThroughProject(graph, requirement));
+            }
+
+            if (selection.IsComplete)
+            {
+                var used = selection.Used.ToDictionary(use => use.Published.Name, use => use.Published);
+                var circles = CycleFinder.Find(used.ToDictionary(
+                    use => use.Key,
+                    use => (IReadOnlyList<PackageName>)use.Value.Dependencies.Select(dependency => dependency.Name).ToList()));
+                foreach (var circle in circles)
+                {
+                    errors.Add(() => ResolveDiagnostics.Cycle(circle.Select(name => used[name]).ToList()));
+                }
             }
 
             foreach (var (node, published) in selection.Used.Where(use => !use.Published.Source.BelongsTo(use.Published.Name)))

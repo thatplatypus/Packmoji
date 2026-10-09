@@ -31,6 +31,9 @@ namespace Packmoji.Core.Resolution
         [MemberNotNullWhen(true, nameof(Graph))]
         public bool Succeeded => Graph is not null;
 
+        /// <summary>The result of a resolution that one problem stopped before anything else could be known.</summary>
+        internal static ResolveResult Stopped(Diagnostic error) => new(null, [error], 0);
+
         /// <param name="graph">Asked for only when there is no error, so that a graph that could not be whole is never made.</param>
         internal static ResolveResult From(DiagnosticList errors, DiagnosticList warnings, Func<ResolvedGraph> graph)
         {

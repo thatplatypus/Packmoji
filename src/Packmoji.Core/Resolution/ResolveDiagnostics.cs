@@ -1,4 +1,5 @@
 using Packmoji.Core.Diagnostics;
+using Packmoji.Core.Graphs;
 using Packmoji.Core.Identity;
 using Packmoji.Core.Lockfiles;
 using Packmoji.Core.Manifests;
@@ -14,6 +15,13 @@ namespace Packmoji.Core.Resolution
     {
         private const string Manifest = ManifestReader.FileName;
         private const string Lock = LockfileReader.FileName;
+
+        public static Diagnostic RootDuplicate(PackageName project, PackageName name) =>
+            new(
+                DiagnosticCodes.DependencyDuplicate,
+                $"\"{name}\" is asked for twice by \"{project}\".",
+                "a manifest names a package once, in one of its two tables",
+                $"keep one requirement on \"{name}\" in {Manifest}");
 
         public static Diagnostic VersionMissing(RequirementGraph graph, RequirementGraph.Node node) =>
             new(
@@ -53,6 +61,66 @@ namespace Packmoji.Core.Resolution
                 "a build holds one version of a package, and no version is on two lines: "
                     + string.Join("; ", package.Lines.Select(node => $"{CompatibilityLine.Of(node.Version)} is asked for by {graph.ChainTo(node.Via)}")),
                 $"raise the minimums that lead to the older line, until every requirement on \"{package.Name}\" is on one line");
+
+        /// <param name="packages">The packages of one bare name, in order of full name. One alone shares its name with the project.</param>
+        public static Diagnostic NameCollision(RequirementGraph graph, IReadOnlyList<Selection.Package> packages)
+        {
+            var bare = packages[0].Name.Name;
+            var names = Listed(packages.Select(package => $"\"{package.Name}\""));
+            var chains = string.Join("; ", packages.Select(package => graph.ChainTo(package.Nodes[0].Via)));
+            return bare == graph.Project.Name
+                ? new Diagnostic(
+                    DiagnosticCodes.ResolveNameCollision,
+                    $"{names} {(packages.Count == 1 ? "has" : "have")} the same name as this project, \"{graph.Project}\".",
+                    $"Emojicode imports a package by its bare name, so a project named \"{bare}\" cannot be built with another package of that name: {chains}",
+                    "stop depending on what brings it in, or give this project another name")
+                : new Diagnostic(
+                    DiagnosticCodes.ResolveNameCollision,
+                    $"{names} have the same name.",
+                    $"Emojicode imports a package by its bare name, so two packages named \"{bare}\" cannot be in one build: {chains}",
+                    "depend on only one of them");
+        }
+
+        public static Diagnostic CycleThroughProject(RequirementGraph graph, RequirementGraph.Requirement requirement) =>
+            new(
+                DiagnosticCodes.ResolveCycle,
+                $"\"{graph.Project}\" depends on itself.",
+                $"a package cannot be built from something that needs the package itself: {graph.ChainTo(requirement)}",
+                requirement.Asker is { } asker
+                    ? $"stop depending on \"{asker.Name}\", or use a version of it that does not depend on \"{graph.Project}\""
+                    : $"remove \"{graph.Project}\" from its own {Manifest}");
+
+        /// <param name="circle">The selected versions of a circle, each depending on the next and the last on the first.</param>
+        public static Diagnostic Cycle(IReadOnlyList<PublishedVersion> circle)
+        {
+            var first = circle[0];
+            var closing = circle[^1].Dependencies
+                .Where(dependency => dependency.Name == first.Name)
+                .OrderBy(dependency => dependency.Requirement.Minimum)
+                .ThenBy(dependency => dependency.Requirement.Text, StringComparer.Ordinal)
+                .First();
+            var steps = Chain.Text(circle.Count + 1, index => index < circle.Count
+                ? $"{circle[index].Name}@{circle[index].Version}"
+                : $"{first.Name}@{closing.Requirement.Text}");
+            return circle.Count == 1
+                ? new Diagnostic(
+                    DiagnosticCodes.ResolveCycle,
+                    $"\"{first.Name}\" depends on itself.",
+                    $"Emojicode cannot build a package that needs itself: {steps}",
+                    $"ask in {Manifest} for a version of it that does not, if there is one, and tell its author if there is not")
+                : new Diagnostic(
+                    DiagnosticCodes.ResolveCycle,
+                    $"\"{first.Name}\" depends on itself through other packages.",
+                    $"Emojicode cannot build packages that need one another in a circle: {steps}",
+                    $"ask in {Manifest} for versions of them that do not need one another, if there are any, and tell their authors if there are not");
+        }
+
+        public static Diagnostic GraphTooLarge(RequirementGraph graph, RequirementGraph.Requirement last) =>
+            new(
+                DiagnosticCodes.ResolveGraphTooLarge,
+                $"What \"{graph.Project}\" depends on is more than {RequirementGraph.MaxNodes} versions.",
+                $"no real project is near that, so pmj stopped looking; the last requirement it followed was {graph.ChainTo(last)}",
+                "look at what that chain brings in, and at where pmj gets its package information from");
 
         public static Diagnostic OwnerMismatch(RequirementGraph graph, RequirementGraph.Node node, PublishedVersion published) =>
             new(
