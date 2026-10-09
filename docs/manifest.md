@@ -321,6 +321,8 @@ A diagnostic often repeats text from the file, and the file may be someone else'
 
 Nearly every code is an error, which stops what `pmj` was doing. One is a warning, `resolve.yanked-locked`: it is reported, and the work goes on.
 
+The codes that begin with `resolve.`, and `lock.mismatch`, are raised when `pmj` chooses versions or checks a lockfile against what is published. [resolution.md](resolution.md) says what to do about each.
+
 | Code | Raised when |
 |---|---|
 | `file.too-large` | A manifest is over 1 MiB, or a lockfile is over 4 MiB |

@@ -26,6 +26,7 @@
     <!-- The reference for the two file formats travels with the tests, so that a test can hold its
          examples to the readers. It is written in Task 15, and until then there is nothing to copy. -->
     <None Include="..\..\docs\manifest.md" Link="docs\manifest.md" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\docs\manifest.md')" />
+    <None Include="..\..\docs\resolution.md" Link="docs\resolution.md" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\docs\resolution.md')" />
   </ItemGroup>
 
 </Project>
