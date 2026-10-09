@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Runs the trim and AOT analyzers on every build, so nothing that pmj could not use as a
+         native binary gets into Core unnoticed. -->
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Packmoji.Core.Tests" />
+  </ItemGroup>
+
+</Project>
