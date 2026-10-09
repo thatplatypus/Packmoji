@@ -23,7 +23,7 @@ namespace Packmoji.Core.Lockfiles
             json.WriteEndObject();
 
             json.WriteStartArray("packages");
-            foreach (var package in lockfile.Packages.OrderBy(package => package.Name))
+            foreach (var package in lockfile.Packages.OrderBy(package => package.Name).ThenBy(package => package.Version))
             {
                 json.WriteStartObject();
                 json.WriteString("name", package.Name.ToString());
@@ -35,7 +35,7 @@ namespace Packmoji.Core.Lockfiles
                 json.WriteString("verified", VerificationLevels.Name(package.Verified));
                 json.WriteStrings(
                     "dependencies",
-                    package.Dependencies.OrderBy(dependency => dependency.Name).Select(dependency => $"{dependency.Name}@{dependency.Version}"));
+                    package.Dependencies.OrderBy(dependency => dependency.Name).ThenBy(dependency => dependency.Version).Select(dependency => $"{dependency.Name}@{dependency.Version}"));
                 json.WriteEndObject();
             }
 
@@ -45,6 +45,10 @@ namespace Packmoji.Core.Lockfiles
         }
 
         private static IEnumerable<string> Requirements(IReadOnlyList<Dependency> requirements) =>
-            requirements.OrderBy(requirement => requirement.Name).Select(requirement => $"{requirement.Name}@{requirement.Requirement.Text}");
+            requirements
+                .OrderBy(requirement => requirement.Name)
+                .ThenBy(requirement => requirement.Requirement.Minimum)
+                .ThenBy(requirement => requirement.Requirement.Text, StringComparer.Ordinal)
+                .Select(requirement => $"{requirement.Name}@{requirement.Requirement.Text}");
     }
 }

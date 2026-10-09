@@ -282,6 +282,20 @@ namespace Packmoji.Core.Lockfiles
 
         private static void CheckConsistency(List<Located<Dependency>> requirements, List<Entry> entries, DiagnosticList diagnostics)
         {
+            var named = new HashSet<PackageName>();
+            foreach (var requirement in requirements)
+            {
+                if (!named.Add(requirement.Value.Name))
+                {
+                    diagnostics.Add(new Diagnostic(
+                        DiagnosticCodes.DependencyDuplicate,
+                        $"\"{requirement.Value.Name}\" is asked for twice in \"root\".",
+                        "a manifest names a package once, in one of its two tables, so a lockfile written from one does too",
+                        RegenerateFix,
+                        requirement.Location));
+                }
+            }
+
             var byName = new Dictionary<PackageName, LockedPackage>();
             var byBareName = new Dictionary<string, PackageName>(StringComparer.Ordinal);
             foreach (var entry in entries)
