@@ -12,6 +12,14 @@ namespace Packmoji.Core.Json
         private readonly ReadOnlyMemory<byte> _utf8;
         private readonly List<int> _lineStarts = [0];
 
+        // Where the last lookup ended. The reader asks for places in rising order, so the next place is
+        // nearly always further along the same line, and only the bytes between the two are counted.
+        // Counting from the start of the line each time is quadratic in the length of the line: a file
+        // of a few hundred kilobytes on one line would take a minute to read.
+        private int _lastLine = -1;
+        private int _lastOffset;
+        private int _lastCodePoints;
+
         public SourceText(ReadOnlyMemory<byte> utf8, string file)
         {
             _utf8 = utf8;
@@ -39,7 +47,14 @@ namespace Packmoji.Core.Json
                 line = ~line - 1;
             }
 
-            return new SourceLocation(File, line + 1, CodePoints(_lineStarts[line], target) + 1);
+            var codePoints = line == _lastLine && target >= _lastOffset
+                ? _lastCodePoints + CodePoints(_lastOffset, target)
+                : CodePoints(_lineStarts[line], target);
+
+            _lastLine = line;
+            _lastOffset = target;
+            _lastCodePoints = codePoints;
+            return new SourceLocation(File, line + 1, codePoints + 1);
         }
 
         /// <summary>The place of a line and a byte within it, both counted from zero, which is how the JSON reader reports an error.</summary>
