@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>pmj</AssemblyName>
+    <RootNamespace>Packmoji.Cli</RootNamespace>
+    <PublishAot>true</PublishAot>
+    <!-- pmj compares and sorts by code point everywhere, so it has no use for culture data. Without
+         it the binary is smaller, and it behaves the same on every machine. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Packmoji.Core\Packmoji.Core.csproj" />
+  </ItemGroup>
+
+</Project>
