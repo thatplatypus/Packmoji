@@ -25,6 +25,7 @@ namespace Packmoji.Core.Resolution
 
             var graph = await RequirementGraph.BuildAsync(manifest, source, cancellationToken);
             var selection = Selection.Of(graph, manifest);
+            var locked = (existing?.Packages ?? []).ToLookup(package => (package.Name, package.Version));
             var errors = new DiagnosticList();
             var warnings = new DiagnosticList();
 
@@ -33,9 +34,41 @@ namespace Packmoji.Core.Resolution
                 errors.Add(() => ResolveDiagnostics.VersionMissing(graph, node));
             }
 
+            foreach (var (node, published) in selection.Used.Where(use => use.Published.Status == VersionStatus.Yanked))
+            {
+                // What the lockfile already holds goes on being used: a yank must not break a build
+                // that worked yesterday. Nothing else may start to use the version.
+                if (locked.Contains((published.Name, published.Version)))
+                {
+                    warnings.Add(() => ResolveDiagnostics.YankedLocked(published.Name, published.Version));
+                }
+                else
+                {
+                    errors.Add(() => ResolveDiagnostics.Yanked(graph, node));
+                }
+            }
+
+            foreach (var (node, _) in selection.Used.Where(use => use.Published.Status == VersionStatus.Quarantined))
+            {
+                errors.Add(() => ResolveDiagnostics.Quarantined(graph, node));
+            }
+
             foreach (var package in selection.Packages.Where(package => package.Selected is null))
             {
                 errors.Add(() => ResolveDiagnostics.LineConflict(graph, package));
+            }
+
+            foreach (var (node, published) in selection.Used.Where(use => !use.Published.Source.BelongsTo(use.Published.Name)))
+            {
+                errors.Add(() => ResolveDiagnostics.OwnerMismatch(graph, node, published));
+            }
+
+            foreach (var (_, published) in selection.Used)
+            {
+                foreach (var held in locked[(published.Name, published.Version)].Where(held => held.Sha256 != published.Sha256 || held.Source != published.Source))
+                {
+                    errors.Add(() => ResolveDiagnostics.LockMismatch(held, published));
+                }
             }
 
             return ResolveResult.From(errors, warnings, () => Resolved(selection));
