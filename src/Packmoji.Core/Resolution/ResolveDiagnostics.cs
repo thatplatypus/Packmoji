@@ -32,6 +32,13 @@ namespace Packmoji.Core.Resolution
                     ? $"ask for a later version of \"{asker.Name}\", one that asks for a version of \"{node.Name}\" that was published; {asker.Name} {asker.Version} is published and cannot change, so if there is none, its author has to publish one"
                     : $"ask for a version of \"{node.Name}\" that was published, in {Manifest}");
 
+        public static Diagnostic LockedVersionMissing(LockedPackage locked) =>
+            new(
+                DiagnosticCodes.ResolveVersionMissing,
+                $"Version {locked.Version} of \"{locked.Name}\" is not published.",
+                $"{Lock} holds it, and a version that is not published cannot be fetched",
+                LockfileReader.RegenerateFix);
+
         public static Diagnostic Yanked(RequirementGraph graph, RequirementGraph.Node node) =>
             new(
                 DiagnosticCodes.ResolveYanked,
@@ -53,6 +60,9 @@ namespace Packmoji.Core.Resolution
 
         public static Diagnostic Quarantined(RequirementGraph graph, RequirementGraph.Node node) =>
             Quarantined(node.Name, node.Version, $"it is the version this build would use: {graph.ChainTo(node.Via)}");
+
+        public static Diagnostic LockedQuarantined(LockedPackage locked) =>
+            Quarantined(locked.Name, locked.Version, $"{Lock} holds it");
 
         public static Diagnostic LineConflict(RequirementGraph graph, Selection.Package package) =>
             new(
