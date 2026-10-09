@@ -1,0 +1,16 @@
+# .NET build output
+bin/
+obj/
+artifacts/
+TestResults/
+*.user
+
+# What pmj builds into, in any sample or test project
+target/
+
+# Working papers: the brief, and the specs and plans this was built from. They stay on disk.
+docs/superpowers/
+.superpowers/
+
+.DS_Store
+.vs/
