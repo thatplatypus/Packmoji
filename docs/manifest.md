@@ -299,6 +299,7 @@ A lockfile must agree with itself:
 **Reading**
 
 - The files are UTF-8. A byte order mark at the start is ignored.
+- A manifest is at most 1 MiB (1,048,576 bytes) and a lockfile at most 4 MiB (4,194,304 bytes). A real manifest is a few hundred bytes, and 4 MiB is room for some nine thousand locked packages. A larger file is refused before any of it is read.
 - They are strict JSON: no comments and no trailing commas.
 - A key may appear once in an object.
 - Either kind of line end is accepted.

@@ -17,16 +17,36 @@ namespace Packmoji.Core.Lockfiles
     {
         public const string FileName = "packmoji.lock";
 
+        /// <summary>
+        /// The most bytes a lockfile may be: 4 MiB, which is room for some nine thousand packages. It
+        /// is public so that whatever takes a lockfile from a disk can refuse it by its length, before
+        /// reading it at all.
+        /// </summary>
+        public const int MaxBytes = 4_194_304;
+
         internal const string RegenerateFix = "delete packmoji.lock and run pmj install to write it again";
 
         public static ReadResult<Lockfile> Read(string text, string file = FileName)
         {
             ArgumentNullException.ThrowIfNull(text);
+
+            // A text is never fewer bytes than it has characters, so one that is far too long is
+            // refused without being counted, and none that is too long is ever copied.
+            if (text.Length > MaxBytes || Encoding.UTF8.GetByteCount(text) > MaxBytes)
+            {
+                return TooLarge(file);
+            }
+
             return Read(Encoding.UTF8.GetBytes(text), file);
         }
 
         public static ReadResult<Lockfile> Read(ReadOnlyMemory<byte> utf8, string file = FileName)
         {
+            if (utf8.Length > MaxBytes)
+            {
+                return TooLarge(file);
+            }
+
             var diagnostics = new DiagnosticList();
             var lockfile = ReadLockfile(utf8, file, diagnostics);
             if (diagnostics.Count > 0 || lockfile is null)
@@ -40,6 +60,18 @@ namespace Packmoji.Core.Lockfiles
 
             return ReadResult<Lockfile>.Success(lockfile);
         }
+
+        private static ReadResult<Lockfile> TooLarge(string file) =>
+            ReadResult<Lockfile>.Failure(
+                [
+                    new Diagnostic(
+                        DiagnosticCodes.FileTooLarge,
+                        $"\"{file}\" is too large to be a lockfile.",
+                        $"a lockfile is at most {MaxBytes} bytes, which is 4 MiB and room for some nine thousand packages",
+                        RegenerateFix,
+                        new SourceLocation(file, 1, 1)),
+                ],
+                0);
 
         private static Lockfile? ReadLockfile(ReadOnlyMemory<byte> utf8, string file, DiagnosticList diagnostics)
         {
