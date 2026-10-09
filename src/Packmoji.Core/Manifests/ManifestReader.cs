@@ -24,7 +24,7 @@ namespace Packmoji.Core.Manifests
 
         public static ReadResult<Manifest> Read(ReadOnlyMemory<byte> utf8, string file = FileName)
         {
-            var diagnostics = new List<Diagnostic>();
+            var diagnostics = new DiagnosticList();
             var tree = JsonTreeReader.Read(utf8, file, ConflictFix, diagnostics);
             if (tree is null)
             {
@@ -33,7 +33,8 @@ namespace Packmoji.Core.Manifests
 
             if (tree.Kind != JsonKind.Object)
             {
-                return ReadResult<Manifest>.Failure([JsonDiagnostics.RootNotObject(tree)]);
+                diagnostics.Add(JsonDiagnostics.RootNotObject(tree));
+                return ReadResult<Manifest>.Failure(diagnostics);
             }
 
             var root = new JsonObjectReader(tree, diagnostics);
@@ -63,7 +64,7 @@ namespace Packmoji.Core.Manifests
                 policy));
         }
 
-        private static PackageSection? ReadPackage(JsonItem? item, List<Diagnostic> diagnostics)
+        private static PackageSection? ReadPackage(JsonItem? item, DiagnosticList diagnostics)
         {
             if (item is null)
             {
@@ -110,7 +111,7 @@ namespace Packmoji.Core.Manifests
             return new PackageSection(name, version, kind.Value, emojicode, descriptionItem?.Text, license, repository);
         }
 
-        private static PackageKind? ReadKind(JsonItem? item, List<Diagnostic> diagnostics)
+        private static PackageKind? ReadKind(JsonItem? item, DiagnosticList diagnostics)
         {
             if (item is null)
             {
@@ -131,7 +132,7 @@ namespace Packmoji.Core.Manifests
             return null;
         }
 
-        private static List<Located<Dependency>>? ReadDependencies(JsonItem? table, List<Diagnostic> diagnostics)
+        private static List<Located<Dependency>>? ReadDependencies(JsonItem? table, DiagnosticList diagnostics)
         {
             if (table is null)
             {
@@ -170,7 +171,7 @@ namespace Packmoji.Core.Manifests
             return dependencies;
         }
 
-        private static BuildSection? ReadBuild(JsonItem? item, List<Diagnostic> diagnostics)
+        private static BuildSection? ReadBuild(JsonItem? item, DiagnosticList diagnostics)
         {
             if (item is null)
             {
@@ -206,7 +207,7 @@ namespace Packmoji.Core.Manifests
             return new BuildSection(entry, ReadEach<GlobPattern>(sourcesItem, "sources", GlobPattern.TryParse, diagnostics));
         }
 
-        private static NativeSection? ReadNative(JsonItem? item, List<Diagnostic> diagnostics)
+        private static NativeSection? ReadNative(JsonItem? item, DiagnosticList diagnostics)
         {
             if (item is null)
             {
@@ -242,7 +243,7 @@ namespace Packmoji.Core.Manifests
             return new NativeSection(sources, includeDirs, link);
         }
 
-        private static PolicySection? ReadPolicy(JsonItem? item, List<Diagnostic> diagnostics)
+        private static PolicySection? ReadPolicy(JsonItem? item, DiagnosticList diagnostics)
         {
             if (item is null)
             {
@@ -256,7 +257,7 @@ namespace Packmoji.Core.Manifests
             return new PolicySection(requireAttestation?.IsTrue);
         }
 
-        private static List<T>? ReadEach<T>(JsonItem? array, string key, TryParser<T> parser, List<Diagnostic> diagnostics) where T : class
+        private static List<T>? ReadEach<T>(JsonItem? array, string key, TryParser<T> parser, DiagnosticList diagnostics) where T : class
         {
             if (array.Strings(key, diagnostics) is not { } strings)
             {
@@ -283,7 +284,7 @@ namespace Packmoji.Core.Manifests
             PackageSection? package,
             List<Located<Dependency>>? dependencies,
             List<Located<Dependency>>? devDependencies,
-            List<Diagnostic> diagnostics)
+            DiagnosticList diagnostics)
         {
             // The first package seen under each bare name, which is the name Emojicode imports by. The
             // package itself is in the build too, so its own name is taken before any dependency's.

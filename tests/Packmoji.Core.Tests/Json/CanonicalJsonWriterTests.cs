@@ -84,7 +84,7 @@ namespace Packmoji.Core.Tests.Json
             json.WriteString("odd", "quote \" backslash \\ bell \u0007");
             json.WriteEndObject();
 
-            var diagnostics = new List<Diagnostic>();
+            var diagnostics = new DiagnosticList();
             var root = JsonTreeReader.Read(Encoding.UTF8.GetBytes(json.ToString()), "test.json", "resolve the conflict", diagnostics);
 
             diagnostics.ShouldBeEmpty();

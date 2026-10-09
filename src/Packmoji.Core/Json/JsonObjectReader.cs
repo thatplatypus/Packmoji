@@ -7,7 +7,7 @@ namespace Packmoji.Core.Json
     /// left over can be reported as unknown. A reader built on this cannot forget to refuse a key it
     /// does not know, and the list of allowed keys in the diagnostic cannot fall out of date.
     /// </summary>
-    internal sealed class JsonObjectReader(JsonItem item, List<Diagnostic> diagnostics)
+    internal sealed class JsonObjectReader(JsonItem item, DiagnosticList diagnostics)
     {
         private readonly List<string> _asked = [];
 

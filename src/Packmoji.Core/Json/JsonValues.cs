@@ -8,7 +8,7 @@ namespace Packmoji.Core.Json
         /// Makes a value type from the text of a string, and when that fails reports why at the place
         /// the string stands. A value type knows what is wrong with a text; only the file knows where.
         /// </summary>
-        public static T? Parse<T>(this JsonItem? item, TryParser<T> parser, List<Diagnostic> diagnostics) where T : class
+        public static T? Parse<T>(this JsonItem? item, TryParser<T> parser, DiagnosticList diagnostics) where T : class
         {
             if (item is null)
             {
@@ -28,7 +28,7 @@ namespace Packmoji.Core.Json
         /// The strings of an array, each with its place. An entry that is not a string, or that repeats
         /// an earlier one, is reported and left out. Null when there is no array.
         /// </summary>
-        public static List<Located<string>>? Strings(this JsonItem? array, string key, List<Diagnostic> diagnostics)
+        public static List<Located<string>>? Strings(this JsonItem? array, string key, DiagnosticList diagnostics)
         {
             if (array is null)
             {

@@ -27,19 +27,21 @@ namespace Packmoji.Core.Lockfiles
 
         public static ReadResult<Lockfile> Read(ReadOnlyMemory<byte> utf8, string file = FileName)
         {
-            var diagnostics = new List<Diagnostic>();
+            var diagnostics = new DiagnosticList();
             var lockfile = ReadLockfile(utf8, file, diagnostics);
             if (diagnostics.Count > 0 || lockfile is null)
             {
-                return ReadResult<Lockfile>.Failure(diagnostics
-                    .Select(diagnostic => diagnostic.Code == DiagnosticCodes.LockUnsupportedVersion ? diagnostic : diagnostic with { Fix = RegenerateFix })
-                    .ToList());
+                return ReadResult<Lockfile>.Failure(
+                    diagnostics
+                        .Select(diagnostic => diagnostic.Code == DiagnosticCodes.LockUnsupportedVersion ? diagnostic : diagnostic with { Fix = RegenerateFix })
+                        .ToList(),
+                    diagnostics.Omitted);
             }
 
             return ReadResult<Lockfile>.Success(lockfile);
         }
 
-        private static Lockfile? ReadLockfile(ReadOnlyMemory<byte> utf8, string file, List<Diagnostic> diagnostics)
+        private static Lockfile? ReadLockfile(ReadOnlyMemory<byte> utf8, string file, DiagnosticList diagnostics)
         {
             var tree = JsonTreeReader.Read(utf8, file, RegenerateFix, diagnostics);
             if (tree is null)
@@ -111,14 +113,14 @@ namespace Packmoji.Core.Lockfiles
                 version.Location);
         }
 
-        private static List<Located<Dependency>>? ReadRequirements(JsonItem? array, string key, List<Diagnostic> diagnostics) =>
+        private static List<Located<Dependency>>? ReadRequirements(JsonItem? array, string key, DiagnosticList diagnostics) =>
             ReadPins<VersionRequirement>(array, key, VersionRequirement.TryParse, diagnostics)
                 ?.Select(pin => new Located<Dependency>(new Dependency(pin.Value.Name, pin.Value.Value), pin.Location))
                 .ToList();
 
         // Reads strings of the form "@owner/name@value". A full name begins with an @ and neither a
         // version nor a requirement can hold one, so the last @ is always the one between the two.
-        private static List<Located<(PackageName Name, T Value)>>? ReadPins<T>(JsonItem? array, string key, TryParser<T> parser, List<Diagnostic> diagnostics)
+        private static List<Located<(PackageName Name, T Value)>>? ReadPins<T>(JsonItem? array, string key, TryParser<T> parser, DiagnosticList diagnostics)
             where T : class
         {
             if (array.Strings(key, diagnostics) is not { } strings)
@@ -164,7 +166,7 @@ namespace Packmoji.Core.Lockfiles
             return pins;
         }
 
-        private static List<Entry>? ReadEntries(JsonItem? array, List<Diagnostic> diagnostics)
+        private static List<Entry>? ReadEntries(JsonItem? array, DiagnosticList diagnostics)
         {
             if (array is null)
             {
@@ -187,7 +189,7 @@ namespace Packmoji.Core.Lockfiles
             return entries;
         }
 
-        private static Entry? ReadEntry(JsonItem item, List<Diagnostic> diagnostics)
+        private static Entry? ReadEntry(JsonItem item, DiagnosticList diagnostics)
         {
             var reader = new JsonObjectReader(item, diagnostics);
             var nameItem = reader.Required("name", JsonKind.String, "\"name\": \"@owner/name\"");
@@ -257,7 +259,7 @@ namespace Packmoji.Core.Lockfiles
             return new Entry(package, nameItem.Location, pins.Select(pin => pin.Location).ToList());
         }
 
-        private static VerificationLevel? ReadVerified(JsonItem? item, List<Diagnostic> diagnostics)
+        private static VerificationLevel? ReadVerified(JsonItem? item, DiagnosticList diagnostics)
         {
             if (item is null)
             {
@@ -278,7 +280,7 @@ namespace Packmoji.Core.Lockfiles
             return null;
         }
 
-        private static void CheckConsistency(List<Located<Dependency>> requirements, List<Entry> entries, List<Diagnostic> diagnostics)
+        private static void CheckConsistency(List<Located<Dependency>> requirements, List<Entry> entries, DiagnosticList diagnostics)
         {
             var byName = new Dictionary<PackageName, LockedPackage>();
             var byBareName = new Dictionary<string, PackageName>(StringComparer.Ordinal);

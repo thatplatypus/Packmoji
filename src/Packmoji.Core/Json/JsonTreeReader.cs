@@ -29,7 +29,7 @@ namespace Packmoji.Core.Json
         /// What to do about git conflict markers, which depends on the file: a person resolves a
         /// manifest by hand, and a lockfile is written again.
         /// </param>
-        public static JsonItem? Read(ReadOnlyMemory<byte> utf8, string file, string conflictFix, List<Diagnostic> diagnostics)
+        public static JsonItem? Read(ReadOnlyMemory<byte> utf8, string file, string conflictFix, DiagnosticList diagnostics)
         {
             if (utf8.Span.StartsWith(ByteOrderMark))
             {
@@ -59,7 +59,7 @@ namespace Packmoji.Core.Json
             }
         }
 
-        private static JsonItem ReadValue(ref Utf8JsonReader reader, SourceText source, List<Diagnostic> diagnostics)
+        private static JsonItem ReadValue(ref Utf8JsonReader reader, SourceText source, DiagnosticList diagnostics)
         {
             var location = source.Locate(reader.TokenStartIndex);
             switch (reader.TokenType)

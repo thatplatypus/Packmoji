@@ -12,9 +12,9 @@ namespace Packmoji.Core.Tests.Json
     {
         private const string File = "test.json";
 
-        private static (JsonObjectReader Reader, JsonItem Root, List<Diagnostic> Diagnostics) Open(string text)
+        private static (JsonObjectReader Reader, JsonItem Root, DiagnosticList Diagnostics) Open(string text)
         {
-            var diagnostics = new List<Diagnostic>();
+            var diagnostics = new DiagnosticList();
             var root = JsonTreeReader.Read(Encoding.UTF8.GetBytes(text), File, "resolve the conflict", diagnostics).ShouldNotBeNull();
             return (new JsonObjectReader(root, diagnostics), root, diagnostics);
         }
@@ -146,7 +146,7 @@ namespace Packmoji.Core.Tests.Json
         [Fact]
         public void A_root_that_is_not_an_object_has_a_diagnostic_of_its_own()
         {
-            var diagnostics = new List<Diagnostic>();
+            var diagnostics = new DiagnosticList();
             var root = JsonTreeReader.Read(Encoding.UTF8.GetBytes("[]"), File, "resolve the conflict", diagnostics).ShouldNotBeNull();
 
             var diagnostic = JsonDiagnostics.RootNotObject(root).ShouldBeComplete();

@@ -33,7 +33,7 @@ namespace Packmoji.Core.Tests.Json
             // 420,000, which takes a few milliseconds, so the limit below is not a close one.
             const int count = 60_000;
             var bytes = Encoding.UTF8.GetBytes("[" + string.Join(",", Enumerable.Repeat("\"abcd\"", count)) + "]");
-            var diagnostics = new List<Diagnostic>();
+            var diagnostics = new DiagnosticList();
 
             var watch = System.Diagnostics.Stopwatch.StartNew();
             var root = JsonTreeReader.Read(bytes, File, "resolve the conflict", diagnostics);
@@ -50,7 +50,7 @@ namespace Packmoji.Core.Tests.Json
         {
             const int count = 1_000;
             var bytes = Encoding.UTF8.GetBytes("[" + string.Join(",", Enumerable.Repeat("\"🍇\"", count)) + "]");
-            var diagnostics = new List<Diagnostic>();
+            var diagnostics = new DiagnosticList();
 
             var root = JsonTreeReader.Read(bytes, File, "resolve the conflict", diagnostics);
 

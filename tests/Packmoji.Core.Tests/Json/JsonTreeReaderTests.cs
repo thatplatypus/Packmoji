@@ -12,16 +12,16 @@ namespace Packmoji.Core.Tests.Json
         private const string File = "test.json";
         private const string ConflictFix = "resolve the conflict";
 
-        private static (JsonItem? Root, List<Diagnostic> Diagnostics) Read(string text) => Read(Encoding.UTF8.GetBytes(text));
+        private static (JsonItem? Root, DiagnosticList Diagnostics) Read(string text) => Read(Encoding.UTF8.GetBytes(text));
 
-        private static (JsonItem? Root, List<Diagnostic> Diagnostics) Read(byte[] bytes)
+        private static (JsonItem? Root, DiagnosticList Diagnostics) Read(byte[] bytes)
         {
-            var diagnostics = new List<Diagnostic>();
+            var diagnostics = new DiagnosticList();
             var root = JsonTreeReader.Read(bytes, File, ConflictFix, diagnostics);
             return (root, diagnostics);
         }
 
-        private static Diagnostic ShouldBeOneSyntaxError((JsonItem? Root, List<Diagnostic> Diagnostics) read)
+        private static Diagnostic ShouldBeOneSyntaxError((JsonItem? Root, DiagnosticList Diagnostics) read)
         {
             read.Root.ShouldBeNull();
             var diagnostic = read.Diagnostics.ShouldHaveSingleItem().ShouldBeComplete();
