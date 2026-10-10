@@ -16,6 +16,9 @@ namespace Packmoji.Cli.Building
     /// </summary>
     internal sealed class Builder
     {
+        // The directory under target that holds what is made on the way to what is built.
+        private const string Intermediate = "obj";
+
         private readonly PmjHost _host;
         private readonly BuildRequest _request;
         private readonly TextWriter _said;
@@ -57,6 +60,18 @@ namespace Packmoji.Cli.Building
 
         private BuildOutcome Stopped(params IEnumerable<Diagnostic> problems) => new([.. problems, .. _warnings], _omitted, _compiler, []);
 
+        private string Mode => _request.Release ? "release" : "debug";
+
+        // The places in the project that this build writes into: where its packages go, where its
+        // lock is, and when the project itself is built, the directories of what is made on the way
+        // and of what is made. What is at the very place of a thing that is built needs no asking
+        // after: it is taken away, and a link that is taken away takes nothing with it.
+        private IEnumerable<string> WrittenInto()
+        {
+            string[] always = [ProjectFiles.Packages, ProjectFiles.Target, ProjectLock.Place];
+            return _request.DependenciesOnly ? always : [.. always, $"{ProjectFiles.Target}/{Intermediate}", $"{ProjectFiles.Target}/{Mode}"];
+        }
+
         private async Task<BuildOutcome> BuildAsync(CancellationToken cancellationToken)
         {
             var opened = ProjectSession.OpenToFetch(_host);
@@ -73,6 +88,12 @@ namespace Packmoji.Cli.Building
             if (!project.IsLocked && !(project.Lockfile is null && asksForNothing))
             {
                 return Stopped(CommandDiagnostics.NotInstalled(missing: project.Lockfile is null));
+            }
+
+            // Asked before the first thing is written, which is the lock.
+            if (ProjectFiles.Linked(_host.WorkingDirectory, WrittenInto()) is { } linked)
+            {
+                return Stopped(linked);
             }
 
             using var held = await ProjectLock.TakeAsync(
@@ -329,11 +350,10 @@ namespace Packmoji.Cli.Building
             var package = own.Manifest.Package;
             var name = package.Name.Name;
             var target = Path.Combine(_host.WorkingDirectory, ProjectFiles.Target);
-            var mode = _request.Release ? "release" : "debug";
 
             // What is made on the way is kept apart from what is made, so that no project's name is in the way of it.
-            var work = Path.Combine(target, "obj", mode);
-            var product = Path.Combine(target, mode, name);
+            var work = Path.Combine(target, Intermediate, Mode);
+            var product = Path.Combine(target, Mode, name);
 
             // Nothing of an earlier build stays: not an object that is no longer made, and not a program that would be taken for this one's.
             Clear(work);

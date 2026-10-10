@@ -75,6 +75,8 @@ target/obj/                 what is made on the way
 
 Both directories are for `pmj` to write and for git to ignore, which `pmj new` sees to.
 
+- **Neither may be a symbolic link,** and neither may `target/obj`, `target/debug` or `target/release`. A build clears what is at the places it writes to and then writes there, and a link in a project that came from someone else can lead anywhere on the machine. A build that finds one stops, with `project.unreadable`, before it writes anything.
+
 ## Once for the whole machine
 
 A package is compiled once, and kept in `pmj`'s own directory beside the cache:
@@ -193,6 +195,7 @@ A package may have C and C++ beside its Emojicode. Its manifest says which files
 | `build.link-failed` | The linker failed | Read what it printed. A library it cannot find is one that a package names under `native.link`, and has to be on the machine |
 | `built.unusable` | `pmj` could not read or write what it keeps of built packages | Check that `~/.packmoji/built` is yours to use, or set `PACKMOJI_HOME` |
 | `packages.foreign` | A folder in `packages/` has a locked package's name and is not `pmj`'s | Move it away, or delete it |
+| `project.unreadable` | The project's directory could not be written, or a directory that a build writes into is a symbolic link | Check that the directory is yours to write. Delete a link: `pmj` makes the directory itself |
 | `run.not-an-app` | `pmj run` was run in a library | Run `pmj build`, or run an application that depends on it |
 | `run.failed` | The program was built, and the machine would not start it | Check that the compiler and the C++ compiler both build for this machine |
 

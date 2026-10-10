@@ -88,7 +88,7 @@ namespace Packmoji.Cli.Tests.Docs
                 "compiler.not-found", "compiler.unknown", "compiler.too-old", "compiler.incomplete",
                 "tool.not-found", "native.unsupported",
                 "build.compile-failed", "build.native-failed", "build.archive-failed", "build.link-failed",
-                "built.unusable", "packages.foreign", "run.not-an-app", "run.failed",
+                "built.unusable", "packages.foreign", "project.unreadable", "run.not-an-app", "run.failed",
             ];
 
             foreach (var code in codes)

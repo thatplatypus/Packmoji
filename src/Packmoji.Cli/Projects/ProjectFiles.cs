@@ -92,6 +92,26 @@ namespace Packmoji.Cli.Projects
             }
         }
 
+        /// <summary>
+        /// The problem when one of the places in a project that pmj is about to write into is a
+        /// symbolic link, or null when none is. A project's directory may have come from someone
+        /// else, links and all, and what is cleared and written through a link is cleared and
+        /// written wherever the link leads.
+        /// </summary>
+        /// <param name="places">Paths in the project, each with <c>/</c> between its parts.</param>
+        public static Diagnostic? Linked(string directory, IEnumerable<string> places)
+        {
+            // Asked of the entry itself and not of what it leads to, so a link that leads nowhere is found too.
+            var linked = places.FirstOrDefault(place => new FileInfo(Path.Combine(directory, place.Replace('/', Path.DirectorySeparatorChar))).LinkTarget is not null);
+            return linked is null
+                ? null
+                : new Diagnostic(
+                    DiagnosticCodes.ProjectUnreadable,
+                    $"\"{linked}\" is a symbolic link, and pmj does not build through one.",
+                    "a build clears what is at the places it writes to and then writes there, and a link can lead anywhere on this machine",
+                    "delete the link, and pmj makes a directory in its place");
+        }
+
         public static Diagnostic Unreadable(string path, string done, Exception failure) =>
             new(
                 DiagnosticCodes.ProjectUnreadable,

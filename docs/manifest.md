@@ -390,7 +390,7 @@ The codes that begin with `compiler.`, `build.`, `built.`, `packages.` and `run.
 | `resolve.graph-too-large` | A graph of dependencies has more than 10,000 versions in it, or would make a lockfile over its limit of 4 MiB |
 | `project.not-found` | A command that works on a project was run where there is no `packmoji.json` |
 | `project.exists` | `pmj new` or `pmj init` would write over a project that is there |
-| `project.unreadable` | A project's file could not be read or written |
+| `project.unreadable` | A project's file could not be read or written, or a directory that a build writes into is a symbolic link |
 | `dependency.exists` | `pmj add` was given a package the manifest already has, and no requirement to change it to |
 | `dependency.not-found` | `pmj remove` or `pmj update` named a package the manifest does not have |
 | `package.not-found` | No release of a package is in any repository `pmj` looked in |

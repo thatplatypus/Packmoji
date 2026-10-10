@@ -11,6 +11,9 @@ namespace Packmoji.Cli.Building
     {
         private const string FileName = ".pmj-lock";
 
+        /// <summary>Where in a project the lock is kept.</summary>
+        public const string Place = ProjectFiles.Target + "/" + FileName;
+
         private readonly FileStream _held;
 
         private ProjectLock(FileStream held)
