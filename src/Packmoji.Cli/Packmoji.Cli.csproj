@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Packmoji.Core\Packmoji.Core.csproj" />
+    <ProjectReference Include="..\Packmoji.GitHub\Packmoji.GitHub.csproj" />
   </ItemGroup>
 
 </Project>

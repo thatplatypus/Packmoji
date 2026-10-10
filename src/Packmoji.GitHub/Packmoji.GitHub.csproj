@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- pmj is published as a native binary, and this is what it reaches the network with. -->
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Packmoji.Core\Packmoji.Core.csproj" />
+  </ItemGroup>
+
+</Project>
