@@ -72,5 +72,19 @@ namespace Packmoji.Core.Diagnostics
         public const string CacheUnusable = "cache.unusable";
         public const string CacheMismatch = "cache.mismatch";
         public const string ConfigInvalid = "config.invalid";
+        public const string CompilerNotFound = "compiler.not-found";
+        public const string CompilerUnknown = "compiler.unknown";
+        public const string CompilerTooOld = "compiler.too-old";
+        public const string CompilerIncomplete = "compiler.incomplete";
+        public const string ToolNotFound = "tool.not-found";
+        public const string NativeUnsupported = "native.unsupported";
+        public const string BuildCompileFailed = "build.compile-failed";
+        public const string BuildNativeFailed = "build.native-failed";
+        public const string BuildArchiveFailed = "build.archive-failed";
+        public const string BuildLinkFailed = "build.link-failed";
+        public const string BuiltUnusable = "built.unusable";
+        public const string PackagesForeign = "packages.foreign";
+        public const string RunNotAnApp = "run.not-an-app";
+        public const string RunFailed = "run.failed";
     }
 }

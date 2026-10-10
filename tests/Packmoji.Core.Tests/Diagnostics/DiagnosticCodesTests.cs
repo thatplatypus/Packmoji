@@ -14,7 +14,7 @@ namespace Packmoji.Core.Tests.Diagnostics
             .ToArray();
 
         [Fact]
-        public void There_are_the_66_codes_of_the_three_designs() => Codes.Length.ShouldBe(66);
+        public void There_are_the_80_codes_of_the_four_designs() => Codes.Length.ShouldBe(80);
 
         [Fact]
         public void No_two_codes_are_the_same() => Codes.Distinct(StringComparer.Ordinal).Count().ShouldBe(Codes.Length);
@@ -107,6 +107,46 @@ namespace Packmoji.Core.Tests.Diagnostics
                 "cache.unusable",
                 "cache.mismatch",
                 "config.invalid",
+            ]);
+        }
+
+        [Fact]
+        public void The_build_brought_fourteen_and_they_are_spelled_as_its_design_spells_them()
+        {
+            string[] added =
+            [
+                DiagnosticCodes.CompilerNotFound,
+                DiagnosticCodes.CompilerUnknown,
+                DiagnosticCodes.CompilerTooOld,
+                DiagnosticCodes.CompilerIncomplete,
+                DiagnosticCodes.ToolNotFound,
+                DiagnosticCodes.NativeUnsupported,
+                DiagnosticCodes.BuildCompileFailed,
+                DiagnosticCodes.BuildNativeFailed,
+                DiagnosticCodes.BuildArchiveFailed,
+                DiagnosticCodes.BuildLinkFailed,
+                DiagnosticCodes.BuiltUnusable,
+                DiagnosticCodes.PackagesForeign,
+                DiagnosticCodes.RunNotAnApp,
+                DiagnosticCodes.RunFailed,
+            ];
+
+            added.ShouldBe(
+            [
+                "compiler.not-found",
+                "compiler.unknown",
+                "compiler.too-old",
+                "compiler.incomplete",
+                "tool.not-found",
+                "native.unsupported",
+                "build.compile-failed",
+                "build.native-failed",
+                "build.archive-failed",
+                "build.link-failed",
+                "built.unusable",
+                "packages.foreign",
+                "run.not-an-app",
+                "run.failed",
             ]);
         }
     }

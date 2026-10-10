@@ -391,3 +391,17 @@ The codes that begin with `resolve.`, and `lock.mismatch`, are raised when `pmj`
 | `cache.unusable` | The cache could not be read or written |
 | `cache.mismatch` | `pmj verify` found that what the cache holds of a package is not what `packmoji.lock` holds |
 | `config.invalid` | Something `pmj` was told through its environment is not something it can use |
+| `compiler.not-found` | A build needs the Emojicode compiler, and there is none: `EMOJICODEC` names nothing that can be run, or no `emojicodec` is on `PATH` |
+| `compiler.unknown` | The compiler did not say which version it is: its `--help` has no banner that `pmj` can read |
+| `compiler.too-old` | A package, or the project, asks for a newer compiler than the one that was found |
+| `compiler.incomplete` | The compiler's own packages or headers are not where `pmj` looked, and the build needs them |
+| `tool.not-found` | The C++ compiler, the C compiler or the archiver is needed and cannot be run |
+| `native.unsupported` | A file that `native.sources` selects is neither C nor C++ by its name |
+| `build.compile-failed` | The compiler refused a package's code, or the project's |
+| `build.native-failed` | The C or C++ compiler refused a native file |
+| `build.archive-failed` | The archiver could not make a package's archive |
+| `build.link-failed` | The linker could not make the program |
+| `built.unusable` | What `pmj` keeps of built packages could not be read or written |
+| `packages.foreign` | A folder in the project's `packages/` has a locked package's name and was not put there by `pmj` |
+| `run.not-an-app` | `pmj run` was run in a library, which has no program to run |
+| `run.failed` | The program was built and could not be started |
