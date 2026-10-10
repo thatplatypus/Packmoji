@@ -127,15 +127,13 @@ namespace Packmoji.Cli.Commands
             // Fetched before anything is written, so that a project is never left locked to what could not be had.
             await FetchAsync(result.Graph, cancellationToken);
 
-            if (said is not null && ProjectFiles.Write(Host.WorkingDirectory, ManifestReader.FileName, ManifestWriter.Write(manifest)) is { } manifestProblem)
-            {
-                return DiagnosticPrinter.Report(Host, manifestProblem);
-            }
-
+            // The manifest and the lockfile, or neither: a manifest that asks for what no lockfile answers is half of a command.
             var locked = result.Graph.ToLockfile(manifest);
-            if (ProjectFiles.Write(Host.WorkingDirectory, LockfileReader.FileName, LockfileWriter.Write(locked)) is { } lockProblem)
+            (string Name, string Text)[] lockfile = [(LockfileReader.FileName, LockfileWriter.Write(locked))];
+            (string Name, string Text)[] files = said is null ? lockfile : [(ManifestReader.FileName, ManifestWriter.Write(manifest)), .. lockfile];
+            if (ProjectFiles.Write(Host.WorkingDirectory, files) is { } problem)
             {
-                return DiagnosticPrinter.Report(Host, lockProblem);
+                return DiagnosticPrinter.Report(Host, problem);
             }
 
             if (said is not null)

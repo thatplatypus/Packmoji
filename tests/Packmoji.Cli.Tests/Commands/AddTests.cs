@@ -425,6 +425,29 @@ namespace Packmoji.Cli.Tests.Commands
             sandbox.Files().ShouldBe(["packmoji.json", "packmoji.lock"]);
         }
 
+        [Theory]
+        [InlineData("add", "@thatplatypus/crypto@1.2")]
+        [InlineData("remove", "@thatplatypus/deflate")]
+        [InlineData("update")]
+        public async Task When_the_lockfile_cannot_be_written_the_manifest_is_put_back_as_it_was(params string[] args)
+        {
+            using var sandbox = WithCrypto();
+            sandbox.Release("github.com/thatplatypus/deflate", "@thatplatypus/deflate", "0.1.0");
+            sandbox.Project("@someone/app", "@thatplatypus/crypto@1.0", "@thatplatypus/deflate@0.1");
+            var manifest = sandbox.Read("packmoji.json");
+
+            // Something that is not a file stands where the lockfile goes, so the manifest can be written and the lockfile cannot.
+            Directory.CreateDirectory(sandbox.PathOf("packmoji.lock"));
+
+            var run = await sandbox.RunAsync(args);
+
+            run.Status.ShouldBe(1);
+            run.Output.ShouldBeEmpty();
+            run.Error.ShouldContain($"error[project.unreadable]: \"{sandbox.PathOf("packmoji.lock")}\" could not be written.");
+            sandbox.Read("packmoji.json").ShouldBe(manifest);
+            sandbox.Files().ShouldBe(["packmoji.json"]);
+        }
+
         [Fact]
         public async Task Add_keeps_everything_else_a_manifest_says()
         {

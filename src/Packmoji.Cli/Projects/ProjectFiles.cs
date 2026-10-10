@@ -7,7 +7,9 @@ namespace Packmoji.Cli.Projects
     /// <summary>
     /// Reads and writes the two files a project has. Each is written whole to a file beside it and
     /// then put in its place in one step, so that a pmj that is stopped, or two that run at once,
-    /// can leave an old file or a new one and never half of one.
+    /// can leave an old file or a new one and never half of one. When both are written, both are
+    /// made ready before either is put in its place, and if the second cannot be put there the first
+    /// is put back: a command that fails leaves the project as it found it.
     /// </summary>
     internal static class ProjectFiles
     {
@@ -37,21 +39,46 @@ namespace Packmoji.Cli.Projects
             return File.Exists(path) ? Read(path, LockfileReader.MaxBytes, bytes => LockfileReader.Read(bytes)) : null;
         }
 
-        /// <summary>Writes a file of the project. Null when it was written, and the problem when it could not be.</summary>
-        public static Diagnostic? Write(string directory, string name, string text)
+        /// <summary>Writes files of the project, all of them or none. Null when they were written, and the problem when one could not be.</summary>
+        /// <param name="files">Each file's name and its whole text, in the order they are put in place.</param>
+        public static Diagnostic? Write(string directory, params (string Name, string Text)[] files)
         {
-            var path = Path.Combine(directory, name);
-            var beside = path + ".tmp-" + Guid.NewGuid().ToString("N");
+            var ready = new List<(string Path, string Beside)>();
+            var replaced = new List<(string Path, byte[]? Was)>();
+            var writing = directory;
             try
             {
-                File.WriteAllText(beside, text);
-                File.Move(beside, path, overwrite: true);
+                foreach (var (name, text) in files)
+                {
+                    writing = Path.Combine(directory, name);
+                    var beside = writing + ".tmp-" + Guid.NewGuid().ToString("N");
+                    ready.Add((writing, beside));
+                    File.WriteAllText(beside, text);
+                }
+
+                foreach (var (path, beside) in ready)
+                {
+                    writing = path;
+                    var was = File.Exists(path) ? File.ReadAllBytes(path) : null;
+                    File.Move(beside, path, overwrite: true);
+                    replaced.Add((path, was));
+                }
+
                 return null;
             }
             catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
             {
-                TryDelete(beside);
-                return Unreadable(path, "written", failure);
+                foreach (var (path, was) in Enumerable.Reverse(replaced))
+                {
+                    PutBack(path, was);
+                }
+
+                foreach (var (_, beside) in ready)
+                {
+                    TryDelete(beside);
+                }
+
+                return Unreadable(writing, "written", failure);
             }
         }
 
@@ -76,6 +103,27 @@ namespace Packmoji.Cli.Projects
             catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
             {
                 return Outcome<T>.Failed(Unreadable(path, "read", failure));
+            }
+        }
+
+        // A file that was put in its place before another could not be is made what it was again.
+        private static void PutBack(string path, byte[]? was)
+        {
+            try
+            {
+                if (was is null)
+                {
+                    File.Delete(path);
+                    return;
+                }
+
+                var beside = path + ".tmp-" + Guid.NewGuid().ToString("N");
+                File.WriteAllBytes(beside, was);
+                File.Move(beside, path, overwrite: true);
+            }
+            catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
+            {
+                // What cannot be put back stays as it was written, and the problem that is reported is the one that caused this.
             }
         }
 
