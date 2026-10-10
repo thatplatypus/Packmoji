@@ -93,20 +93,27 @@ namespace Packmoji.Cli.Commands
         /// is held to what is published, and one whose locked bytes are in the cache is not asked of
         /// GitHub at all.
         /// </summary>
-        public async Task<int> InstallLockedAsync(IReadOnlyList<RepositoryRef> alsoLookIn, CancellationToken cancellationToken)
+        /// <param name="json">Whether to answer a tool, with one JSON object.</param>
+        public async Task<int> InstallLockedAsync(IReadOnlyList<RepositoryRef> alsoLookIn, bool json, CancellationToken cancellationToken)
         {
             var check = await FetchLockedAsync(alsoLookIn, cancellationToken);
-            DiagnosticPrinter.Print(Host.Error, check.Diagnostics, check.OmittedDiagnostics);
             if (!check.Succeeded)
             {
-                return ExitStatus.Problem;
+                return DiagnosticPrinter.Report(Host, check.Diagnostics, check.OmittedDiagnostics, json);
             }
 
-            Host.Out.WriteLine(check.Graph.Packages.Count == 0
+            var said = check.Graph.Packages.Count == 0
                 ? "Nothing to install: the project depends on no package."
-                : $"Installed what {LockfileReader.FileName} holds: {Count(check.Graph.Packages.Count)}.");
-            return ExitStatus.Success;
+                : $"Installed what {LockfileReader.FileName} holds: {Count(check.Graph.Packages.Count)}.";
+            return Done(json, check.Diagnostics, check.OmittedDiagnostics, written: false, Lockfile!, said + Environment.NewLine);
         }
+
+        /// <summary>
+        /// Says that a command found nothing to change: to a person in the command's own words, and
+        /// to a tool as a lockfile that holds what it held. Only for a project whose lockfile
+        /// answers its manifest.
+        /// </summary>
+        public int Unchanged(string said, bool json) => Done(json, [], 0, written: false, Lockfile!, said + Environment.NewLine);
 
         /// <summary>
         /// Holds each locked package to what is published and fetches what the cache does not hold,
@@ -131,13 +138,13 @@ namespace Packmoji.Cli.Commands
         /// </summary>
         /// <param name="source">The source the command has been using, so that what it learned is not asked again.</param>
         /// <param name="said">What the command did to the manifest, said first when it has been done. Null when it changed nothing.</param>
-        public async Task<int> ResolveAsync(Manifest manifest, DirectPackageSource source, string? said, CancellationToken cancellationToken)
+        /// <param name="json">Whether to answer a tool, with one JSON object.</param>
+        public async Task<int> ResolveAsync(Manifest manifest, DirectPackageSource source, string? said, bool json, CancellationToken cancellationToken)
         {
             var result = await DirectResolver.ResolveAsync(manifest, Lockfile, source, cancellationToken);
-            DiagnosticPrinter.Print(Host.Error, result.Diagnostics, result.OmittedDiagnostics);
             if (!result.Succeeded)
             {
-                return ExitStatus.Problem;
+                return DiagnosticPrinter.Report(Host, result.Diagnostics, result.OmittedDiagnostics, json);
             }
 
             // Fetched before anything is written, so that a project is never left locked to what could not be had.
@@ -149,38 +156,50 @@ namespace Packmoji.Cli.Commands
             (string Name, string Text)[] files = said is null ? lockfile : [(ManifestReader.FileName, ManifestWriter.Write(manifest)), .. lockfile];
             if (ProjectFiles.Write(Host.WorkingDirectory, files) is { } problem)
             {
-                return DiagnosticPrinter.Report(Host, problem);
+                // What was only a warning is said with what stopped the command, so that nothing found on the way is lost.
+                return DiagnosticPrinter.Report(Host, [problem, .. result.Diagnostics], result.OmittedDiagnostics, json);
             }
 
-            if (said is not null)
-            {
-                Host.Out.WriteLine(said);
-            }
-
-            Host.Out.Write(Summary(Lockfile, locked));
-            return ExitStatus.Success;
+            return Done(json, result.Diagnostics, result.OmittedDiagnostics, written: true, locked, (said is null ? "" : said + Environment.NewLine) + Summary(Lockfile, locked));
         }
 
         /// <summary>
         /// Resolves a manifest and says what would follow, and writes nothing to the project. What it
         /// has to download to find out stays in the cache, where it does no harm.
         /// </summary>
-        public async Task<int> PreviewAsync(Manifest manifest, DirectPackageSource source, string? said, CancellationToken cancellationToken)
+        /// <param name="json">Whether to answer a tool, with one JSON object.</param>
+        public async Task<int> PreviewAsync(Manifest manifest, DirectPackageSource source, string? said, bool json, CancellationToken cancellationToken)
         {
             var result = await DirectResolver.ResolveAsync(manifest, Lockfile, source, cancellationToken);
-            DiagnosticPrinter.Print(Host.Error, result.Diagnostics, result.OmittedDiagnostics);
             if (!result.Succeeded)
             {
-                return ExitStatus.Problem;
+                return DiagnosticPrinter.Report(Host, result.Diagnostics, result.OmittedDiagnostics, json);
             }
 
-            if (said is not null)
+            var would = result.Graph.ToLockfile(manifest);
+            return Done(
+                json,
+                result.Diagnostics,
+                result.OmittedDiagnostics,
+                written: false,
+                would,
+                (said is null ? "" : said + Environment.NewLine) + Summary(Lockfile, would, done: false) + "Nothing was written." + Environment.NewLine);
+        }
+
+        // What a command did. A tool is given one object, with the warnings in it. A person is
+        // given the warnings where problems go, and then the command's own words.
+        private int Done(bool json, IReadOnlyList<Diagnostic> warnings, int omitted, bool written, Lockfile after, string said)
+        {
+            if (json)
             {
-                Host.Out.WriteLine(said);
+                Host.Out.Write(LockReport.Json(warnings, omitted, written, Lockfile, after));
+            }
+            else
+            {
+                DiagnosticPrinter.Print(Host.Error, warnings, omitted);
+                Host.Out.Write(said);
             }
 
-            Host.Out.Write(Summary(Lockfile, result.Graph.ToLockfile(manifest), done: false));
-            Host.Out.WriteLine("Nothing was written.");
             return ExitStatus.Success;
         }
 

@@ -84,7 +84,7 @@ What is written is a manifest, an entry file under `src`, a `.gitignore` for `ta
 ### pmj add
 
 ```
-pmj add <@scope/name>[@<requirement>] [--dev] [--repository <github.com/owner/repo>]
+pmj add <@scope/name>[@<requirement>] [--dev] [--repository <github.com/owner/repo>] [--json]
 ```
 
 - **With no requirement, `add` asks for the latest version, written in full.** The latest is the highest version that is not a pre-release.
@@ -105,7 +105,7 @@ A package the project already depends on:
 ### pmj remove
 
 ```
-pmj remove <@scope/name> [--repository <github.com/owner/repo>]...
+pmj remove <@scope/name> [--repository <github.com/owner/repo>]... [--json]
 ```
 
 Takes the package out of whichever table has it, and resolves what is left. The lockfile then holds only what something still needs.
@@ -113,7 +113,7 @@ Takes the package out of whichever table has it, and resolves what is left. The 
 ### pmj install
 
 ```
-pmj install [--locked] [--repository <github.com/owner/repo>]...
+pmj install [--locked] [--repository <github.com/owner/repo>]... [--json]
 ```
 
 - **When `packmoji.lock` still answers `packmoji.json`, nothing is chosen.** Each locked package is fetched and held to the digest the lockfile records. A package whose locked bytes are already in the cache is not asked of GitHub at all, so `install` then works with no network.
@@ -123,7 +123,7 @@ pmj install [--locked] [--repository <github.com/owner/repo>]...
 ### pmj update
 
 ```
-pmj update [<@scope/name>...] [--dry-run] [--repository <github.com/owner/repo>]...
+pmj update [<@scope/name>...] [--dry-run] [--repository <github.com/owner/repo>]... [--json]
 ```
 
 A build never moves to a newer version by itself, so this is how you move it.
@@ -242,7 +242,7 @@ error[package.not-found]: No release of "@thatplatypus/crypto" was found.
 
 ### For a tool: --json
 
-`pmj tree --json`, `pmj verify --json` and `pmj build --json` put one JSON object on standard output, and nothing else there.
+`pmj tree`, `pmj verify`, `pmj build`, and the four commands that lock packages, `pmj add`, `pmj remove`, `pmj install` and `pmj update`, each take `--json`. With it they put one JSON object on standard output, and nothing else there.
 
 - **`ok`** is false when any problem is an error.
 - **`diagnostics`** holds the problems. With `--json` they are not also printed to standard error.
@@ -321,6 +321,66 @@ A problem in `diagnostics`:
 - **`packages`** is every locked package once, in order of name. A build holds one version of a package, so a name is enough to find one.
 
 `pmj verify --json` gives `ok`, `diagnostics`, `omittedDiagnostics`, and `packages`: every package that was held to the lockfile, each with its `name`, `version`, `source`, `sha256` and `verified`. A package that is not what the lockfile holds is named in a problem's text.
+
+`pmj add`, `pmj remove`, `pmj install` and `pmj update` answer alike: whether the project's files were written, what the lockfile holds that it did not hold before, and every package it holds now. `pmj update --json`, for the project above once grapevine 0.3.1 is released:
+
+```json
+{
+  "ok": true,
+  "diagnostics": [],
+  "omittedDiagnostics": 0,
+  "written": true,
+  "changes": [
+    {
+      "change": "moved",
+      "name": "@thatplatypus/grapevine",
+      "from": "0.3.0",
+      "to": "0.3.1"
+    }
+  ],
+  "packages": [
+    {
+      "name": "@thatplatypus/crypto",
+      "version": "1.0.0",
+      "source": "github.com/thatplatypus/grapevine",
+      "sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+      "verified": "checksum",
+      "dependencies": []
+    },
+    {
+      "name": "@thatplatypus/deflate",
+      "version": "0.1.0",
+      "source": "github.com/thatplatypus/grapevine",
+      "sha256": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+      "verified": "checksum",
+      "dependencies": []
+    },
+    {
+      "name": "@thatplatypus/grapevine",
+      "version": "0.3.1",
+      "source": "github.com/thatplatypus/grapevine",
+      "sha256": "98fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855e3b0c442",
+      "verified": "checksum",
+      "dependencies": [
+        {
+          "name": "@thatplatypus/crypto",
+          "version": "1.0.0"
+        },
+        {
+          "name": "@thatplatypus/deflate",
+          "version": "0.1.0"
+        }
+      ]
+    }
+  ]
+}
+```
+
+- **`written`** says whether the command wrote the project's files. It is false for `update --dry-run`, and for a command that found nothing to change, such as `install` with a lockfile that already answers the manifest.
+- **`changes`** is in order of name, and empty when the lockfile holds the same versions as before. For `update --dry-run` it is what would change.
+- **`change`** is `added`, `removed` or `moved`. `from` is the version before and `to` the version now: a package that was added has no `from`, and one that was removed no `to`. A package can move down as well as up.
+- **`packages`** is every package the lockfile now holds, or would hold, each as `pmj tree --json` gives one.
+- **A command that could not do what it was asked answers with `ok`, `diagnostics` and `omittedDiagnostics` alone,** and has written nothing. `pmj install --locked --json` with a lockfile that is missing, or that no longer answers the manifest, answers so with `lock.out-of-date`.
 
 `pmj build --json`, for the project above:
 

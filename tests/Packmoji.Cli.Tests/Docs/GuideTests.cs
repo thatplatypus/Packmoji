@@ -106,6 +106,17 @@ namespace Packmoji.Cli.Tests.Docs
         }
 
         [Fact]
+        public async Task The_answer_of_a_command_that_locks_in_the_guide_is_what_an_update_of_the_first_project_gives()
+        {
+            using var sandbox = Sandbox.WithGrapevine();
+            await sandbox.RunAsync("new", "@you/site");
+            await sandbox.RunInAsync("site", "add", "@thatplatypus/grapevine");
+            sandbox.Release(Sandbox.Grapevine, "@thatplatypus/grapevine", "0.3.1", "@thatplatypus/crypto@1.0", "@thatplatypus/deflate@0.1");
+
+            ShouldShow(Guide("cli.md"), await sandbox.RunInAsync("site", "update", "--json"));
+        }
+
+        [Fact]
         public async Task The_answer_for_a_tool_in_the_guide_is_what_a_build_of_the_first_project_gives()
         {
             using var sandbox = Sandbox.WithGrapevine();
