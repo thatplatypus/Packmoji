@@ -40,11 +40,40 @@ namespace Packmoji.Core.Tests.Archives
         }
 
         [Fact]
-        public void A_canonical_tar_in_a_gzip_that_another_tool_compressed_is_read()
+        public void The_same_tar_in_a_gzip_that_another_tool_compressed_is_refused()
         {
+            // An archive is the bytes pmj pack writes and no others, or one set of files would have many digests.
             var tar = Unpacked(PackageArchive.Write(Sample.SmallPackage()));
 
             PackageArchive.Read(RawTar.Gzip(tar)).ShouldSucceed().Count.ShouldBe(2);
+            ShouldBeRefused(RawTar.Compressed(tar)).Reason.ShouldContain("pmj pack");
+        }
+
+        [Fact]
+        public void A_gzip_that_says_more_of_itself_than_pmj_writes_is_refused()
+        {
+            var archive = PackageArchive.Write(Sample.SmallPackage());
+            var dated = (byte[])archive.Clone();
+            dated[4] = 1;
+            var fromUnix = (byte[])archive.Clone();
+            fromUnix[9] = 3;
+            var bestCompression = (byte[])archive.Clone();
+            bestCompression[8] = 2;
+
+            ShouldBeRefused(dated).Reason.ShouldContain("pmj pack");
+            ShouldBeRefused(fromUnix).Reason.ShouldContain("pmj pack");
+            ShouldBeRefused(bestCompression).Reason.ShouldContain("pmj pack");
+        }
+
+        [Fact]
+        public void The_same_data_cut_into_other_blocks_than_pmj_cuts_is_refused()
+        {
+            var tar = Unpacked(PackageArchive.Write(Sample.SmallPackage()));
+
+            PackageArchive.Read(RawTar.Stored(tar, tar.Length)).ShouldSucceed();
+            ShouldBeRefused(RawTar.Stored(tar, 512, tar.Length - 512)).Reason.ShouldContain("pmj pack");
+            ShouldBeRefused(RawTar.Stored(tar, tar.Length, 0)).Reason.ShouldContain("pmj pack");
+            ShouldBeRefused(RawTar.Stored(tar, 0, tar.Length)).Reason.ShouldContain("pmj pack");
         }
 
         [Fact]
@@ -99,6 +128,27 @@ namespace Packmoji.Core.Tests.Archives
         }
 
         [Fact]
+        public void Something_carried_after_an_archive_is_refused_though_it_ends_as_the_archive_ends()
+        {
+            // The check and the length an archive ends with, said again after whatever was added.
+            var archive = PackageArchive.Write(Sample.SmallPackage());
+            var carried = new byte[100_000];
+
+            ShouldBeRefused([.. archive, .. carried, .. archive[^8..]]).Reason.ShouldContain("pmj pack");
+        }
+
+        [Fact]
+        public void A_gzip_that_holds_nothing_before_the_archive_is_refused()
+        {
+            var archive = PackageArchive.Write(Sample.SmallPackage());
+            var nothing = RawTar.Stored([], 0);
+
+            nothing.Length.ShouldBe(23);
+            ShouldBeRefused([.. nothing, .. archive]).Reason.ShouldContain("pmj pack");
+            ShouldBeRefused([.. nothing, .. nothing, .. archive, .. new byte[1000], .. archive[^8..]]).Reason.ShouldContain("pmj pack");
+        }
+
+        [Fact]
         public void One_file_more_than_the_limit_is_refused_before_an_archive_is_written()
         {
             var manifest = Sample.File("packmoji.json", Manifest);
@@ -110,13 +160,45 @@ namespace Packmoji.Core.Tests.Archives
         }
 
         [Fact]
-        public void One_byte_more_than_the_limit_is_refused_before_an_archive_is_written()
+        public void Files_whose_archive_would_be_one_block_over_the_limit_are_refused_before_it_is_written()
+        {
+            // The tar is a block for each of the two headers, one for the manifest, the other file's
+            // own blocks and two at the end. Around it is a gzip of 18 bytes and 5 more for each
+            // 65,535 bytes of tar.
+            static long ArchiveOf(long blocks)
+            {
+                var tar = (5 + blocks) * 512;
+                return 18 + (5 * ((tar + 65_534) / 65_535)) + tar;
+            }
+
+            var most = PackageArchive.MaxBytes / 512;
+            while (ArchiveOf(most) > PackageArchive.MaxBytes)
+            {
+                most--;
+            }
+
+            var manifest = Sample.File("packmoji.json", Manifest);
+            ArchiveFile Other(long bytes) => new(Sample.Path("big.bin"), new byte[bytes]);
+
+            PackageArchive.Check([manifest, Other(most * 512)]).ShouldBeEmpty();
+            var largest = PackageArchive.Write([manifest, Other(most * 512)]);
+            largest.Length.ShouldBe((int)ArchiveOf(most));
+            PackageArchive.Read(largest).ShouldSucceed().Count.ShouldBe(2);
+
+            PackageArchive.Check([manifest, Other((most * 512) + 1)]).ShouldHaveSingleItem()
+                .ShouldBe($"its archive would be {ArchiveOf(most + 1)} bytes, and an archive is at most {PackageArchive.MaxBytes} bytes");
+            Should.Throw<ArgumentException>(() => PackageArchive.Write([manifest, Other((most * 512) + 1)]));
+        }
+
+        [Fact]
+        public void A_path_that_goes_in_a_record_is_counted_with_its_record()
         {
             var manifest = Sample.File("packmoji.json", Manifest);
-            ArchiveFile Rest(int more) => new(Sample.Path("big.bin"), new byte[PackageArchive.MaxUnpackedBytes - manifest.Content.Length + more]);
+            ArchiveFile[] files = [manifest, Sample.File("src/lib.🍇", "x"), Sample.File(new string('a', 101), "y"), Sample.File("plain.txt", new string('z', 513))];
 
-            PackageArchive.Check([manifest, Rest(0)]).ShouldBeEmpty();
-            PackageArchive.Check([manifest, Rest(1)]).ShouldHaveSingleItem().ShouldBe($"its files come to more than {PackageArchive.MaxUnpackedBytes} bytes");
+            // Whatever Check counts, Write must write: so one fewer block than these files need has to be refused.
+            PackageArchive.Check(files).ShouldBeEmpty();
+            PackageArchive.Write(files).Length.ShouldBe(18 + 5 + (512 * (2 + 4 + 4 + 3 + 2)));
         }
 
         [Fact]
@@ -126,13 +208,16 @@ namespace Packmoji.Core.Tests.Archives
         }
 
         [Fact]
-        public void A_small_archive_that_unpacks_to_fill_a_disk_is_refused_before_it_has()
+        public void A_small_archive_that_would_unpack_to_fill_a_disk_is_refused_and_is_never_unpacked()
         {
-            // A hundred megabytes of zeros is a hundred kilobytes when it is compressed.
-            var bomb = RawTar.Gzip(RawTar.Header("zeros.bin", 100L * 1024 * 1024), new byte[100 * 1024 * 1024], RawTar.End());
+            // A hundred megabytes of zeros is a hundred kilobytes when it is compressed. An archive is
+            // not compressed at all, so there is nothing to unpack that is larger than the archive.
+            var bomb = RawTar.Compressed(RawTar.Header("zeros.bin", 100L * 1024 * 1024), new byte[100 * 1024 * 1024], RawTar.End());
+            var before = GC.GetTotalAllocatedBytes(precise: true);
 
             bomb.Length.ShouldBeLessThan(1024 * 1024);
-            ShouldBeRefused(bomb).Reason.ShouldContain("unpacks to more than");
+            ShouldBeRefused(bomb).Reason.ShouldContain("pmj pack");
+            (GC.GetTotalAllocatedBytes(precise: true) - before).ShouldBeLessThan(8L * 1024 * 1024);
         }
 
         [Fact]

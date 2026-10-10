@@ -46,12 +46,6 @@ namespace Packmoji.Cli.Commands
                 }
 
                 var archive = PackageArchive.Write(files);
-                if (archive.Length > PackageArchive.MaxBytes)
-                {
-                    return DiagnosticPrinter.Report(host, TooLarge(
-                        $"its archive would be {archive.Length} bytes, and an archive is at most {PackageArchive.MaxBytes} bytes"));
-                }
-
                 var package = manifest.Value.Package;
                 var asset = AssetName.For(package.Name, package.Version);
                 var target = Path.Combine(host.WorkingDirectory, ProjectFiles.Target);

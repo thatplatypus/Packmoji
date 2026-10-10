@@ -26,9 +26,9 @@ namespace Packmoji.Core.Archives
             }
 
             var problems = new List<string>();
-            if (files.Sum(file => file.Size) > PackageArchive.MaxUnpackedBytes)
+            if (TooLarge(files) is { } tooLarge)
             {
-                problems.Add($"its files come to more than {PackageArchive.MaxUnpackedBytes} bytes");
+                problems.Add(tooLarge);
             }
 
             if (!files.Any(file => file.Path == ManifestReader.FileName))
@@ -38,6 +38,18 @@ namespace Packmoji.Core.Archives
 
             problems.AddRange(NameProblems(files.Select(file => file.Path).ToList()));
             return problems;
+        }
+
+        /// <summary>
+        /// Why the archive of these files would be over its limit, or null when it would not be. An
+        /// archive is not compressed, so its length follows from the paths and the lengths alone.
+        /// </summary>
+        public static string? TooLarge(IReadOnlyList<(string Path, long Size)> files)
+        {
+            var size = GzipFormat.SizeOf(TarFormat.SizeOf(files));
+            return size > PackageArchive.MaxBytes
+                ? $"its archive would be {size} bytes, and an archive is at most {PackageArchive.MaxBytes} bytes"
+                : null;
         }
 
         /// <summary>Every reason these paths cannot all be files on one disk, whatever disk that is.</summary>

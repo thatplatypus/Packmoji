@@ -175,10 +175,10 @@ namespace Packmoji.Core.Tests.Packing
         public void More_files_or_more_bytes_than_an_archive_may_hold_are_refused()
         {
             var many = Enumerable.Range(0, PackageArchive.MaxFiles).Select(number => new TreeEntry($"src/f{number}.🍇", 1, false)).ToArray();
-            TreeEntry[] large = [new("packmoji.json", 100, false), new("src/lib.🍇", PackageArchive.MaxUnpackedBytes, false)];
+            TreeEntry[] large = [new("packmoji.json", 100, false), new("src/lib.🍇", PackageArchive.MaxBytes, false)];
 
             Refused(Conventional, [.. Tree("packmoji.json", "src/lib.🍇"), .. many], DiagnosticCodes.ArchiveInvalid).Reason.ShouldContain($"{PackageArchive.MaxFiles} files");
-            Refused(Conventional, large, DiagnosticCodes.ArchiveInvalid).Reason.ShouldContain($"{PackageArchive.MaxUnpackedBytes} bytes");
+            Refused(Conventional, large, DiagnosticCodes.ArchiveInvalid).Reason.ShouldContain($"an archive is at most {PackageArchive.MaxBytes} bytes");
         }
     }
 }

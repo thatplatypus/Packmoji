@@ -10,8 +10,9 @@ namespace Packmoji.Core.Archives
     /// <remarks>
     /// Reading is as strict as writing. An archive comes from someone else and is unpacked on this
     /// machine, and the only archive that has to be read is one that pmj wrote: so what is read is
-    /// written again, and has to come out the same. That refuses a link, a path that climbs out and a
-    /// file that would run without a rule for each, because pmj writes none of them.
+    /// written again, and has to come out the same, byte for byte. That refuses a link, a path that
+    /// climbs out, a file that would run, and anything carried along beside the files, without a rule
+    /// for each, because pmj writes none of them.
     /// </remarks>
     public static class PackageArchive
     {
@@ -20,9 +21,6 @@ namespace Packmoji.Core.Archives
 
         /// <summary>The most files an archive may hold.</summary>
         public const int MaxFiles = 4096;
-
-        /// <summary>The most bytes an archive's files may come to: 64 MiB.</summary>
-        public const int MaxUnpackedBytes = 64 * 1024 * 1024;
 
         /// <summary>
         /// Every reason a set of files cannot be an archive, as the end of a sentence that begins
@@ -54,9 +52,9 @@ namespace Packmoji.Core.Archives
                 return Refused($"it is larger than {MaxBytes} bytes");
             }
 
-            if (GzipFormat.Unpack(archive, TarFormat.MaxBytes, out var notGzip) is not { } tar)
+            if (GzipFormat.Unpack(archive.Span) is not { } tar)
             {
-                return Refused(notGzip!);
+                return Refused("it is not a gzip file as pmj pack writes one: it is damaged, or something else made it, or something was added to it");
             }
 
             if (!TarFormat.TryParse(tar, out var entries, out var notTar))

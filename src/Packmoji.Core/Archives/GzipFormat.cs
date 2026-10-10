@@ -1,18 +1,23 @@
 using System.Buffers.Binary;
-using System.IO.Compression;
-using System.Runtime.InteropServices;
 
 namespace Packmoji.Core.Archives
 {
     /// <summary>
     /// The gzip an archive's tar is in. It is written with stored blocks, which is to say not
     /// compressed at all: a compressor's output differs between versions and between processors, and
-    /// the bytes of an archive are what a digest is taken of. Sources are small. What is read may be
-    /// compressed by anything, so long as it is one whole gzip and nothing more.
+    /// the bytes of an archive are what a digest is taken of. Sources are small.
     /// </summary>
+    /// <remarks>
+    /// What is read has to be the very bytes that would be written. A gzip can be made in endless
+    /// ways that unpack to the same data, and can carry more after its end without ceasing to be one,
+    /// so anything looser would give one set of files many archives, and let an archive hold what
+    /// nobody who unpacks it would ever see. Nothing is inflated, so nothing can unpack to more than
+    /// it is.
+    /// </remarks>
     internal static class GzipFormat
     {
         private const int MaxStored = 65_535;
+        private const int BlockHeaderLength = 5;
         private const int TrailerLength = 8;
 
         // Deflate, no flags, no time, no extra flags, and an operating system of "unknown": nothing
@@ -21,10 +26,13 @@ namespace Packmoji.Core.Archives
 
         private static readonly uint[] CrcTable = MakeCrcTable();
 
+        /// <summary>How many bytes the gzip of this many bytes is.</summary>
+        public static long SizeOf(long dataLength) => Header.Length + (Blocks(dataLength) * BlockHeaderLength) + dataLength + TrailerLength;
+
         public static byte[] Store(ReadOnlySpan<byte> data)
         {
-            var blocks = Math.Max(1, (data.Length + MaxStored - 1) / MaxStored);
-            var archive = new byte[Header.Length + (blocks * 5) + data.Length + TrailerLength];
+            var blocks = (int)Blocks(data.Length);
+            var archive = new byte[SizeOf(data.Length)];
             Header.CopyTo(archive, 0);
             var at = Header.Length;
             for (var block = 0; block < blocks; block++)
@@ -33,8 +41,8 @@ namespace Packmoji.Core.Archives
                 archive[at] = (byte)(block == blocks - 1 ? 1 : 0);
                 BinaryPrimitives.WriteUInt16LittleEndian(archive.AsSpan(at + 1), (ushort)chunk.Length);
                 BinaryPrimitives.WriteUInt16LittleEndian(archive.AsSpan(at + 3), (ushort)~chunk.Length);
-                chunk.CopyTo(archive.AsSpan(at + 5));
-                at += 5 + chunk.Length;
+                chunk.CopyTo(archive.AsSpan(at + BlockHeaderLength));
+                at += BlockHeaderLength + chunk.Length;
             }
 
             BinaryPrimitives.WriteUInt32LittleEndian(archive.AsSpan(at), Crc(data));
@@ -42,54 +50,36 @@ namespace Packmoji.Core.Archives
             return archive;
         }
 
-        /// <summary>What a gzip holds, or null and the reason when it is not one gzip of at most <paramref name="maxBytes"/> bytes.</summary>
-        public static byte[]? Unpack(ReadOnlyMemory<byte> gzip, int maxBytes, out string? problem)
+        /// <summary>What a gzip holds, or null when it is not, byte for byte, the gzip that <see cref="Store"/> writes of it.</summary>
+        public static byte[]? Unpack(ReadOnlySpan<byte> gzip)
         {
-            const string notGzip = "it is not a gzip file, or it is damaged";
-            if (gzip.Length < Header.Length + TrailerLength || gzip.Span[0] != Header[0] || gzip.Span[1] != Header[1])
+            // Every block but the last is full, so how long the whole is says how many blocks there
+            // would be and how much they would hold. What is found at those places is taken out and
+            // stored again: it is the archive only if that gives the same bytes.
+            var blocks = Math.Max(1, (gzip.Length - Header.Length - TrailerLength + MaxStored + BlockHeaderLength - 1L) / (MaxStored + BlockHeaderLength));
+            var length = gzip.Length - Header.Length - TrailerLength - (blocks * BlockHeaderLength);
+            if (length < 0 || length > blocks * MaxStored)
             {
-                problem = notGzip;
                 return null;
             }
 
-            var bytes = MemoryMarshal.TryGetArray(gzip, out var segment) ? segment : new ArraySegment<byte>(gzip.ToArray());
-            var unpacked = new MemoryStream();
-            try
+            var data = new byte[length];
+            for (var block = 0; block < blocks; block++)
             {
-                using var input = new MemoryStream(bytes.Array!, bytes.Offset, bytes.Count, writable: false);
-                using var stream = new GZipStream(input, CompressionMode.Decompress);
-                var buffer = new byte[81_920];
-                int read;
-                while ((read = stream.Read(buffer, 0, buffer.Length)) > 0)
+                var from = Header.Length + (block * (long)(MaxStored + BlockHeaderLength)) + BlockHeaderLength;
+                var chunk = (int)Math.Min(MaxStored, length - (block * (long)MaxStored));
+                if (chunk < 0 || from + chunk > gzip.Length - TrailerLength)
                 {
-                    if (unpacked.Length + read > maxBytes)
-                    {
-                        problem = $"it unpacks to more than {maxBytes} bytes";
-                        return null;
-                    }
-
-                    unpacked.Write(buffer, 0, read);
+                    return null;
                 }
-            }
-            catch (InvalidDataException)
-            {
-                problem = notGzip;
-                return null;
+
+                gzip.Slice((int)from, chunk).CopyTo(data.AsSpan(block * MaxStored));
             }
 
-            // The check and the length a gzip ends with, held to what came out. A gzip that was cut
-            // short, or that has something after it, or that is two in a row, does not end with them.
-            var data = unpacked.ToArray();
-            var trailer = gzip.Span[^TrailerLength..];
-            if (BinaryPrimitives.ReadUInt32LittleEndian(trailer) != Crc(data) || BinaryPrimitives.ReadUInt32LittleEndian(trailer[4..]) != (uint)data.Length)
-            {
-                problem = notGzip;
-                return null;
-            }
-
-            problem = null;
-            return data;
+            return Store(data).AsSpan().SequenceEqual(gzip) ? data : null;
         }
+
+        private static long Blocks(long dataLength) => Math.Max(1, (dataLength + MaxStored - 1) / MaxStored);
 
         private static uint Crc(ReadOnlySpan<byte> data)
         {

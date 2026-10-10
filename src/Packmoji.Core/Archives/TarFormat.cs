@@ -21,8 +21,21 @@ namespace Packmoji.Core.Archives
 
         private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
-        /// <summary>The most bytes a tar of the most files of the most bytes can be.</summary>
-        public static int MaxBytes => PackageArchive.MaxUnpackedBytes + (PackageArchive.MaxFiles * 6 * Block) + (2 * Block);
+        /// <summary>How many bytes the tar of files with these paths and lengths is, without making it.</summary>
+        public static long SizeOf(IReadOnlyList<(string Path, long Size)> files)
+        {
+            long size = 2 * Block;
+            foreach (var (path, length) in files)
+            {
+                size += Block + Padded(length);
+                if (!IsShortAndPlain(path))
+                {
+                    size += Block + Padded(Record(path).Length);
+                }
+            }
+
+            return size;
+        }
 
         /// <param name="files">In the order of <see cref="PathOrder"/>.</param>
         public static byte[] Write(IReadOnlyList<ArchiveFile> files)
@@ -189,7 +202,9 @@ namespace Packmoji.Core.Archives
             tar.Write(new byte[Padded(content.Length) - content.Length]);
         }
 
-        private static int Padded(int length) => (length + Block - 1) / Block * Block;
+        private static int Padded(int length) => (int)Padded((long)length);
+
+        private static long Padded(long length) => (length + Block - 1) / Block * Block;
 
         private static bool TryReadOctal(ReadOnlySpan<byte> field, out long value)
         {

@@ -58,8 +58,34 @@ namespace Packmoji.Core.Tests.TestSupport
 
         public static byte[] End() => new byte[1024];
 
+        /// <summary>
+        /// The parts one after another, in the gzip pmj writes, so that what a test changed in the
+        /// tar is the one thing that is wrong with the archive.
+        /// </summary>
+        public static byte[] Gzip(params byte[][] parts) => Packmoji.Core.Archives.GzipFormat.Store(parts.SelectMany(part => part).ToArray());
+
+        /// <summary>The data in a gzip of stored blocks of the lengths given, which need not be the lengths pmj cuts at.</summary>
+        public static byte[] Stored(byte[] data, params int[] lengths)
+        {
+            using var archive = new MemoryStream();
+            archive.Write([0x1f, 0x8b, 8, 0, 0, 0, 0, 0, 0, 255]);
+            var at = 0;
+            for (var block = 0; block < lengths.Length; block++)
+            {
+                archive.WriteByte((byte)(block == lengths.Length - 1 ? 1 : 0));
+                archive.Write(BitConverter.GetBytes((ushort)lengths[block]));
+                archive.Write(BitConverter.GetBytes((ushort)~lengths[block]));
+                archive.Write(data, at, lengths[block]);
+                at += lengths[block];
+            }
+
+            var whole = Packmoji.Core.Archives.GzipFormat.Store(data);
+            archive.Write(whole, whole.Length - 8, 8);
+            return archive.ToArray();
+        }
+
         /// <summary>The parts one after another, in a gzip that compresses, as any other tool writes one.</summary>
-        public static byte[] Gzip(params byte[][] parts)
+        public static byte[] Compressed(params byte[][] parts)
         {
             using var archive = new MemoryStream();
             using (var gzip = new GZipStream(archive, CompressionLevel.Optimal))

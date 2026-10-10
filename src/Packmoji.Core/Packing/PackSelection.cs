@@ -31,9 +31,9 @@ namespace Packmoji.Core.Packing
             {
                 diagnostics.Add(TooLarge($"it would hold more than {PackageArchive.MaxFiles} files"));
             }
-            else if (selected.Sum(entry => entry.Size) > PackageArchive.MaxUnpackedBytes)
+            else if (ArchiveRules.TooLarge(selected.Select(entry => (entry.Path, entry.Size)).ToList()) is { } tooLarge)
             {
-                diagnostics.Add(TooLarge($"its files come to more than {PackageArchive.MaxUnpackedBytes} bytes"));
+                diagnostics.Add(TooLarge(tooLarge));
             }
 
             if (diagnostics.Count > 0)
