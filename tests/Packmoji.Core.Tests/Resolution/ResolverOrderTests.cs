@@ -1,3 +1,4 @@
+using Packmoji.Core.Diagnostics;
 using Packmoji.Core.Lockfiles;
 using Packmoji.Core.Tests.TestSupport;
 using Shouldly;
@@ -43,6 +44,24 @@ namespace Packmoji.Core.Tests.Resolution
             other.Asked.ShouldBe(one.Asked);
             LockfileReader.Read(first).ShouldSucceed().Packages.Select(package => $"{package.Name}@{package.Version}")
                 .ShouldBe(["@thatplatypus/a@1.0.0", "@thatplatypus/b@1.0.0", "@thatplatypus/c@1.2.0", "@thatplatypus/d@0.3.1"]);
+        }
+
+        [Fact]
+        public async Task A_version_that_names_one_package_twice_gives_the_same_words_in_whichever_order_it_names_it()
+        {
+            // No manifest can say this, and a source is not held to what a manifest can say. Both
+            // spellings name crypto 1.2.0, and which of them is shown must not depend on which came first.
+            static Universe Published(params string[] grapevineAsksFor) => new Universe()
+                .Publish("@thatplatypus/grapevine", "0.3.0", grapevineAsksFor)
+                .Publish("@thatplatypus/crypto", "1.2.0")
+                .Yank("@thatplatypus/crypto", "1.2.0");
+            var manifest = Project.Asking("@thatplatypus/grapevine@0.3");
+
+            var one = await Published("@thatplatypus/crypto@1.2", "@thatplatypus/crypto@1.2.0").Resolve(manifest);
+            var other = await Published("@thatplatypus/crypto@1.2.0", "@thatplatypus/crypto@1.2").Resolve(manifest);
+
+            one.ShouldFailWith(DiagnosticCodes.ResolveYanked).Reason.ShouldEndWith("→ @thatplatypus/crypto@1.2");
+            other.Diagnostics.ShouldBe(one.Diagnostics);
         }
 
         [Fact]

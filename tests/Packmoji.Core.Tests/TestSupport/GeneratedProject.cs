@@ -7,6 +7,8 @@ namespace Packmoji.Core.Tests.TestSupport
     /// A project, and everything published that it could lead to, made up by CsCheck: up to six
     /// packages, each with up to five versions on two compatibility lines, some yanked and some never
     /// published. A version depends only on packages that come after its own, so there is no circle.
+    /// Now and then a version names one package twice, and more rarely the manifest does: no file can
+    /// say either, and a source or a manifest made in code can.
     /// </summary>
     /// <remarks>
     /// What is generated is plain numbers, and the members below say what they mean. That keeps every
@@ -17,7 +19,9 @@ namespace Packmoji.Core.Tests.TestSupport
         GeneratedProject.Ask[] Dependencies,
         GeneratedProject.Ask[] DevDependencies,
         GeneratedProject.Ask More,
-        int Order)
+        int Order,
+        bool VersionsRepeat,
+        bool ManifestRepeats)
     {
         public const string Name = "@generated/app";
 
@@ -39,7 +43,10 @@ namespace Packmoji.Core.Tests.TestSupport
             Asks.Array[0, 2],
             Asks,
             Gen.Int[0, 1_000_000],
-            (packages, dependencies, devDependencies, more, order) => new GeneratedProject(packages, dependencies, devDependencies, more, order));
+            Gen.Int[0, 7].Select(roll => roll == 0),
+            Gen.Int[0, 15].Select(roll => roll == 0),
+            (packages, dependencies, devDependencies, more, order, versionsRepeat, manifestRepeats) =>
+                new GeneratedProject(packages, dependencies, devDependencies, more, order, versionsRepeat, manifestRepeats));
 
         /// <param name="Target">Which package is asked for, counted among those that may be asked for.</param>
         /// <param name="Pick">Which version of it: mostly one on its main line, at times the one on its other line, and now and then one that was never published.</param>
@@ -130,7 +137,8 @@ namespace Packmoji.Core.Tests.TestSupport
             return reordered ? published.Reverse() : published;
         }
 
-        // A manifest names a package once, in one of its two tables, so a package asked for again is passed over.
+        // A manifest names a package once, in one of its two tables, so a package asked for again is
+        // passed over, but for the few projects that are made to name one twice.
         private List<(int Package, bool Dev, string Text)> Root()
         {
             var named = new HashSet<int>();
@@ -138,7 +146,7 @@ namespace Packmoji.Core.Tests.TestSupport
             foreach (var (ask, dev) in Dependencies.Select(ask => (ask, false)).Concat(DevDependencies.Select(ask => (ask, true))))
             {
                 var package = ask.Target % Packages.Length;
-                if (named.Add(package))
+                if (named.Add(package) || ManifestRepeats)
                 {
                     root.Add((package, dev, Written(ask, package)));
                 }
@@ -154,7 +162,7 @@ namespace Packmoji.Core.Tests.TestSupport
             var asks = new List<string>();
             foreach (var ask in version.Asks)
             {
-                if (later > 0 && named.Add(package + 1 + (ask.Target % later)))
+                if (later > 0 && (named.Add(package + 1 + (ask.Target % later)) || VersionsRepeat))
                 {
                     asks.Add(Written(ask, package + 1 + (ask.Target % later)));
                 }

@@ -165,6 +165,32 @@ namespace Packmoji.Core.Tests.Resolution
         }
 
         [Fact]
+        public async Task A_hundred_and_fifty_warnings_do_not_push_the_one_error_out_of_the_list()
+        {
+            // Only a hundred problems are listed. The error is the last to be found here, and the first to be listed.
+            var names = Enumerable.Range(100, 150).Select(number => $"@thatplatypus/p{number}").ToArray();
+            var asked = names.Select(name => $"{name}@1.0").ToArray();
+            var before = new Universe();
+            var after = new Universe().Publish("@thatplatypus/zlib", "1.0.0").Yank("@thatplatypus/zlib", "1.0.0");
+            foreach (var name in names)
+            {
+                before.Publish(name, "1.0.0");
+                after.Publish(name, "1.0.0").Yank(name, "1.0.0");
+            }
+
+            var locked = await Locked(before, Project.Asking(asked));
+
+            var result = await after.Resolve(Project.Asking([.. asked, "@thatplatypus/zlib@1.0"]), locked);
+
+            result.Succeeded.ShouldBeFalse();
+            result.Diagnostics.Count.ShouldBe(100);
+            result.OmittedDiagnostics.ShouldBe(51);
+            result.Diagnostics[0].Code.ShouldBe(DiagnosticCodes.ResolveYanked);
+            result.Diagnostics[0].Message.ShouldContain("\"@thatplatypus/zlib\"");
+            result.Diagnostics.Skip(1).ShouldAllBe(diagnostic => diagnostic.Code == DiagnosticCodes.ResolveYankedLocked);
+        }
+
+        [Fact]
         public async Task Whatever_the_graph_what_was_locked_before_a_yank_goes_on_resolving_and_nothing_else_does()
         {
             var cancellation = TestContext.Current.CancellationToken;

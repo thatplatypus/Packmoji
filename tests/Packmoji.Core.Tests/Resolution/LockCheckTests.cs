@@ -277,6 +277,31 @@ namespace Packmoji.Core.Tests.Resolution
         }
 
         [Fact]
+        public async Task A_hundred_and_fifty_warnings_do_not_push_the_one_error_out_of_the_list()
+        {
+            // Only a hundred problems are listed. The error is of the last package, and it is listed first.
+            var names = Enumerable.Range(100, 150).Select(number => $"@thatplatypus/p{number}").Append("@thatplatypus/zlib").ToArray();
+            var manifest = Project.Asking(names.Select(name => $"{name}@1.0").ToArray());
+            var before = new Universe();
+            var after = new Universe();
+            foreach (var name in names)
+            {
+                before.Publish(name, "1.0.0");
+                after.Publish(name, "1.0.0").Yank(name, "1.0.0");
+            }
+
+            var locked = (await before.Resolve(manifest)).ShouldSucceed().ToLockfile(manifest);
+
+            var result = await Check(locked, after.Quarantine("@thatplatypus/zlib", "1.0.0"));
+
+            result.Succeeded.ShouldBeFalse();
+            result.Diagnostics.Count.ShouldBe(100);
+            result.OmittedDiagnostics.ShouldBe(51);
+            result.Diagnostics[0].Code.ShouldBe(DiagnosticCodes.ResolveQuarantined);
+            result.Diagnostics.Skip(1).ShouldAllBe(diagnostic => diagnostic.Code == DiagnosticCodes.ResolveYankedLocked);
+        }
+
+        [Fact]
         public async Task A_version_that_is_quarantined_and_also_changed_is_reported_for_both()
         {
             var locked = await Locked();
