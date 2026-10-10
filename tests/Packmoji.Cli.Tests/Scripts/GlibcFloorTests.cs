@@ -66,6 +66,16 @@ namespace Packmoji.Cli.Tests.Scripts
             (await RunAsync("2.35", Needs(needed, "something"))).Status.ShouldBe(status);
         }
 
+        // As text, 2.9 comes after 2.36, and would be taken for the newest of the three.
+        [Fact]
+        public async Task Of_several_versions_a_program_is_held_to_the_newest_as_a_number()
+        {
+            var run = await RunAsync("2.35", Needs("GLIBC_2.9", "inotify_init1"), Needs("GLIBC_2.36", "arc4random"), Needs("GLIBC_2.4", "__stack_chk_fail"));
+
+            run.Status.ShouldBe(1);
+            run.Error.ShouldContain("glibc 2.36");
+        }
+
         [Fact]
         public async Task What_is_not_a_version_of_the_c_library_is_not_counted()
         {

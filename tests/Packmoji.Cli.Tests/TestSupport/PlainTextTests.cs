@@ -35,10 +35,12 @@ namespace Packmoji.Cli.Tests.TestSupport
             PlainText.Slashed(text, '/').ShouldBe(text);
         }
 
+        // A backslash stands between the parts of a path only on a machine that writes a path so. Elsewhere it is a character of a name.
         [Fact]
         public void A_text_is_read_with_the_separator_of_the_machine_it_is_read_on()
         {
             PlainText.Slashed(Path.Combine("a", "b")).ShouldBe("a/b");
+            PlainText.Slashed(@"a\b").ShouldBe(Path.DirectorySeparatorChar == '\\' ? "a/b" : @"a\b");
         }
     }
 }

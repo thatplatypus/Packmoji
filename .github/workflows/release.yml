@@ -133,5 +133,7 @@ jobs:
           echo '```'
           cat "assets/pmj-$version.sha256"
           echo '```'
+          echo
+          echo "How one is fetched and held to its digest: https://github.com/$GH_REPO/blob/$GITHUB_REF_NAME/docs/cli.md#getting-pmj"
         } > notes.md
         gh release create "$GITHUB_REF_NAME" --verify-tag --title "pmj $version" --notes-file notes.md assets/*

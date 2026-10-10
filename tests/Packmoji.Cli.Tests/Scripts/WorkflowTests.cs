@@ -132,6 +132,13 @@ namespace Packmoji.Cli.Tests.Scripts
         }
 
         [Fact]
+        public void The_notes_of_a_release_send_a_reader_to_where_the_guide_says_how_a_program_is_fetched()
+        {
+            Job(Workflow("release.yml"), "release").ShouldContain("https://github.com/$GH_REPO/blob/$GITHUB_REF_NAME/docs/cli.md#getting-pmj");
+            File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "docs", "cli.md")).ReplaceLineEndings("\n").ShouldContain("\n## Getting pmj\n");
+        }
+
+        [Fact]
         public void A_tag_that_is_not_the_version_stops_a_release_before_anything_is_built()
         {
             var programs = Job(Workflow("release.yml"), "programs");
