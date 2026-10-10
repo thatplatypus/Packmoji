@@ -1,7 +1,7 @@
 # Checks every pull request, and main after a merge. The checks need no secret.
 #
 # Each job runs a script that also runs on a developer's machine, so a failure here can be
-# had again at a desk: scripts/check.sh and scripts/aot-smoke.sh.
+# had again at a desk: scripts/check.sh, scripts/aot-smoke.sh and scripts/real-compiler.sh.
 name: CI
 
 on:
@@ -35,6 +35,19 @@ jobs:
 
     - name: Build, test and report coverage
       run: scripts/check.sh --coverage
+
+  real-compiler:
+    name: The real compiler
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    - name: Checkout
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    # The script builds a container that holds Emojicode 1.0 beta 2 and the SDK, and runs in it
+    # the tests that every other job has a made-up compiler for.
+    - name: Build and run the sample projects with the released compiler
+      run: scripts/real-compiler.sh
 
   aot:
     name: Native AOT (${{ matrix.rid }})

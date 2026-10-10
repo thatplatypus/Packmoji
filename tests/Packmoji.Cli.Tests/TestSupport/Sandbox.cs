@@ -1,3 +1,4 @@
+using Packmoji.Cli.Building;
 using Packmoji.Core.Identity;
 using Packmoji.Core.Lockfiles;
 using Packmoji.Core.Manifests;
@@ -14,14 +15,44 @@ namespace Packmoji.Cli.Tests.TestSupport
     /// </summary>
     internal sealed class Sandbox : IDisposable
     {
+        // The variables that say where the tools of a build are, which a machine with real tools has set as it needs them.
+        private static readonly string[] ToolVariables = ["PATH", "EMOJICODEC", "EMOJICODE_PACKAGES_PATH", "EMOJICODE_INCLUDE", "CXX", "CC", "AR"];
+
+        private readonly bool _realTools;
+
         public Sandbox()
+            : this(realTools: false)
         {
+        }
+
+        private Sandbox(bool realTools)
+        {
+            _realTools = realTools;
             Root = Path.Combine(Path.GetTempPath(), "pmj-tests", Guid.NewGuid().ToString("N"));
             Work = Directory.CreateDirectory(Path.Combine(Root, "work")).FullName;
             Home = Path.Combine(Root, "home");
             Tools = new FakeTools(Variable) { BuiltInPackages = Path.Combine(InstallRoot, "EmojicodePackages") };
-            InstallTools();
+            if (realTools)
+            {
+                foreach (var name in ToolVariables)
+                {
+                    if (Environment.GetEnvironmentVariable(name) is { Length: > 0 } value)
+                    {
+                        Variables[name] = value;
+                    }
+                }
+            }
+            else
+            {
+                InstallTools();
+            }
         }
+
+        /// <summary>
+        /// A machine whose compiler and other tools are the real ones of the machine the tests run
+        /// on, found as its environment says. Its GitHub is still made up, and its files are its own.
+        /// </summary>
+        public static Sandbox WithRealTools() => new(realTools: true);
 
         /// <summary>The repository that holds all three of Grapevine's packages.</summary>
         public const string Grapevine = "github.com/thatplatypus/grapevine";
@@ -53,7 +84,7 @@ namespace Packmoji.Cli.Tests.TestSupport
         /// nothing. Nothing is there: this machine's Emojicode is where its environment says, until a
         /// test moves it.
         /// </summary>
-        public string InstallRoot => Path.Combine(Root, "usr-local");
+        public string InstallRoot => _realTools ? "/usr/local" : Path.Combine(Root, "usr-local");
 
         /// <summary>Where the made-up tools are: the one directory on this machine's <c>PATH</c>.</summary>
         public string ToolsDirectory => Path.Combine(Root, "tools");
@@ -87,8 +118,8 @@ namespace Packmoji.Cli.Tests.TestSupport
                 Out = output,
                 Error = error,
                 Variable = Variable,
-                Tools = Tools,
-                IsMacOS = MacOS,
+                Tools = _realTools ? new ProcessToolRunner() : Tools,
+                IsMacOS = _realTools ? OperatingSystem.IsMacOS() : MacOS,
                 InstallRoot = InstallRoot,
             };
 
@@ -157,6 +188,31 @@ namespace Packmoji.Cli.Tests.TestSupport
         {
             Asked.Add(name);
             return Variables.GetValueOrDefault(name);
+        }
+
+        /// <summary>
+        /// Puts the sample projects on this machine as a checkout of the repository would, in
+        /// <c>hello-pkg</c> under <see cref="Work"/>, and releases its two libraries on the made-up
+        /// GitHub as their author would: each packed by <c>pmj pack</c>, and the file released.
+        /// </summary>
+        public async Task ReleaseTheSampleAsync()
+        {
+            var sample = Path.Combine(AppContext.BaseDirectory, "samples", "hello-pkg");
+            foreach (var file in Directory.EnumerateFiles(sample, "*", SearchOption.AllDirectories))
+            {
+                var copy = Path.Combine(Work, "hello-pkg", Path.GetRelativePath(sample, file));
+                Directory.CreateDirectory(Path.GetDirectoryName(copy)!);
+                File.Copy(file, copy);
+            }
+
+            foreach (var library in new[] { "words", "greeter" })
+            {
+                var packed = await RunInAsync($"hello-pkg/{library}", "pack");
+                packed.Error.ShouldBeEmpty();
+                packed.Status.ShouldBe(0);
+                var archive = Directory.GetFiles(PathOf($"hello-pkg/{library}/target"), "*.pmj.tar.gz").ShouldHaveSingleItem();
+                Upload("github.com/thatplatypus/packmoji", $"@thatplatypus/hello_{library}", "0.1.0", File.ReadAllBytes(archive));
+            }
         }
 
         /// <summary>A path inside <see cref="Work"/>, written with <c>/</c>, as a path on this machine.</summary>
