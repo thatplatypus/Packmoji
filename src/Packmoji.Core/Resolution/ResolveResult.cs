@@ -31,33 +31,6 @@ namespace Packmoji.Core.Resolution
         [MemberNotNullWhen(true, nameof(Graph))]
         public bool Succeeded => Graph is not null;
 
-        /// <summary>
-        /// This result with more errors after its own, for whatever asked for the resolution and can
-        /// say more about what stopped it than the resolver can.
-        /// </summary>
-        internal ResolveResult WithErrors(IReadOnlyList<Diagnostic> more)
-        {
-            if (more.Count == 0)
-            {
-                return this;
-            }
-
-            var errors = new DiagnosticList();
-            var warnings = new DiagnosticList();
-            foreach (var diagnostic in Diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).Concat(more))
-            {
-                errors.Add(diagnostic);
-            }
-
-            foreach (var diagnostic in Diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Warning))
-            {
-                warnings.Add(diagnostic);
-            }
-
-            var extended = From(errors, warnings, null);
-            return new ResolveResult(null, extended.Diagnostics, extended.OmittedDiagnostics + OmittedDiagnostics);
-        }
-
         /// <summary>The result of a resolution that one problem stopped before anything else could be known.</summary>
         internal static ResolveResult Stopped(Diagnostic error) => new(null, [error], 0);
 

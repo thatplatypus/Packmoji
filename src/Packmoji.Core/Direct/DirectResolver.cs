@@ -19,21 +19,15 @@ namespace Packmoji.Core.Direct
             {
                 var known = source.KnownRepositories;
                 var result = await Resolver.ResolveAsync(manifest, existing, source, cancellationToken);
-                if (!result.Diagnostics.Any(diagnostic => diagnostic.Code == DiagnosticCodes.ResolveVersionMissing))
-                {
-                    return result;
-                }
 
                 // A package can be asked for before the package that shows where its owner keeps
-                // things. If a repository was learned of since this resolution began, what was not
-                // found may be there, so it is all asked again: the source has kept what it found,
-                // and looks only where it has not looked. This ends, since repositories are learned
-                // of only by finding packages in them.
-                if (source.KnownRepositories == known)
+                // things. If something was not found, and a repository was learned of since this
+                // resolution began, it may be there, so it is all asked again: the source has kept
+                // what it found, and looks only where it has not looked. This ends, since
+                // repositories are learned of only by finding packages in them.
+                if (source.KnownRepositories == known || !result.Diagnostics.Any(diagnostic => diagnostic.Code is DiagnosticCodes.ResolveVersionMissing or DiagnosticCodes.PackageNotFound))
                 {
-                    return result.WithErrors(source.Unplaced()
-                        .Select(unplaced => DirectPackageSource.NotFound(unplaced.Name, unplaced.Version, source.LookedIn(unplaced.Name, unplaced.Version)))
-                        .ToList());
+                    return result;
                 }
             }
         }

@@ -237,7 +237,7 @@ namespace Packmoji.Cli.Tests.Commands
         }
 
         [Fact]
-        public async Task A_version_that_was_never_released_is_an_error_that_says_where_pmj_looked()
+        public async Task A_version_that_cannot_be_found_is_an_error_that_says_where_pmj_looked_and_no_more_than_it_knows()
         {
             using var sandbox = WithCrypto();
             var manifest = sandbox.Read("packmoji.json");
@@ -246,9 +246,9 @@ namespace Packmoji.Cli.Tests.Commands
 
             run.Status.ShouldBe(1);
             run.Output.ShouldBeEmpty();
-            run.Error.ShouldContain("error[resolve.version-missing]: Version 9.9.0 of \"@thatplatypus/crypto\" was never published.");
-            run.Error.ShouldContain("error[package.not-found]: No release of \"@thatplatypus/crypto\" 9.9.0 was found.");
-            run.Error.ShouldContain("pmj looked for the release crypto-v9.9.0 in github.com/thatplatypus/crypto");
+            run.Error.ShouldStartWith("error[package.not-found]: No release of \"@thatplatypus/crypto\" 9.9.0 was found.");
+            run.Error.ShouldContain("pmj looked for the release crypto-v9.9.0 in github.com/thatplatypus/crypto, and it is not there; it is asked for: @someone/app → @thatplatypus/crypto@9.9");
+            run.Error.ShouldNotContain("never published");
             sandbox.Read("packmoji.json").ShouldBe(manifest);
             sandbox.Has("packmoji.lock").ShouldBeFalse();
         }

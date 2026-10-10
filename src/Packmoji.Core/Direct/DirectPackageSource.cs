@@ -21,7 +21,7 @@ namespace Packmoji.Core.Direct
     /// release is taken only when the manifest in its archive says that it is the package and the
     /// version looked for, and that the package lives where it was found.
     /// </remarks>
-    public sealed class DirectPackageSource : IPackageSource
+    public sealed class DirectPackageSource : IPackageSource, IExplainsMissing
     {
         private readonly IReleaseHost _host;
         private readonly IAssetStore _store;
@@ -31,6 +31,7 @@ namespace Packmoji.Core.Direct
         private readonly Dictionary<string, SortedSet<string>> _known = new(StringComparer.Ordinal);
         private readonly Dictionary<string, RepositoryRef> _repositories = new(StringComparer.Ordinal);
         private readonly Dictionary<(PackageName Name, SemanticVersion Version), PublishedVersion> _found = [];
+        private readonly HashSet<PackageName> _placed = [];
         private readonly Dictionary<(PackageName Name, SemanticVersion Version), List<RepositoryRef>> _lookedIn = [];
         private readonly Dictionary<PackageName, List<RepositoryRef>> _listedIn = [];
         private readonly Dictionary<string, IReadOnlyList<ReleaseInfo>> _releases = new(StringComparer.Ordinal);
@@ -81,6 +82,7 @@ namespace Packmoji.Core.Direct
                 && await _store.FindAsync(name, version, digest, cancellationToken) is { } kept
                 && Sha256Digest.Of(kept.Span) == digest)
             {
+                _placed.Add(name);
                 return _found[key] = Describe(name, version, _locked[name], kept);
             }
 
@@ -108,6 +110,7 @@ namespace Packmoji.Core.Direct
                 var published = Describe(name, version, repository, archive);
                 await _store.KeepAsync(name, version, published.Sha256, archive, cancellationToken);
                 Learn(repository);
+                _placed.Add(name);
                 return _found[key] = published;
             }
 
@@ -151,18 +154,20 @@ namespace Packmoji.Core.Direct
         public IReadOnlyList<RepositoryRef> LookedIn(PackageName name) => _listedIn.TryGetValue(name, out var listedIn) ? listedIn : [];
 
         /// <summary>
-        /// The versions that were looked for and not found, of packages no version of which was found
-        /// at all: those this source cannot place, as against those it can and that lack a version.
+        /// Of a version this source did not find: when no version of the package was found anywhere,
+        /// and the lockfile does not say where it lives, all that is known is that it was not found
+        /// where pmj looked. That it was never published is more than this source can know. A package
+        /// that was found, at another version, is one whose place is known, and the resolver's own
+        /// word for a version that is missing there stands.
         /// </summary>
-        public IReadOnlyList<(PackageName Name, SemanticVersion Version)> Unplaced() =>
-            _lookedIn.Keys
-                .Where(key => !_found.ContainsKey(key) && !_found.Keys.Any(found => found.Name == key.Name) && !_locked.ContainsKey(key.Name))
-                .OrderBy(key => key.Name)
-                .ThenBy(key => key.Version)
-                .ToList();
+        Diagnostic? IExplainsMissing.Missing(PackageName name, SemanticVersion version, string chain) =>
+            _lookedIn.ContainsKey((name, version)) && !_placed.Contains(name) && !_locked.ContainsKey(name)
+                ? NotFound(name, version, LookedIn(name, version), chain)
+                : null;
 
         /// <summary>Says that a package could not be placed: where pmj looked for it, and how to say where it is.</summary>
-        public static Diagnostic NotFound(PackageName name, SemanticVersion? version, IReadOnlyList<RepositoryRef> lookedIn)
+        /// <param name="askedFor">How a resolution came to ask for the version, when one did.</param>
+        public static Diagnostic NotFound(PackageName name, SemanticVersion? version, IReadOnlyList<RepositoryRef> lookedIn, string? askedFor = null)
         {
             ArgumentNullException.ThrowIfNull(name);
             ArgumentNullException.ThrowIfNull(lookedIn);
@@ -172,7 +177,7 @@ namespace Packmoji.Core.Direct
                 version is null ? $"No release of \"{name}\" was found." : $"No release of \"{name}\" {version} was found.",
                 version is null
                     ? $"pmj looked in {places} for a release tagged {name.Name}-v and a version, and there is none"
-                    : $"pmj looked for the release {ReleaseTag.For(name, version)} in {places}, and it is not there",
+                    : $"pmj looked for the release {ReleaseTag.For(name, version)} in {places}, and it is not there{(askedFor is null ? "" : $"; it is asked for: {askedFor}")}",
                 $"if the package shares a repository with others, say which, once: pmj add {name} --repository github.com/{name.Scope}/<repository>");
         }
 

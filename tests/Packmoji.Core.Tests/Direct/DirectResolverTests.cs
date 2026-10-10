@@ -60,13 +60,34 @@ namespace Packmoji.Core.Tests.Direct
 
             var result = await Resolve(Grapevine(), manifest);
 
+            // Not finding a package is all pmj knows. It does not also say the version was never published.
             result.Succeeded.ShouldBeFalse();
-            result.Diagnostics.Select(diagnostic => diagnostic.ShouldBeComplete().Code).ShouldBe([DiagnosticCodes.ResolveVersionMissing, DiagnosticCodes.PackageNotFound]);
-            var notFound = result.Diagnostics[1];
+            var notFound = result.Diagnostics.ShouldHaveSingleItem().ShouldBeComplete();
+            notFound.Code.ShouldBe(DiagnosticCodes.PackageNotFound);
             notFound.Message.ShouldBe("No release of \"@thatplatypus/crypto\" 1.0.0 was found.");
             notFound.Reason.ShouldContain("crypto-v1.0.0");
             notFound.Reason.ShouldContain("github.com/thatplatypus/crypto");
-            notFound.Fix.ShouldContain("pmj add @thatplatypus/crypto --repository github.com/thatplatypus/");
+            notFound.Reason.ShouldEndWith("it is asked for: @someone/app → @thatplatypus/crypto@1.0");
+            notFound.Fix.ShouldContain("--repository github.com/thatplatypus/");
+        }
+
+        [Fact]
+        public async Task A_package_that_another_package_needs_and_that_cannot_be_found_is_not_blamed_on_the_one_that_needs_it()
+        {
+            // The tool is in a repository of its own name. What it needs is released, in a repository pmj has no way to know of.
+            var host = new FakeReleaseHost()
+                .Release("github.com/thatplatypus/tool", "@thatplatypus/tool", "1.0.0", "@thatplatypus/helper@2.0")
+                .Release("github.com/thatplatypus/mono", "@thatplatypus/helper", "2.0.0");
+            var manifest = Project.Named("@someone/app", ["@thatplatypus/tool@1.0"], []);
+
+            var result = await Resolve(host, manifest);
+
+            var notFound = result.Diagnostics.ShouldHaveSingleItem().ShouldBeComplete();
+            notFound.Code.ShouldBe(DiagnosticCodes.PackageNotFound);
+            notFound.Message.ShouldBe("No release of \"@thatplatypus/helper\" 2.0.0 was found.");
+            notFound.Reason.ShouldEndWith("it is asked for: @someone/app → @thatplatypus/tool@1.0.0 → @thatplatypus/helper@2.0");
+            (notFound.Message + notFound.Reason + notFound.Fix).ShouldNotContain("never published");
+            (notFound.Message + notFound.Reason + notFound.Fix).ShouldNotContain("has to publish");
         }
 
         [Fact]
@@ -131,8 +152,24 @@ namespace Packmoji.Core.Tests.Direct
                     var fromMemory = await Resolver.ResolveAsync(manifest, null, project.Universe(yanks: false), cancellation);
                     var fromReleases = await DirectResolver.ResolveAsync(manifest, null, new DirectPackageSource(host, new MemoryAssetStore(), manifest, null), cancellation);
 
+                    // The same problems in the same order, but for one: where memory knows that a
+                    // version was never published, releases can only say that none was found.
                     fromReleases.Succeeded.ShouldBe(fromMemory.Succeeded);
-                    fromReleases.Diagnostics.Where(diagnostic => diagnostic.Code != DiagnosticCodes.PackageNotFound).ShouldBe(fromMemory.Diagnostics);
+                    fromReleases.Diagnostics.Count.ShouldBe(fromMemory.Diagnostics.Count);
+                    foreach (var (known, found) in fromMemory.Diagnostics.Zip(fromReleases.Diagnostics))
+                    {
+                        if (found.Code == DiagnosticCodes.PackageNotFound)
+                        {
+                            known.Code.ShouldBe(DiagnosticCodes.ResolveVersionMissing);
+                            var missing = System.Text.RegularExpressions.Regex.Match(known.Message, "^Version (.+) of (\".+\") was never published\\.$");
+                            missing.Success.ShouldBeTrue(known.Message);
+                            found.Message.ShouldBe($"No release of {missing.Groups[2].Value} {missing.Groups[1].Value} was found.");
+                        }
+                        else
+                        {
+                            found.ShouldBe(known);
+                        }
+                    }
                     if (fromMemory.Succeeded && fromReleases.Succeeded)
                     {
                         fromReleases.Graph.Selected().ShouldBe(fromMemory.Graph.Selected());
