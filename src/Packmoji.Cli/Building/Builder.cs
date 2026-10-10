@@ -197,7 +197,8 @@ namespace Packmoji.Cli.Building
             var built = order
                 .OrderBy(package => package.Name)
                 .Select(package => new BuiltPackage(
-                    package,
+                    package.Name,
+                    package.Version,
                     Path.Combine(_host.WorkingDirectory, PlacedPackages.DirectoryName, package.Name.Name),
                     sources[package.Name].Manifest.Native?.Link ?? [],
                     toBuild.Contains(package)))

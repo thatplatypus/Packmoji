@@ -181,7 +181,7 @@ Downloads every locked package again, whatever the cache holds, and checks three
 ### pmj build
 
 ```
-pmj build [--release] [--dependencies-only]
+pmj build [--release] [--dependencies-only] [--json]
 ```
 
 Compiles every package `packmoji.lock` holds, and puts each in the project's `packages/` directory, which is where the compiler looks.

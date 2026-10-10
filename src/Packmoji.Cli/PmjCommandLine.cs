@@ -186,9 +186,10 @@ namespace Packmoji.Cli
             {
                 Description = "Build the packages the project depends on and put them in packages/, and stop before the project itself. Nothing is needed here but packmoji.json and packmoji.lock.",
             };
-            var command = new Command("build", "Compile what packmoji.lock holds, each package once for the whole machine, and then the project.") { release, dependenciesOnly };
+            var json = Json();
+            var command = new Command("build", "Compile what packmoji.lock holds, each package once for the whole machine, and then the project.") { release, dependenciesOnly, json };
             command.SetAction((parseResult, cancellationToken) =>
-                BuildCommand.RunAsync(host, parseResult.GetValue(release), parseResult.GetValue(dependenciesOnly), cancellationToken));
+                BuildCommand.RunAsync(host, parseResult.GetValue(release), parseResult.GetValue(dependenciesOnly), parseResult.GetValue(json), cancellationToken));
             return command;
         }
 
