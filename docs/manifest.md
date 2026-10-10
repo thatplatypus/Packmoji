@@ -84,9 +84,9 @@ Only `package` and its first four keys are required. This is a whole manifest:
 | `build.entry` | string | no | The package's main file, ending in `.emojic` or `.🍇`: see [The entry file](#the-entry-file) |
 | `build.sources` | array of strings | no | Patterns for the package's source files. At least one, none repeated. Default `src/**/*.emojic` and `src/**/*.🍇` |
 | `native` | object | no | |
-| `native.sources` | array of strings | no | Patterns for the C and C++ files compiled into the package |
+| `native.sources` | array of strings | no | Patterns for the C and C++ files compiled into the package: see [Native code](#native-code) |
 | `native.includeDirs` | array of strings | no | Directories of the package's own headers |
-| `native.link` | array of strings | no | Libraries to link, each named as the linker's `-l` would name it |
+| `native.link` | array of strings | no | Libraries that a program which uses the package is linked with, each named as the linker's `-l` would name it |
 | `policy` | object | no | |
 | `policy.requireAttestation` | boolean | no | Whether every dependency must have a verified build attestation. Default `false`. `pmj` cannot verify one yet, so a project that sets it to `true` cannot install: see `attestation.unverifiable` |
 
@@ -112,6 +112,17 @@ When `build.entry` is absent, the entry is found by convention:
 | `library` | `src/lib.emojic` | `src/lib.🍇` |
 
 Exactly one of the two must exist. Neither is an error, and so is both. `pmj new` always writes `build.entry`, so a manifest it made never relies on the convention.
+
+### Native code
+
+A package may have C and C++ beside its Emojicode, for what Emojicode's own packages do not reach. `pmj build` compiles those files with the machine's own compilers and puts them in the package's archive.
+
+- **`native.sources` selects the files to compile.** One that ends `.c` is C, and one that ends `.cpp`, `.cc` or `.cxx` is C++. A file that ends any other way stops a build, so a pattern must not also select the headers.
+- **`native.includeDirs` names the directories of the package's own headers.** The Emojicode compiler's headers are found without being named.
+- **`native.link` names the libraries a program needs because it uses the package.** They are linked into every program that depends on it.
+- **There is no key for a compiler's flags.** C++ is compiled as C++17 and C as C11, both optimized, and a package cannot change that.
+
+[How pmj builds](building.md#native-code) has the commands.
 
 ### Paths and patterns
 
@@ -206,6 +217,8 @@ A requirement never selects across a compatibility line.
 `package.emojicode` is `>=` followed by a full version, with no spaces: `">=1.0.0-beta.2"`. It has no upper bound.
 
 The one released compiler calls itself "1.0 beta 2", which is the version `1.0.0-beta.2`. That is earlier than `1.0.0`, so a package that should build today asks for `>=1.0.0-beta.2`.
+
+`pmj build` holds every package, and the project, to this before it compiles anything. A compiler that is older than one of them asks for is `compiler.too-old`.
 
 ## packmoji.lock
 
@@ -322,6 +335,8 @@ A diagnostic often repeats text from the file, and the file may be someone else'
 Nearly every code is an error, which stops what `pmj` was doing. One is a warning, `resolve.yanked-locked`: it is reported, and the work goes on.
 
 The codes that begin with `resolve.`, and `lock.mismatch`, are raised when `pmj` chooses versions or checks a lockfile against what is published. [resolution.md](resolution.md) says what to do about each.
+
+The codes that begin with `compiler.`, `build.`, `built.`, `packages.` and `run.`, and `tool.not-found` and `native.unsupported`, are raised by `pmj build` and `pmj run`. [building.md](building.md#when-a-build-stops) says what to do about each. The one exception is `compiler.invalid`, which is a manifest's own.
 
 | Code | Raised when |
 |---|---|

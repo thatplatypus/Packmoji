@@ -97,6 +97,50 @@ namespace Packmoji.Cli.Tests.Docs
             ShouldShow(guide, await sandbox.RunInAsync("site", "add", "@thatplatypus/grapevine"));
             ShouldShow(guide, await sandbox.RunInAsync("site", "tree"));
             ShouldShow(guide, await sandbox.RunInAsync("site", "tree", "--json"));
+            ShouldShow(guide, await sandbox.RunInAsync("site", "build"));
+
+            // A terminal shows what pmj says of the build and then what the program says, though they are written to two streams.
+            var run = await sandbox.RunInAsync("site", "run");
+            run.Status.ShouldBe(0);
+            guide.ShouldContain("$ pmj run\n" + run.Error.ReplaceLineEndings("\n") + run.Output.ReplaceLineEndings("\n").TrimEnd('\n') + "\n```");
+        }
+
+        [Fact]
+        public async Task The_answer_for_a_tool_in_the_guide_is_what_a_build_of_the_first_project_gives()
+        {
+            using var sandbox = Sandbox.WithGrapevine();
+            await sandbox.RunAsync("new", "@you/site");
+            await sandbox.RunInAsync("site", "add", "@thatplatypus/grapevine");
+
+            var run = await sandbox.RunInAsync("site", "build", "--json");
+
+            // The guide's project is in someone's home, and its compiler where the installer puts it.
+            run.Error.ShouldBeEmpty();
+            var answer = run.Output.Replace(sandbox.PathOf("site"), "/home/you/site").Replace(sandbox.ToolsDirectory, "/usr/local/bin").Replace(Path.DirectorySeparatorChar, '/');
+            Shape(Guide("cli.md")).ShouldContain(Shape(answer).TrimEnd('\n'));
+        }
+
+        [Fact]
+        public async Task Every_variable_a_build_reads_from_its_environment_is_in_the_guide()
+        {
+            // A build that needs everything a build can need: a package to archive, C and C++ in the project, and a program to link.
+            using var sandbox = new Sandbox();
+            sandbox.Release("github.com/thatplatypus/crypto", "@thatplatypus/crypto", "1.0.0");
+            sandbox.Write("packmoji.json", "{ \"package\": { \"name\": \"@you/site\", \"version\": \"0.1.0\", \"kind\": \"app\", \"emojicode\": \">=1.0.0-beta.2\" }, \"dependencies\": { \"@thatplatypus/crypto\": \"1.0\" }, \"native\": { \"sources\": [\"native/*\"] } }\n");
+            sandbox.Write("src/main.🍇", "🏁 🍇\n🍉\n");
+            sandbox.Write("native/a.c", "// c\n");
+            sandbox.Write("native/b.cpp", "// c++\n");
+            (await sandbox.RunAsync("install")).Status.ShouldBe(0);
+            sandbox.Asked.Clear();
+
+            (await sandbox.RunAsync("build")).Status.ShouldBe(0);
+
+            sandbox.Asked.Distinct().Order(StringComparer.Ordinal).ShouldBe(["AR", "CC", "CXX", "EMOJICODEC", "EMOJICODE_INCLUDE", "EMOJICODE_PACKAGES_PATH", "PATH"]);
+            foreach (var variable in sandbox.Asked.Distinct())
+            {
+                Guide("cli.md").ShouldContain($"`{variable}`");
+                Guide("building.md").ShouldContain($"`{variable}`");
+            }
         }
 
         [Fact]
@@ -168,6 +212,7 @@ namespace Packmoji.Cli.Tests.Docs
         [Theory]
         [InlineData("cli.md")]
         [InlineData("publishing.md")]
+        [InlineData("building.md")]
         public void A_guide_holds_no_em_dash(string name) => Guide(name).ShouldNotContain(char.ConvertFromUtf32(0x2014));
     }
 }

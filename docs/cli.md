@@ -1,10 +1,10 @@
 # The pmj command line
 
-`pmj` makes projects, fetches the packages they depend on, and packs a package for release. This page says what each command does, what it prints, how it ends, and where it finds things.
+`pmj` makes projects, fetches the packages they depend on, builds them and runs them, and packs a package for release. This page says what each command does, what it prints, how it ends, and where it finds things.
 
 Packages are found on GitHub directly, as releases of their repositories. There is no registry yet.
 
-`pmj` does not build yet. That is the next milestone, and until then the sources of what you install are in [the cache](#the-cache), unpacked and ready for the compiler.
+`pmj` builds with the Emojicode compiler, which it does not bring with it. [How pmj builds](building.md) says what a build needs and what it does.
 
 ## A first project
 
@@ -29,6 +29,20 @@ $ pmj tree
 └── @thatplatypus/grapevine 0.3.0
     ├── @thatplatypus/crypto 1.0.0
     └── @thatplatypus/deflate 0.1.0
+
+$ pmj build
+Building @thatplatypus/crypto 1.0.0
+Building @thatplatypus/deflate 0.1.0
+Building @thatplatypus/grapevine 0.3.0
+Built 3 packages into packages/.
+Building @you/site 0.1.0
+Built the application target/debug/site.
+
+$ pmj run
+3 packages were built before, and are in packages/.
+Building @you/site 0.1.0
+Built the application target/debug/site.
+Hello from @you/site!
 ```
 
 Commit both `packmoji.json` and `packmoji.lock`. On another machine, or in CI, `pmj install --locked` then fetches exactly the same bytes.
@@ -48,7 +62,7 @@ Every command works in the current directory. A command that reads a project nee
 | `pmj tree` | Shows the packages `packmoji.lock` holds, and what each depends on |
 | `pmj pack` | Writes the file that a release of this package carries |
 | `pmj verify` | Downloads every locked package again, and holds it and the cache's copy to `packmoji.lock` |
-| `pmj build` | Compiles the packages `packmoji.lock` holds, each once for the whole machine, and puts them in `packages/` |
+| `pmj build` | Compiles the packages `packmoji.lock` holds, each once for the whole machine, and then the project |
 | `pmj run` | Builds this application, and runs it |
 
 `pmj --help` lists them, `pmj <command> --help` says what one takes, and `pmj --version` prints the version.
@@ -185,13 +199,18 @@ Downloads every locked package again, whatever the cache holds, and checks three
 pmj build [--release] [--dependencies-only] [--json]
 ```
 
-Compiles every package `packmoji.lock` holds, and puts each in the project's `packages/` directory, which is where the compiler looks.
+Compiles every package `packmoji.lock` holds, puts each in the project's `packages/` directory, which is where the compiler looks, and then compiles the project itself into `target/`.
 
+- **An application is built to a program,** `target/debug/<name>`.
+- **A library is built to a folder,** `target/debug/<name>/`, which holds what a package is built to: its interface `🏛`, its archive `lib<name>.a`, and the compiler's report of it, `documentation.json`.
 - **A build chooses no version.** It reads `packmoji.lock`, and when that is missing or no longer answers `packmoji.json` it says to run `pmj install`. A project that asks for no package needs no lockfile.
 - **What is locked and not yet in the cache is fetched first,** as `pmj install` fetches it. With the cache filled, a build asks nothing of GitHub.
-- **A package is compiled once for the whole machine.** What was built is kept, and the next project that locks the same package, on the same compiler, is given it without a compile.
-- **`--release` has the compiler optimize.** What is built with it and without it is kept apart.
-- **`--dependencies-only` stops before the project itself.** It needs nothing in the directory but the two files.
+- **A package is compiled once for the whole machine.** What was built is kept, and the next project that locks the same package, on the same compiler, is given it without a compile. The project itself is compiled every time.
+- **`--release` has the compiler optimize,** the packages as well as the project, and builds the project into `target/release/`. What is built with it and without it is kept apart.
+- **`--dependencies-only` stops before the project itself.** It needs nothing in the directory but the two files. It is for a tool that compiles the project its own way: see [For a tool](#for-a-tool---json).
+- **What the compiler and the other tools print goes to standard error,** each line behind the name of what was being built, as in `[grapevine]`.
+
+[How pmj builds](building.md) has the rest: what a build needs on the machine, what each tool is asked, and what to do when one refuses.
 
 ### pmj run
 
@@ -223,7 +242,7 @@ error[package.not-found]: No release of "@thatplatypus/crypto" was found.
 
 ### For a tool: --json
 
-`pmj tree --json` and `pmj verify --json` put one JSON object on standard output, and nothing else there.
+`pmj tree --json`, `pmj verify --json` and `pmj build --json` put one JSON object on standard output, and nothing else there.
 
 - **`ok`** is false when any problem is an error.
 - **`diagnostics`** holds the problems. With `--json` they are not also printed to standard error.
@@ -303,6 +322,68 @@ A problem in `diagnostics`:
 
 `pmj verify --json` gives `ok`, `diagnostics`, `omittedDiagnostics`, and `packages`: every package that was held to the lockfile, each with its `name`, `version`, `source`, `sha256` and `verified`. A package that is not what the lockfile holds is named in a problem's text.
 
+`pmj build --json`, for the project above:
+
+```json
+{
+  "ok": true,
+  "diagnostics": [],
+  "omittedDiagnostics": 0,
+  "compiler": {
+    "path": "/usr/local/bin/emojicodec",
+    "version": "1.0.0-beta.2",
+    "sha256": "08da67b417a11db6a3647ccc3e563f541706fa5f38426b89c19ab3f68ecbaa91"
+  },
+  "packagesDirectory": "/home/you/site/packages",
+  "packages": [
+    {
+      "name": "@thatplatypus/crypto",
+      "version": "1.0.0",
+      "bareName": "crypto",
+      "directory": "/home/you/site/packages/crypto",
+      "link": [],
+      "built": true
+    },
+    {
+      "name": "@thatplatypus/deflate",
+      "version": "0.1.0",
+      "bareName": "deflate",
+      "directory": "/home/you/site/packages/deflate",
+      "link": [],
+      "built": true
+    },
+    {
+      "name": "@thatplatypus/grapevine",
+      "version": "0.3.0",
+      "bareName": "grapevine",
+      "directory": "/home/you/site/packages/grapevine",
+      "link": [],
+      "built": true
+    }
+  ],
+  "project": {
+    "name": "@you/site",
+    "version": "0.1.0",
+    "kind": "app",
+    "output": "/home/you/site/target/debug/site"
+  }
+}
+```
+
+| Key | Holds |
+|---|---|
+| `compiler` | The compiler that was used: where it is, the version it gives of itself, and the SHA-256 of its file. Absent when the build needed none, or was stopped before one was found |
+| `packagesDirectory` | The one directory that holds a folder for every package: what to have the compiler search, with `-S` |
+| `packages` | Every locked package once, in order of name. Empty when the build was stopped |
+| `packages[].bareName` | The name the package is imported by, which is the name of its folder |
+| `packages[].directory` | The package's folder in the project. It holds `🏛`, `lib<bareName>.a` and `documentation.json` |
+| `packages[].link` | The libraries its manifest says to link with, as `native.link` has them |
+| `packages[].built` | Whether this build compiled it. False when it had been built before and was only put in its place |
+| `project` | What was made of the project itself: its `kind`, and as `output` the program of an application or the folder of a library. Absent with `--dependencies-only`, and when the project could not be built |
+
+- **What the compiler and the other tools printed is on standard error,** with `--json` as without it. It is their word and not `pmj`'s, and a problem in `diagnostics` gives its first line as the reason.
+- **To compile and link a project yourself,** give the compiler `packagesDirectory` to search, and link with the archive in each `directory` and with each `link` library. [How pmj builds](building.md#for-a-tool-that-compiles-the-project-itself) says how `pmj` links, which is how a program has to be linked.
+
 These shapes may still change, until a tool depends on them.
 
 ## Exit statuses
@@ -315,6 +396,8 @@ These shapes may still change, until a tool depends on them.
 | `70` | `pmj` itself failed. That is a fault in `pmj`, and worth reporting |
 | `130` | `pmj` was stopped before it had finished, as by Ctrl+C |
 
+`pmj run` is the one command that ends otherwise: with whatever status the program it ran ended with. When the application could not be built, or its program could not be started, it ends with 1.
+
 Each file `pmj` writes is written whole beside its place and then put there in one step. So a `pmj` that is stopped leaves an old file or a new one, and never half of one.
 
 ## Environment
@@ -326,9 +409,15 @@ Each file `pmj` writes is written whole beside its place and then put there in o
 | `PACKMOJI_GITHUB` | Another address for `https://github.com`, where releases are downloaded from |
 | `PACKMOJI_GITHUB_API` | Another address for `https://api.github.com`, where versions are listed |
 | `PACKMOJI_DIRECT` | Accepted, as `--direct` is. Finding packages on GitHub directly is the only way there is yet |
+| `EMOJICODEC` | The Emojicode compiler that a build uses. Without it, the first `emojicodec` on `PATH` |
+| `EMOJICODE_PACKAGES_PATH` | Where the compiler's own packages are, which a program is linked with. The compiler reads it too. Without it, `/usr/local/EmojicodePackages` |
+| `EMOJICODE_INCLUDE` | Where the compiler's headers are, which native code is compiled against. Without it, `/usr/local/include/emojicode` |
+| `CXX`, `CC`, `AR` | The C++ compiler, which also links a program, the C compiler, and the archiver. Without them, `c++`, `cc` and `ar` on `PATH` |
 
 - **A token is sent to the API's address and to nothing else.** It is never sent with a download, and it is in nothing `pmj` prints or writes. Space and line ends around it are no part of it.
 - **The two addresses are for a GitHub of your own, and for tests.** Each begins with `http://` or `https://`, and they are set together or not at all: with one alone, `pmj` would download from one GitHub and list versions from another. A token goes to whatever address you give for the API.
+- **Each of the four programs is one program, with no arguments:** a path, or a name that is looked for in the directories of `PATH`. A variable that is set to nothing says nothing.
+- **A build reads the six of them only when it needs them.** A package of Emojicode alone needs no C++ compiler, and a command that does not build needs none of this.
 - **What `pmj` is told here and cannot use stops it,** with `config.invalid`, before anything is asked of anyone: an address that is not one, one address without the other, or a token that could not be sent. It is never passed over for what `pmj` does when nothing is said. A command that needs nothing of GitHub is not stopped, such as `pmj new`, or `pmj install` when the cache holds what is locked.
 
 ## How a package is found
@@ -367,6 +456,7 @@ pmj install --repository github.com/thatplatypus/grapevine
 | `add` with no requirement, and `update` | GitHub's API, for a repository's list of releases, once for each repository |
 | `add`, `install`, `update` and `remove` | A release's file by its own address, for each package that is not locked yet, or whose locked bytes the cache does not hold |
 | `verify` | A release's file by its own address, for every locked package |
+| `build` and `run` | A release's file by its own address, for each locked package whose locked bytes the cache does not hold. With the cache filled, nothing |
 | `tree`, `pack`, `new` and `init` | Nothing |
 
 - **GitHub's API answers 60 requests an hour to someone it does not know,** and 5,000 with a token. Set `GITHUB_TOKEN` if you meet the limit.
@@ -387,11 +477,27 @@ Everything `pmj` downloads is kept, so that it is downloaded once:
 - **An archive is held to its name each time it is read.** One that is no longer the bytes its name says is not used, and is fetched again.
 - **The cache can be deleted at any time.** `pmj install` fills it again from the lockfile.
 
+## Built packages
+
+A package is compiled once for the whole machine, and what was built is kept beside the cache:
+
+```
+~/.packmoji/built/<scope>/<name>/<version>/<key>/<name>/
+```
+
+- **The folder holds what the compiler needs of a package:** its interface `🏛`, its archive `lib<name>.a`, the compiler's report `documentation.json`, and `pmj-build.json`, which says what it was built from.
+- **The key names everything it was built from:** the package's bytes, the compiler, whether it optimized, and what the package depends on as that was built. Anything else is another key, and is built apart.
+- **A project is given copies,** in its own `packages/` directory, so nothing in a project points here.
+- **It can be deleted at any time.** The next build compiles what it needs again.
+
+[How pmj builds](building.md#once-for-the-whole-machine) says exactly what a key holds.
+
 ## What pmj does not do yet
 
 | Not yet | Comes with |
 |---|---|
-| `build`, `run` and `test` | The next milestone |
+| `test` | Later. Emojicode has no way of its own to say what a package's tests are, and one has to be chosen first |
+| Building several packages at once, and compiling a project only when it has changed | Later |
 | A registry, and `search` and `info` | The registry |
 | `publish`, attestations, and a release workflow | Publishing |
 | Installing for a project that requires attestation | Publishing. Until then such a project is refused, with `attestation.unverifiable`: a requirement that cannot be checked is not met |
