@@ -27,7 +27,7 @@ namespace Packmoji.Cli.Commands
                     outcome.Compiler,
                     Path.Combine(host.WorkingDirectory, PlacedPackages.DirectoryName),
                     outcome.Packages,
-                    null));
+                    outcome.Project));
             }
             else
             {

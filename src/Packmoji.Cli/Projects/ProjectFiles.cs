@@ -16,6 +16,13 @@ namespace Packmoji.Cli.Projects
         /// <summary>The directory of a project that pmj writes into, and so never reads a package from.</summary>
         public const string Target = "target";
 
+        /// <summary>
+        /// What is kept at the top of a project's directory and is no part of the project: what pmj
+        /// writes, where built packages go, and git's own files. No pattern of a manifest is given
+        /// the chance to select them.
+        /// </summary>
+        public static readonly string[] NotTheProject = [".git", Target, "packages"];
+
         /// <summary>The manifest of the project in a directory, or why there is none to work with.</summary>
         public static Outcome<Manifest> ReadManifest(string directory)
         {

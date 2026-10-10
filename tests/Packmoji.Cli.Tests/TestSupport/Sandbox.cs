@@ -19,7 +19,7 @@ namespace Packmoji.Cli.Tests.TestSupport
             Root = Path.Combine(Path.GetTempPath(), "pmj-tests", Guid.NewGuid().ToString("N"));
             Work = Directory.CreateDirectory(Path.Combine(Root, "work")).FullName;
             Home = Path.Combine(Root, "home");
-            Tools = new FakeTools(Variable) { BuiltInPackages = Path.Combine(Root, "built-in-packages") };
+            Tools = new FakeTools(Variable) { BuiltInPackages = Path.Combine(InstallRoot, "EmojicodePackages") };
             InstallTools();
         }
 
@@ -47,6 +47,13 @@ namespace Packmoji.Cli.Tests.TestSupport
 
         /// <summary>Whether this machine is a Mac: pmj is told so, and the made-up linker behaves as the one of macOS does.</summary>
         public bool MacOS { get; set; }
+
+        /// <summary>
+        /// Where Emojicode's installer would have put its files on this machine had it been told
+        /// nothing. Nothing is there: this machine's Emojicode is where its environment says, until a
+        /// test moves it.
+        /// </summary>
+        public string InstallRoot => Path.Combine(Root, "usr-local");
 
         /// <summary>Where the made-up tools are: the one directory on this machine's <c>PATH</c>.</summary>
         public string ToolsDirectory => Path.Combine(Root, "tools");
@@ -82,6 +89,7 @@ namespace Packmoji.Cli.Tests.TestSupport
                 Variable = Variable,
                 Tools = Tools,
                 IsMacOS = MacOS,
+                InstallRoot = InstallRoot,
             };
 
             var status = await PmjCommandLine.RunAsync(args, host, Stop ?? TestContext.Current.CancellationToken);

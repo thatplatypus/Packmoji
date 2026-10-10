@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Packmoji.Core.Building;
 using Packmoji.Core.Diagnostics;
+using Packmoji.Core.Identity;
 using Packmoji.Core.Lockfiles;
 
 namespace Packmoji.Cli.Building
@@ -16,10 +17,15 @@ namespace Packmoji.Cli.Building
         private const string CompilerVariable = "EMOJICODEC";
         private const string ArchiverVariable = "AR";
         private const string HeadersVariable = "EMOJICODE_INCLUDE";
+        private const string PackagesVariable = "EMOJICODE_PACKAGES_PATH";
         private const string PathVariable = "PATH";
 
-        // Where the compiler's installer puts its headers when it is told nothing: install.sh:10.
-        private const string InstalledHeaders = "/usr/local/include/emojicode";
+        // The two libraries that the compiler's own package s says a program is linked with. Of the
+        // packages that come with the compiler, it is the only one that says any.
+        private static readonly string[] OwnLibraries = ["m", "pthread"];
+
+        // The two of the compiler's own packages that every program is linked with.
+        private static readonly string[] AlwaysLinked = ["s", "runtime"];
 
         // A header that every native file of a package includes, and so the one that says whether the headers are there.
         private static readonly string RuntimeHeader = Path.Combine("runtime", "Runtime.h");
@@ -93,9 +99,24 @@ namespace Packmoji.Cli.Building
                     $"check that it is a compiler that answers --version, or set {native.Variable} to one that does"));
         }
 
-        public IReadOnlyList<Diagnostic> Lacks(bool archiving, bool nativeCode)
+        public IReadOnlyList<Diagnostic> Lacks(bool archiving, bool nativeCode, bool linking)
         {
             var lacks = new List<Diagnostic>();
+            var linker = Native(NativeLanguage.Cpp);
+            if (linking && Find(linker.Variable, linker.Fallback) is null)
+            {
+                lacks.Add(NotFound(DiagnosticCodes.ToolNotFound, linker.Tool, linker.Variable, linker.Fallback, linker.Install));
+            }
+
+            if (linking && AlwaysLinked.Select(Stock).FirstOrDefault(archive => !File.Exists(archive)) is { } missing)
+            {
+                lacks.Add(new Diagnostic(
+                    DiagnosticCodes.CompilerIncomplete,
+                    "The Emojicode compiler's own packages were not found.",
+                    $"a program is linked with them, and \"{missing}\" is not there",
+                    $"set {PackagesVariable} to the directory that holds the compiler's own packages, s and runtime among them: it is where Emojicode's installer was told to put them"));
+            }
+
             if (archiving && Find(ArchiverVariable, "ar") is null)
             {
                 lacks.Add(NotFound(DiagnosticCodes.ToolNotFound, "The archiver", ArchiverVariable, "ar", "install a C toolchain, which has one"));
@@ -118,44 +139,70 @@ namespace Packmoji.Cli.Building
             ArgumentNullException.ThrowIfNull(compile);
             var made = Path.Combine(compile.WorkDirectory, compile.Name + ".o");
             var declared = Path.Combine(compile.OutputDirectory, Interface);
-            List<string> arguments = [compile.Entry, "-p", compile.Name, "-c", "-o", made, "-i", declared, "-r"];
-            if (compile.Optimized)
+            var compiled = await CompileAsync(
+                compile.What,
+                [compile.Entry, "-p", compile.Name, "-c", "-o", made, "-i", declared, "-r"],
+                compile.Optimized,
+                compile.SearchPaths,
+                compile.WorkDirectory,
+                [made, declared],
+                cancellationToken);
+
+            // The report is written beside the object, and belongs with what others read of the package.
+            var report = Path.Combine(compile.WorkDirectory, Report);
+            if (compiled.Succeeded && File.Exists(report))
+            {
+                File.Move(report, Path.Combine(compile.OutputDirectory, Report), overwrite: true);
+            }
+
+            return compiled;
+        }
+
+        public ValueTask<BuildStep<string>> CompileProgramAsync(ProgramCompile compile, CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(compile);
+            var made = Path.Combine(compile.WorkDirectory, compile.Name + ".o");
+            return CompileAsync(compile.What, [compile.Entry, "-c", "-o", made], compile.Optimized, compile.SearchPaths, compile.WorkDirectory, [made], cancellationToken);
+        }
+
+        /// <param name="arguments">What the compiler is given before the flags that a package and a program share.</param>
+        /// <param name="made">What the compiler is to write, the object first.</param>
+        private async ValueTask<BuildStep<string>> CompileAsync(
+            string what,
+            List<string> arguments,
+            bool optimized,
+            IReadOnlyList<string> searchPaths,
+            string workDirectory,
+            string[] made,
+            CancellationToken cancellationToken)
+        {
+            if (optimized)
             {
                 arguments.Add("-O");
             }
 
-            foreach (var searched in compile.SearchPaths)
+            foreach (var searched in searchPaths)
             {
                 arguments.Add("-S");
                 arguments.Add(searched);
             }
 
             // Run where there is no ./packages, which the compiler would search without being asked.
-            if (await host.Tools.RunAsync(Compiler, arguments, compile.WorkDirectory, cancellationToken) is not { } run)
+            if (await host.Tools.RunAsync(Compiler, arguments, workDirectory, cancellationToken) is not { } run)
             {
                 return BuildStep<string>.Failed(NotRun(DiagnosticCodes.CompilerNotFound, "The Emojicode compiler", Compiler));
             }
 
             var printed = run.Output + run.Error;
-            if (Refused(run, made, declared) is { } reason)
-            {
-                return BuildStep<string>.Failed(
+            return Refused(run, made) is { } reason
+                ? BuildStep<string>.Failed(
                     new Diagnostic(
                         DiagnosticCodes.BuildCompileFailed,
-                        $"{compile.What} could not be compiled.",
+                        $"{what} could not be compiled.",
                         reason,
                         "mend what the compiler names, which is printed above; if the code is a package's and not yours, tell its author"),
-                    printed);
-            }
-
-            // The report is written beside the object, and belongs with what others read of the package.
-            var report = Path.Combine(compile.WorkDirectory, Report);
-            if (File.Exists(report))
-            {
-                File.Move(report, Path.Combine(compile.OutputDirectory, Report), overwrite: true);
-            }
-
-            return BuildStep<string>.Of(made, printed);
+                    printed)
+                : BuildStep<string>.Of(made[0], printed);
         }
 
         public async ValueTask<BuildStep<string>> CompileNativeAsync(NativeCompile compile, CancellationToken cancellationToken)
@@ -223,9 +270,74 @@ namespace Packmoji.Cli.Building
                 : BuildStep<string>.Of(made, printed);
         }
 
+        public async ValueTask<BuildStep<string>> LinkAsync(LinkRequest link, CancellationToken cancellationToken)
+        {
+            ArgumentNullException.ThrowIfNull(link);
+            var native = Native(NativeLanguage.Cpp);
+            if (Find(native.Variable, native.Fallback) is not { } linker)
+            {
+                return BuildStep<string>.Failed(NotFound(DiagnosticCodes.ToolNotFound, native.Tool, native.Variable, native.Fallback, native.Install));
+            }
+
+            // The compiler's own link names archives in an order that fails as soon as one package
+            // imports another, so pmj links: every archive in one group, where their order does not
+            // matter and the linker takes only what the program refers to. The linker of macOS reads
+            // archives that way without being asked, and refuses the two flags.
+            List<string> arguments = [.. link.Objects];
+            if (!host.IsMacOS)
+            {
+                arguments.Add("-Wl,--start-group");
+            }
+
+            arguments.AddRange(link.Packages.OrderBy(package => package.Name, StringComparer.Ordinal).Select(package => Path.Combine(package.Directory, $"lib{package.Name}.a")));
+            arguments.AddRange(ReservedNames.All.Order(StringComparer.Ordinal).Select(Stock).Where(File.Exists));
+            if (!host.IsMacOS)
+            {
+                arguments.Add("-Wl,--end-group");
+            }
+
+            var libraries = link.Libraries.Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal).ToList();
+            libraries.AddRange(OwnLibraries.Where(own => !libraries.Contains(own, StringComparer.Ordinal)));
+            arguments.AddRange(libraries.Select(library => "-l" + library));
+            arguments.Add("-o");
+            arguments.Add(link.Program);
+            if (await host.Tools.RunAsync(linker, arguments, Path.GetDirectoryName(link.Program)!, cancellationToken) is not { } run)
+            {
+                return BuildStep<string>.Failed(NotRun(DiagnosticCodes.ToolNotFound, native.Tool, linker));
+            }
+
+            var printed = run.Output + run.Error;
+            return Failed("the linker", run, link.Program) is { } reason
+                ? BuildStep<string>.Failed(
+                    new Diagnostic(
+                        DiagnosticCodes.BuildLinkFailed,
+                        $"{link.What} could not be linked.",
+                        reason,
+                        "read what the linker printed, which is above; a library it cannot find is one that a package names under \"native.link\", and has to be on this machine"),
+                    printed)
+                : BuildStep<string>.Of(link.Program, printed);
+        }
+
         private string Compiler => _compiler ?? throw new InvalidOperationException("The compiler is asked which it is before it is asked to compile.");
 
-        private string Headers => Set(HeadersVariable) ?? InstalledHeaders;
+        // Where the compiler's installer puts its headers and its own packages when it is told nothing: install.sh:8-10.
+        private string Headers => Set(HeadersVariable) ?? Path.Combine(host.InstallRoot, "include", "emojicode");
+
+        // The compiler looks for a package where its variable says and then where it was installed,
+        // and the variable may name a directory of someone's own packages. So its own packages are in
+        // the first of the two that holds s, which every program needs.
+        private string StockDirectory
+        {
+            get
+            {
+                var installed = Path.Combine(host.InstallRoot, "EmojicodePackages");
+                var named = Set(PackagesVariable);
+                return named is null || (!File.Exists(Path.Combine(named, "s", "libs.a")) && File.Exists(Path.Combine(installed, "s", "libs.a"))) ? installed : named;
+            }
+        }
+
+        // The archive of one of the compiler's own packages.
+        private string Stock(string package) => Path.Combine(StockDirectory, package, $"lib{package}.a");
 
         // C++17 is what the compiler's own headers are written in. For C, gnu11 and not c11: native
         // code is there to reach the system, and plain c11 hides the system's own declarations.

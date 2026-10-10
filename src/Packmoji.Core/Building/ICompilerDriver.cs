@@ -25,17 +25,24 @@ namespace Packmoji.Core.Building
         /// What stands in the way of a build that has these things to do, found out before anything
         /// is compiled, so that a build that could not end does not begin.
         /// </summary>
-        /// <param name="archiving">Whether a package is to be built, which ends with its archive.</param>
+        /// <param name="archiving">Whether a package or a library is to be built, which ends with its archive.</param>
         /// <param name="nativeCode">Whether a native file is to be compiled.</param>
-        IReadOnlyList<Diagnostic> Lacks(bool archiving, bool nativeCode);
+        /// <param name="linking">Whether an application is to be linked.</param>
+        IReadOnlyList<Diagnostic> Lacks(bool archiving, bool nativeCode, bool linking);
 
         /// <summary>Compiles a package's Emojicode code. Gives the object, and leaves what others need of the package in its folder.</summary>
         ValueTask<BuildStep<string>> CompilePackageAsync(PackageCompile compile, CancellationToken cancellationToken);
+
+        /// <summary>Compiles an application's Emojicode code. Gives the object.</summary>
+        ValueTask<BuildStep<string>> CompileProgramAsync(ProgramCompile compile, CancellationToken cancellationToken);
 
         /// <summary>Compiles one native file. Gives the object.</summary>
         ValueTask<BuildStep<string>> CompileNativeAsync(NativeCompile compile, CancellationToken cancellationToken);
 
         /// <summary>Makes a package's archive in its folder, from its objects. Gives the archive.</summary>
         ValueTask<BuildStep<string>> ArchiveAsync(ArchiveRequest archive, CancellationToken cancellationToken);
+
+        /// <summary>Links an application's objects with its packages into a program. Gives the program.</summary>
+        ValueTask<BuildStep<string>> LinkAsync(LinkRequest link, CancellationToken cancellationToken);
     }
 }

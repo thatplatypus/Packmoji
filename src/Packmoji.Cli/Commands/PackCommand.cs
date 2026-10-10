@@ -15,10 +15,6 @@ namespace Packmoji.Cli.Commands
     /// </summary>
     internal static class PackCommand
     {
-        // What is kept in a package's directory and is no part of the package: what pmj writes, where
-        // built packages go, and git's own files. No pattern is given the chance to select them.
-        private static readonly string[] NotThePackage = [".git", ProjectFiles.Target, "packages"];
-
         public static int Run(PmjHost host)
         {
             var manifest = ProjectFiles.ReadManifest(host.WorkingDirectory);
@@ -29,7 +25,7 @@ namespace Packmoji.Cli.Commands
 
             try
             {
-                var selected = PackSelection.Select(manifest.Value, FileTree.List(host.WorkingDirectory, NotThePackage));
+                var selected = PackSelection.Select(manifest.Value, FileTree.List(host.WorkingDirectory, ProjectFiles.NotTheProject));
                 if (!selected.Succeeded)
                 {
                     return DiagnosticPrinter.Report(host, selected.Diagnostics, selected.OmittedDiagnostics);

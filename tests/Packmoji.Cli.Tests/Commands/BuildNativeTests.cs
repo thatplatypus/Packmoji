@@ -298,18 +298,18 @@ namespace Packmoji.Cli.Tests.Commands
         {
             using var sandbox = await WithNetInstalledAsync();
             sandbox.Variables.Remove("EMOJICODE_INCLUDE");
+            var installed = Path.Combine(sandbox.InstallRoot, "include", "emojicode");
 
-            var run = await sandbox.RunAsync("build", "--dependencies-only");
+            var without = await sandbox.RunAsync("build", "--dependencies-only");
+            Directory.CreateDirectory(Path.GetDirectoryName(installed)!);
+            Directory.Move(sandbox.IncludeDirectory, installed);
+            var with = await sandbox.RunAsync("build", "--dependencies-only");
 
-            // Whether they are there is this machine's affair. What is asked for is where pmj looks.
-            if (run.Status == 0)
-            {
-                sandbox.Tools.Calls.Select(sandbox.Plain).ShouldContain(call => call.Contains(" -I /usr/local/include/emojicode "));
-            }
-            else
-            {
-                run.Error.ShouldContain("\"/usr/local/include/emojicode/runtime/Runtime.h\" is not there");
-            }
+            without.Status.ShouldBe(1);
+            without.Error.ShouldContain($"native code is compiled against them, and \"{Path.Combine(installed, "runtime", "Runtime.h")}\" is not there");
+            with.Error.ShouldBeEmpty();
+            with.Status.ShouldBe(0);
+            sandbox.Tools.Calls.Select(sandbox.Plain).ShouldContain(call => call.Contains(" -I ~/usr-local/include/emojicode -I "));
         }
 
         [Fact]

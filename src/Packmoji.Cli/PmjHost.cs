@@ -38,6 +38,13 @@ namespace Packmoji.Cli
         /// <summary>Whether this is macOS, whose linker is asked for less than any other's.</summary>
         public bool IsMacOS { get; init; } = OperatingSystem.IsMacOS();
 
+        /// <summary>
+        /// The directory Emojicode's installer puts its files under when it is told nothing. The
+        /// compiler's own packages and its headers are looked for there when the environment does
+        /// not say where they are.
+        /// </summary>
+        public string InstallRoot { get; init; } = "/usr/local";
+
         /// <summary>The version of pmj, as <c>pmj --version</c> gives it.</summary>
         public static string Version { get; } =
             typeof(PmjHost).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "0.0.0";
