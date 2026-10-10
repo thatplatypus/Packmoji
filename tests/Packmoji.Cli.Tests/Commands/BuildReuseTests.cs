@@ -152,6 +152,25 @@ namespace Packmoji.Cli.Tests.Commands
         }
 
         [Fact]
+        public async Task When_what_pmj_keeps_cannot_be_written_the_build_says_so_and_puts_nothing_in_the_project()
+        {
+            using var sandbox = Sandbox.WithGrapevine();
+            await sandbox.InstallAsync("@someone/app", "@thatplatypus/grapevine@0.3");
+            var built = Path.Combine(sandbox.Home, "built");
+            File.WriteAllText(built, "a file, where pmj keeps a directory\n");
+
+            var run = await sandbox.RunAsync("build", "--dependencies-only");
+
+            run.Status.ShouldBe(1);
+            var problem = run.Error.Split(Environment.NewLine);
+            problem[0].ShouldStartWith($"error[built.unusable]: \"{Path.Combine(built, "thatplatypus", "crypto", "1.0.0")}{Path.DirectorySeparatorChar}");
+            problem[0].ShouldEndWith("\", among the built packages pmj keeps, could not be written.");
+            problem[2].ShouldBe("  fix: check that the directory is yours to use, or keep pmj's files somewhere else by setting PACKMOJI_HOME; what is kept there can be deleted at any time, and is built again");
+            sandbox.Files("packages").ShouldBeEmpty();
+            File.ReadAllText(built).ShouldBe("a file, where pmj keeps a directory\n");
+        }
+
+        [Fact]
         public async Task When_what_pmj_keeps_is_deleted_it_is_built_again()
         {
             using var sandbox = await WithGrapevineBuiltAsync();
