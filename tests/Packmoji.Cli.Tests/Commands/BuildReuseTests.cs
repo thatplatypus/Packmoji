@@ -192,5 +192,21 @@ namespace Packmoji.Cli.Tests.Commands
             sandbox.Keys("crypto").Count.ShouldBe(1);
             sandbox.Built().ShouldNotContain(kept => kept.Contains(".tmp-", StringComparison.Ordinal));
         }
+
+        [Fact]
+        public async Task What_is_kept_with_a_stamp_too_large_to_be_one_is_built_over_and_the_stamp_is_never_read()
+        {
+            using var sandbox = await WithGrapevineBuiltAsync();
+            var stamp = sandbox.BuiltFile("crypto", "pmj-build.json");
+            var written = File.ReadAllText(stamp);
+            File.SetAttributes(stamp, FileAttributes.Normal);
+            File.WriteAllText(stamp, new string(' ', 2 * 1024 * 1024) + written);
+
+            var run = await sandbox.RunAsync("build", "--dependencies-only");
+
+            run.Status.ShouldBe(0);
+            sandbox.Tools.Compiles.Count().ShouldBe(1);
+            File.ReadAllText(sandbox.BuiltFile("crypto", "pmj-build.json")).ShouldBe(written);
+        }
     }
 }

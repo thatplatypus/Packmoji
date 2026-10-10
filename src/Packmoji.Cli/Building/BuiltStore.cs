@@ -32,14 +32,14 @@ namespace Packmoji.Cli.Building
         /// <summary>Whether a package has been built under a key. An entry counts when its stamp gives that key.</summary>
         public bool Holds(PackageName name, SemanticVersion version, Sha256Digest key)
         {
-            var stamp = Path.Combine(PackageDirectory(name, version, key), BuildStamp.FileName);
+            var folder = PackageDirectory(name, version, key);
             try
             {
-                return File.Exists(stamp) && BuildStamp.KeyIn(File.ReadAllBytes(stamp)) == key;
+                return StampFile.KeyIn(folder) == key;
             }
             catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
             {
-                throw new PackageSourceException(Unusable(stamp, "read", failure));
+                throw new PackageSourceException(Unusable(folder, "read", failure));
             }
         }
 

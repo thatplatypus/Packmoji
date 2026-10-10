@@ -113,6 +113,30 @@ namespace Packmoji.Cli.Tests.Building
         }
 
         [Fact]
+        public async Task A_tool_is_not_given_what_it_is_to_be_kept_from_and_a_program_that_is_run_is_given_all_pmj_was()
+        {
+            NeedsAShell();
+
+            // A variable of this test's own, so that no other test finds its environment changed.
+            var secret = "PMJ_TEST_" + Guid.NewGuid().ToString("N").ToUpperInvariant();
+            Environment.SetEnvironmentVariable(secret, "a token");
+            try
+            {
+                var tools = new ProcessToolRunner(secret);
+
+                var tool = await tools.RunAsync(Shell, ["-c", $"echo \"${{{secret}:-not given}}\""], _directory, Cancellation);
+                var program = await tools.RunAttachedAsync(Shell, ["-c", $"test \"${secret}\" = \"a token\""], _directory, Cancellation);
+
+                tool!.Output.ShouldBe("not given\n");
+                program.ShouldBe(0);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable(secret, null);
+            }
+        }
+
+        [Fact]
         public async Task A_program_run_with_pmjs_own_streams_gives_its_status()
         {
             NeedsAShell();

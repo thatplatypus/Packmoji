@@ -483,5 +483,35 @@ namespace Packmoji.Cli.Tests.Commands
             Directory.GetDirectories(Path.Combine(sandbox.Home, "built", "thatplatypus", "crypto", "1.0.0")).Length.ShouldBe(1);
             sandbox.Read("packages/crypto/🏛").ShouldBe("💭 what the other pmj built\n");
         }
+
+        [Theory]
+        [InlineData("install", "--locked")]
+        [InlineData("build", "--dependencies-only")]
+        public async Task An_archive_put_in_the_cache_under_one_packages_name_that_is_another_packages_is_not_installed_or_built_as_the_first(params string[] command)
+        {
+            // Someone writes both of a project's files, and puts an archive in the cache themselves,
+            // as a tool that has no network does. The archive is deflate's. The lockfile says its
+            // digest is that of crypto 1.0.0, and it is kept where crypto 1.0.0 is kept.
+            using var sandbox = await WithCryptoInstalledAsync();
+            var crypto = sandbox.Lockfile().Packages.Single();
+            var deflate = TestPackage.Archive("@thatplatypus/deflate", "0.1.0", "github.com/thatplatypus/deflate");
+            var digest = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(deflate));
+            sandbox.Write("packmoji.lock", sandbox.Read("packmoji.lock").Replace(crypto.Sha256.Hex, digest));
+            sandbox.ForgetCache();
+            var kept = Path.Combine(sandbox.Home, "cache", "thatplatypus", "crypto", "1.0.0");
+            Directory.CreateDirectory(kept);
+            File.WriteAllBytes(Path.Combine(kept, digest + ".pmj.tar.gz"), deflate);
+            sandbox.GitHub.Requests.Clear();
+            sandbox.GitHub.Unreachable = true;
+
+            var run = await sandbox.RunAsync(command);
+
+            run.Status.ShouldBe(1);
+            run.Error.ShouldContain("error[release.invalid]: ");
+            run.Error.ShouldContain("the manifest in its archive is that of \"@thatplatypus/deflate\"");
+            Directory.Exists(Path.Combine(kept, digest)).ShouldBeFalse();
+            sandbox.Tools.Compiles.ShouldBeEmpty();
+            sandbox.GitHub.Requests.ShouldBeEmpty();
+        }
     }
 }

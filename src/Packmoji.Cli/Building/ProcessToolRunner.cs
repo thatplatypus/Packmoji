@@ -5,11 +5,22 @@ using System.Text;
 namespace Packmoji.Cli.Building
 {
     /// <summary>Starts real programs, on the machine pmj runs on.</summary>
-    public sealed class ProcessToolRunner : IToolRunner
+    /// <param name="withheld">
+    /// Variables of pmj's environment that a tool is started without. A token for GitHub is for
+    /// GitHub's API and nothing else, and a compiler has no use for one. The program that
+    /// <c>pmj run</c> runs is another matter: it is given all that pmj was, as if it had been
+    /// started by hand.
+    /// </param>
+    public sealed class ProcessToolRunner(params string[] withheld) : IToolRunner
     {
         public async Task<ToolRun?> RunAsync(string program, IReadOnlyList<string> arguments, string workingDirectory, CancellationToken cancellationToken)
         {
             var start = Start(program, arguments, workingDirectory);
+            foreach (var variable in withheld)
+            {
+                start.Environment.Remove(variable);
+            }
+
             start.RedirectStandardInput = true;
             start.RedirectStandardOutput = true;
             start.RedirectStandardError = true;

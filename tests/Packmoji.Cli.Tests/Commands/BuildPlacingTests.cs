@@ -119,6 +119,21 @@ namespace Packmoji.Cli.Tests.Commands
         }
 
         [Fact]
+        public async Task A_stamp_that_is_too_large_to_be_one_is_not_read_and_the_package_is_put_there_again()
+        {
+            using var sandbox = await WithGrapevineBuiltAsync();
+            var stamp = sandbox.PathOf("packages/crypto/pmj-build.json");
+            var written = File.ReadAllText(stamp);
+
+            // Still JSON, and still the right key: only far more of it than a stamp is.
+            File.WriteAllText(stamp, new string(' ', 2 * 1024 * 1024) + written);
+
+            (await sandbox.RunAsync("build", "--dependencies-only")).Status.ShouldBe(0);
+
+            File.ReadAllText(stamp).ShouldBe(written);
+        }
+
+        [Fact]
         public async Task A_folder_pmj_left_half_way_to_its_place_is_cleared_away_by_the_next_build()
         {
             using var sandbox = await WithGrapevineBuiltAsync();

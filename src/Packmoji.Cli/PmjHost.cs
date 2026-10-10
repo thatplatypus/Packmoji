@@ -67,7 +67,7 @@ namespace Packmoji.Cli
                 Out = output,
                 Error = error,
                 Variable = variable,
-                Tools = new ProcessToolRunner(),
+                Tools = new ProcessToolRunner(TokenVariables),
             };
         }
 

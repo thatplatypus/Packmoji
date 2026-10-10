@@ -15,7 +15,7 @@ namespace Packmoji.Cli.Building
     /// </remarks>
     internal static class PlacedPackages
     {
-        public const string DirectoryName = "packages";
+        public const string DirectoryName = ProjectFiles.Packages;
 
         /// <summary>
         /// Makes the directory hold exactly these packages of pmj's: puts in what is missing, replaces
@@ -77,13 +77,9 @@ namespace Packmoji.Cli.Building
         }
 
         // Whether a folder already holds this build of a package, whole.
-        private static bool IsThere(string folder, PlacedPackage package)
-        {
-            var stamp = Path.Combine(folder, BuildStamp.FileName);
-            return File.Exists(stamp)
-                && BuildStamp.KeyIn(File.ReadAllBytes(stamp)) == package.Key
-                && Directory.EnumerateFiles(package.From).All(file => File.Exists(Path.Combine(folder, Path.GetFileName(file))));
-        }
+        private static bool IsThere(string folder, PlacedPackage package) =>
+            StampFile.KeyIn(folder) == package.Key
+            && Directory.EnumerateFiles(package.From).All(file => File.Exists(Path.Combine(folder, Path.GetFileName(file))));
 
         private static void Remove(string folder)
         {

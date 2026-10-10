@@ -31,6 +31,13 @@ namespace Packmoji.Core.Building
 
         public const int FormatVersion = 1;
 
+        /// <summary>
+        /// The most bytes a stamp may be: 1 MiB, where a real one is a few hundred bytes. It is
+        /// public so that whatever takes a stamp from a disk can pass over one by its length, before
+        /// reading it at all: a project's directory holds whatever was put in it.
+        /// </summary>
+        public const int MaxBytes = 1_048_576;
+
         /// <summary>The stamp as the text of its file.</summary>
         public string Write()
         {
