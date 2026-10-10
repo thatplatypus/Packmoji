@@ -455,6 +455,24 @@ namespace Packmoji.Cli.Tests.Commands
         }
 
         [Fact]
+        public async Task A_library_whose_archive_could_not_be_made_leaves_nothing_where_it_was_being_built()
+        {
+            using var sandbox = new Sandbox();
+            sandbox.Write("packmoji.json", Manifest("library"));
+            sandbox.Write("src/lib.🍇", "💭 a shelf\n");
+            (await sandbox.RunAsync("build")).Status.ShouldBe(0);
+            sandbox.Files("target/debug").ShouldBe(["shelf/documentation.json", "shelf/libshelf.a", "shelf/🏛"]);
+            sandbox.Tools.Fails.Add("ar");
+
+            var run = await sandbox.RunAsync("build");
+
+            // An interface with no archive beside it is half a package, and would be taken for a whole one.
+            run.Status.ShouldBe(1);
+            run.Error.ShouldContain("error[build.archive-failed]: The archive of \"@someone/shelf\" 0.1.0 could not be made.");
+            sandbox.Files("target").ShouldNotContain(file => file.StartsWith("debug/", StringComparison.Ordinal));
+        }
+
+        [Fact]
         public async Task With_no_archiver_a_library_is_not_compiled()
         {
             using var sandbox = new Sandbox();

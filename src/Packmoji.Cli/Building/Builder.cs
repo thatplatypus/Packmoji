@@ -348,13 +348,11 @@ namespace Packmoji.Cli.Building
         // Builds the project itself into its own directory: an application to a program, and a library to what a package is built to.
         private async Task<BuildStep<BuiltProject>> BuildProjectAsync(OwnProject own, RelativePath entry, IReadOnlyList<BuiltPackage> packages, CancellationToken cancellationToken)
         {
-            var package = own.Manifest.Package;
-            var name = package.Name.Name;
             var target = Path.Combine(_host.WorkingDirectory, ProjectFiles.Target);
 
             // What is made on the way is kept apart from what is made, so that no project's name is in the way of it.
             var work = Path.Combine(target, Intermediate, Mode);
-            var product = Path.Combine(target, Mode, name);
+            var product = Path.Combine(target, Mode, own.Manifest.Package.Name.Name);
 
             // Nothing of an earlier build stays: not an object that is no longer made, and not a program that would be taken for this one's.
             Clear(work);
@@ -362,6 +360,29 @@ namespace Packmoji.Cli.Building
             Directory.CreateDirectory(work);
             Directory.CreateDirectory(Path.GetDirectoryName(product)!);
 
+            var made = false;
+            try
+            {
+                var built = await MakeProjectAsync(own, entry, packages, work, product, cancellationToken);
+                made = built.Succeeded;
+                return built;
+            }
+            finally
+            {
+                // Nor is anything left half made by this one: an interface with no archive beside
+                // it would be taken for a package, and a file a linker did not finish for a program.
+                if (!made)
+                {
+                    Discard(product);
+                }
+            }
+        }
+
+        // Compiles the project and makes of it what its kind is, at a place that has been cleared for it.
+        private async Task<BuildStep<BuiltProject>> MakeProjectAsync(OwnProject own, RelativePath entry, IReadOnlyList<BuiltPackage> packages, string work, string product, CancellationToken cancellationToken)
+        {
+            var package = own.Manifest.Package;
+            var name = package.Name.Name;
             _said.WriteLine($"Building {package.Name} {package.Version}");
             IReadOnlyList<string> search = packages.Count > 0 ? [Path.Combine(_host.WorkingDirectory, PlacedPackages.DirectoryName)] : [];
             var main = Local(_host.WorkingDirectory, entry.Value);
@@ -451,6 +472,19 @@ namespace Packmoji.Cli.Building
             else if (File.Exists(path))
             {
                 File.Delete(path);
+            }
+        }
+
+        // Takes away what a build that did not end well had begun.
+        private static void Discard(string path)
+        {
+            try
+            {
+                Clear(path);
+            }
+            catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
+            {
+                // The problem that is reported is the one that led here, and the next build clears what this one could not.
             }
         }
 
