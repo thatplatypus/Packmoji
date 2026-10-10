@@ -32,12 +32,23 @@ namespace Packmoji.Core.Resolution
                     ? $"ask for a later version of \"{asker.Name}\", one that asks for a version of \"{node.Name}\" that was published; {asker.Name} {asker.Version} is published and cannot change, so if there is none, its author has to publish one"
                     : $"ask for a version of \"{node.Name}\" that was published, in {Manifest}");
 
-        public static Diagnostic LockedVersionMissing(LockedPackage locked) =>
+        public static Diagnostic VersionGone(RequirementGraph graph, RequirementGraph.Node node) =>
+            Gone(node.Name, node.Version, $"; it is asked for: {graph.ChainTo(node.Via)}");
+
+        public static Diagnostic LockedVersionMissing(LockedPackage locked) => Gone(locked.Name, locked.Version, "");
+
+        /// <summary>
+        /// A version the lockfile holds was published once, so it is not one that was never there.
+        /// What is replaced is first taken down, and a lockfile deleted while it is down leaves no
+        /// digest to catch what comes back: so this is the one problem with a lockfile whose fix is
+        /// to keep the lockfile.
+        /// </summary>
+        private static Diagnostic Gone(PackageName name, SemanticVersion version, string askedFor) =>
             new(
                 DiagnosticCodes.ResolveVersionMissing,
-                $"Version {locked.Version} of \"{locked.Name}\" is not published.",
-                $"{Lock} holds it, and a version that is not published cannot be fetched",
-                LockfileReader.RegenerateFix);
+                $"Version {version} of \"{name}\" is no longer published.",
+                $"{Lock} holds it, so it was published once, and a published version is not meant to go away{askedFor}",
+                $"keep {Lock}, which records what this version was, and find out why it is gone before going on: if it comes back, the digest in the lockfile shows whether it came back unchanged, and if it does not, ask for a later version of \"{name}\" in {Manifest}");
 
         public static Diagnostic Yanked(RequirementGraph graph, RequirementGraph.Node node) =>
             new(

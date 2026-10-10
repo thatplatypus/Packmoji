@@ -88,6 +88,8 @@ The first step is your project. Each step after it is a version that asked. The 
 
 **A lockfile that disagrees with what is published** (`lock.mismatch`) is the same kind of signal, and deleting the lockfile is the wrong first move. If the lockfile is as it was committed, the published version has been replaced and must not be used. If the lockfile was edited or badly merged, restore it.
 
+**A version your lockfile holds that is no longer published** is one more. The lockfile holds its digest, so it was published once, and a published version is not meant to go away. Keep the lockfile: what is replaced is first taken down, and if the version comes back, the digest is what shows whether it came back unchanged. If it does not come back, ask for a later version.
+
 ## When nothing is resolved
 
 If your manifest still asks for exactly what the lockfile recorded, `pmj` chooses nothing. Reordering a table, or writing `1.2.0` where it said `1.2`, is not a change.
@@ -99,7 +101,7 @@ It does still ask about each locked package, because what was locked may have be
 | The same version, with the same digest and repository | Nothing |
 | It has been yanked | The warning `resolve.yanked-locked` |
 | It is quarantined | The error `resolve.quarantined` |
-| It is not published | The error `resolve.version-missing` |
+| It is no longer published | The error `resolve.version-missing`. Keep the lockfile |
 | Another digest, or another repository | The error `lock.mismatch` |
 
 ## The same answer every time

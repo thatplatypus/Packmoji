@@ -47,7 +47,9 @@ namespace Packmoji.Core.Resolution
 
             foreach (var node in graph.Nodes.Where(node => node.Published is null).OrderBy(node => node.Name).ThenBy(node => node.Version))
             {
-                errors.Add(() => ResolveDiagnostics.VersionMissing(graph, node));
+                errors.Add(() => locked.Contains((node.Name, node.Version))
+                    ? ResolveDiagnostics.VersionGone(graph, node)
+                    : ResolveDiagnostics.VersionMissing(graph, node));
             }
 
             foreach (var (node, published) in selection.Used.Where(use => use.Published.Status == VersionStatus.Yanked))

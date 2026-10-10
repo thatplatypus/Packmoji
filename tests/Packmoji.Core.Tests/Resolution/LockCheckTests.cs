@@ -68,8 +68,10 @@ namespace Packmoji.Core.Tests.Resolution
         }
 
         [Fact]
-        public async Task A_locked_version_that_is_not_published_is_an_error_and_the_lockfile_is_to_be_written_again()
+        public async Task A_locked_version_that_is_gone_is_an_error_and_the_lockfile_is_to_be_kept()
         {
+            // What is replaced is first taken down. A lockfile deleted while it is down leaves no digest
+            // to catch what comes back, so the one thing this must not say is to delete the lockfile.
             var locked = await Locked();
             var universe = new Universe()
                 .Publish("@thatplatypus/grapevine", "0.3.0", "@thatplatypus/crypto@1.0", "@thatplatypus/deflate@0.1")
@@ -77,8 +79,11 @@ namespace Packmoji.Core.Tests.Resolution
 
             var diagnostic = (await Check(locked, universe)).ShouldFailWith(DiagnosticCodes.ResolveVersionMissing);
 
-            diagnostic.Message.ShouldBe("Version 1.0.0 of \"@thatplatypus/crypto\" is not published.");
-            diagnostic.Fix.ShouldBe(LockfileReader.RegenerateFix);
+            diagnostic.Message.ShouldBe("Version 1.0.0 of \"@thatplatypus/crypto\" is no longer published.");
+            diagnostic.Reason.ShouldStartWith("packmoji.lock holds it");
+            diagnostic.Fix.ShouldStartWith("keep packmoji.lock");
+            diagnostic.Fix.ShouldNotContain("delete");
+            diagnostic.Fix.ShouldContain("a later version of \"@thatplatypus/crypto\"");
         }
 
         [Fact]

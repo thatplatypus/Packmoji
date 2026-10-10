@@ -65,6 +65,39 @@ namespace Packmoji.Core.Tests.Resolution
         }
 
         [Fact]
+        public async Task A_version_that_the_lockfile_holds_and_the_source_no_longer_has_is_gone_and_the_lockfile_is_to_be_kept()
+        {
+            // The lockfile holds a digest for it, so it was published once. What is replaced is first
+            // taken down, and a lockfile deleted meanwhile leaves no digest to catch what comes back.
+            var manifest = Project.Asking("@thatplatypus/grapevine@0.3");
+            var before = new Universe()
+                .Publish("@thatplatypus/grapevine", "0.3.0", "@thatplatypus/crypto@1.0")
+                .Publish("@thatplatypus/crypto", "1.0.0");
+            var locked = (await before.Resolve(manifest)).ShouldSucceed().ToLockfile(manifest);
+            var universe = new Universe().Publish("@thatplatypus/grapevine", "0.3.0", "@thatplatypus/crypto@1.0");
+
+            var diagnostic = (await universe.Resolve(manifest, locked)).ShouldFailWith(DiagnosticCodes.ResolveVersionMissing);
+
+            diagnostic.Message.ShouldBe("Version 1.0.0 of \"@thatplatypus/crypto\" is no longer published.");
+            diagnostic.Reason.ShouldStartWith("packmoji.lock holds it");
+            diagnostic.Reason.ShouldEndWith(": @thatplatypus/app → @thatplatypus/grapevine@0.3.0 → @thatplatypus/crypto@1.0");
+            diagnostic.Fix.ShouldStartWith("keep packmoji.lock");
+            diagnostic.Fix.ShouldNotContain("delete");
+        }
+
+        [Fact]
+        public async Task A_lockfile_that_holds_the_package_at_another_version_says_nothing_of_this_one()
+        {
+            var manifest = Project.Asking("@thatplatypus/crypto@1.0");
+            var locked = (await new Universe().Publish("@thatplatypus/crypto", "1.0.0").Resolve(manifest)).ShouldSucceed().ToLockfile(manifest);
+
+            var diagnostic = (await new Universe().Resolve(Project.Asking("@thatplatypus/crypto@1.1"), locked))
+                .ShouldFailWith(DiagnosticCodes.ResolveVersionMissing);
+
+            diagnostic.Message.ShouldBe("Version 1.1.0 of \"@thatplatypus/crypto\" was never published.");
+        }
+
+        [Fact]
         public async Task Every_missing_version_is_reported_in_order_of_name_and_then_of_version()
         {
             var universe = new Universe().Publish("@thatplatypus/grapevine", "0.3.0", "@thatplatypus/crypto@1.2", "@thatplatypus/deflate@0.1");
