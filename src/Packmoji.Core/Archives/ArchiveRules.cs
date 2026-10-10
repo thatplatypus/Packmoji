@@ -36,10 +36,19 @@ namespace Packmoji.Core.Archives
                 problems.Add($"it holds no {ManifestReader.FileName}, which says what package it is");
             }
 
+            problems.AddRange(NameProblems(files.Select(file => file.Path).ToList()));
+            return problems;
+        }
+
+        /// <summary>Every reason these paths cannot all be files on one disk, whatever disk that is.</summary>
+        public static IReadOnlyList<string> NameProblems(IReadOnlyList<string> paths)
+        {
+            var problems = new List<string>();
+
             // Case is folded one character at a time, which needs no culture data and is what a
             // disk that ignores case does.
             var spelled = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (var (path, _) in files)
+            foreach (var path in paths)
             {
                 if (!spelled.TryAdd(path.ToUpperInvariant(), path))
                 {
@@ -48,7 +57,7 @@ namespace Packmoji.Core.Archives
                 }
             }
 
-            foreach (var (path, _) in files)
+            foreach (var path in paths)
             {
                 var parts = path.Split('/');
                 for (var count = 1; count < parts.Length; count++)
