@@ -19,8 +19,9 @@ The file is also unpacked on the machine of everyone who installs it, and it com
 - **The gzip header has no name, no time and no flags.** The data is in stored blocks of at most 65,535 bytes.
 - **Reading accepts the bytes `pmj pack` writes, and no others.** What was read is written again, tar and gzip alike, and has to come out the same bytes.
 - **Two limits:** an archive is at most 16 MiB, and holds at most 4,096 files. It is not compressed, so it unpacks to less than it is.
-- **Two paths that are the same but for case are refused,** and so is a part of a path that Windows keeps for a device. Both when packing and when reading.
-- **Whether two names differ only by Unicode normalization is not checked.**
+- **Two paths that are the same but for case are refused,** and so is a part of a path that Windows keeps for a device. Both when packing and when reading. Case is a letter and its one capital, as .NET's own tables have them.
+- **Whether two names differ only by Unicode normalization is not checked,** nor by the fuller rules of case, under which a sharp s is two letters s.
+- **When an archive is unpacked, no file is ever written over another.** Two names that only this disk holds to be one stop the install: nothing is unpacked, and nothing is locked.
 
 ## The bytes
 
@@ -63,7 +64,7 @@ The file's bytes follow, filled out with zeros to a whole block.
 - **One gzip for one tar, because a gzip can say the same thing in endless ways, and can carry more after its end.** A reader that took any of them would give one set of files many digests, and would let a release hold bytes that nobody who unpacks it ever sees. Nothing is inflated, so there is no archive that unpacks to fill a disk.
 - **Limits, because the file is read into memory and unpacked onto a disk.** They can be raised later, and could not be lowered without refusing what was already published.
 - **Case, because many disks keep one file for two names that differ by it.** A package packed on Linux would otherwise install on macOS as something else.
-- **Normalization is left, because `pmj` cannot check it.** It is built without culture data, where .NET's normalization does nothing. That is a known gap, and it is listed for the milestone that hardens things.
+- **Normalization and the fuller rules of case are left, because `pmj` cannot check them.** It is built without culture data, where .NET's normalization does nothing and its casing knows single letters only. That is a known gap, and it is listed for the milestone that hardens things. Until then the disk is the judge, and it fails safe: a package with two such names installs where the disk keeps them apart, and is refused, whole, where it does not.
 
 ## Alternatives
 

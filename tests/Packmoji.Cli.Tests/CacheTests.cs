@@ -67,6 +67,43 @@ namespace Packmoji.Cli.Tests
         }
 
         [Fact]
+        public async Task Two_files_that_this_disk_holds_as_one_are_never_unpacked_one_over_the_other()
+        {
+            // A sharp s and two letters s are one name on a Mac, and two on Linux. No rule pmj can
+            // check without the tables of Unicode tells them apart, so the disk is the judge.
+            using var sandbox = new Sandbox();
+            var archive = Packmoji.Core.Archives.PackageArchive.Write(
+            [
+                TestPackage.File("packmoji.json", TestPackage.Manifest("@thatplatypus/crypto", "1.0.0", "library", null)),
+                TestPackage.File("src/STRASSE.x", "the first"),
+                TestPackage.File("src/stra\u00DFe.x", "the second"),
+                TestPackage.File("src/lib.🍇", "💭\n"),
+            ]);
+            sandbox.Upload("github.com/thatplatypus/crypto", "@thatplatypus/crypto", "1.0.0", archive);
+            sandbox.Project("@someone/app", "@thatplatypus/crypto@1.0");
+            var unpacked = Path.Combine(sandbox.Home, "cache", "thatplatypus", "crypto", "1.0.0", Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(archive)));
+
+            var run = await sandbox.RunAsync("install");
+
+            if (run.Status == 0)
+            {
+                File.ReadAllText(Path.Combine(unpacked, "src", "STRASSE.x")).ShouldBe("the first");
+                File.ReadAllText(Path.Combine(unpacked, "src", "stra\u00DFe.x")).ShouldBe("the second");
+                Directory.GetFiles(Path.Combine(unpacked, "src")).Length.ShouldBe(3);
+            }
+            else
+            {
+                run.Status.ShouldBe(1);
+                run.Output.ShouldBeEmpty();
+                run.Error.ShouldContain("error[archive.invalid]: The archive of \"@thatplatypus/crypto\" 1.0.0 cannot be unpacked on this disk.");
+                run.Error.ShouldContain("is the same file here as another of the package's files");
+                sandbox.Has("packmoji.lock").ShouldBeFalse();
+                Directory.Exists(unpacked).ShouldBeFalse();
+                sandbox.Cached().ShouldNotContain(file => file.Contains(".tmp-", StringComparison.Ordinal));
+            }
+        }
+
+        [Fact]
         public async Task When_what_was_chosen_cannot_be_unpacked_the_project_is_not_left_locked_to_it()
         {
             using var sandbox = new Sandbox();

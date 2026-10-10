@@ -93,7 +93,7 @@ namespace Packmoji.Cli.Cache
                     }
 
                     Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                    File.WriteAllBytes(target, file.Content.Span);
+                    Create(target, file, name, version);
                 }
 
                 try
@@ -114,6 +114,11 @@ namespace Packmoji.Cli.Cache
                 }
 
                 return directory;
+            }
+            catch (PackageSourceException)
+            {
+                DiscardDirectory(beside);
+                throw;
             }
             catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
             {
@@ -172,6 +177,26 @@ namespace Packmoji.Cli.Cache
             }
 
             return problems;
+        }
+
+        // Never written over a file that is there. Two names that are different text can be one file
+        // on a disk that ignores case or how a letter is written, and the second would otherwise take
+        // the place of the first without a word.
+        private static void Create(string target, ArchiveFile file, PackageName name, SemanticVersion version)
+        {
+            try
+            {
+                using var created = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+                created.Write(file.Content.Span);
+            }
+            catch (IOException) when (File.Exists(target))
+            {
+                throw new PackageSourceException(new Diagnostic(
+                    DiagnosticCodes.ArchiveInvalid,
+                    $"The archive of \"{name}\" {version} cannot be unpacked on this disk.",
+                    $"\"{file.Path}\" is the same file here as another of the package's files: their names differ only in a way this disk does not keep",
+                    "tell its author: no two files of a package may have names that differ only by case, or by how a letter is written"));
+            }
         }
 
         public string DirectoryPath(PackageName name, SemanticVersion version, Sha256Digest digest) =>

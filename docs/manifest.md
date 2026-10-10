@@ -381,7 +381,7 @@ The codes that begin with `resolve.`, and `lock.mismatch`, are raised when `pmj`
 | `package.not-found` | No release of a package is in any repository `pmj` looked in |
 | `version.none-released` | Every released version of a package is a pre-release, and none was asked for by name |
 | `release.invalid` | A release is there, and its archive is not that package at that version in that repository |
-| `archive.invalid` | An archive is not in the form `pmj pack` writes, or is over a limit |
+| `archive.invalid` | An archive is not the bytes `pmj pack` writes, is over a limit, or holds two files that the disk it is unpacked on keeps as one |
 | `pack.nothing` | `pmj pack` would write an archive without the package's entry file, because no pattern of the manifest selects it |
 | `pack.unportable` | A file to be packed has a name that another platform could not hold, or is a symbolic link |
 | `lock.out-of-date` | The lockfile is missing or no longer answers the manifest, where a command needs one that does |

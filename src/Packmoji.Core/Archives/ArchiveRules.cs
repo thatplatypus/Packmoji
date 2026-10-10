@@ -57,8 +57,11 @@ namespace Packmoji.Core.Archives
         {
             var problems = new List<string>();
 
-            // Case is folded one character at a time, which needs no culture data and is what a
-            // disk that ignores case does.
+            // Case is folded one character at a time, by .NET's own tables, which needs no culture
+            // data. That tells apart everything a letter and its one capital can spell. What only
+            // fuller tables could tell, such as a sharp s and two letters s, the long s, or two ways
+            // of writing an accent, is left to the disk a package is unpacked on, where no file is
+            // ever written over another.
             var spelled = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var path in paths)
             {
