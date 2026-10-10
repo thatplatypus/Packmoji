@@ -49,6 +49,7 @@ Every command works in the current directory. A command that reads a project nee
 | `pmj pack` | Writes the file that a release of this package carries |
 | `pmj verify` | Downloads every locked package again, and holds it and the cache's copy to `packmoji.lock` |
 | `pmj build` | Compiles the packages `packmoji.lock` holds, each once for the whole machine, and puts them in `packages/` |
+| `pmj run` | Builds this application, and runs it |
 
 `pmj --help` lists them, `pmj <command> --help` says what one takes, and `pmj --version` prints the version.
 
@@ -191,6 +192,20 @@ Compiles every package `packmoji.lock` holds, and puts each in the project's `pa
 - **A package is compiled once for the whole machine.** What was built is kept, and the next project that locks the same package, on the same compiler, is given it without a compile.
 - **`--release` has the compiler optimize.** What is built with it and without it is kept apart.
 - **`--dependencies-only` stops before the project itself.** It needs nothing in the directory but the two files.
+
+### pmj run
+
+```
+pmj run [--release] [-- <argument>...]
+```
+
+Builds the application as `pmj build` does, and runs the program that comes of it.
+
+- **What follows `--` is given to the program,** each argument as it is written. `pmj` takes none of it for an option of its own.
+- **The program is run in the directory `pmj` was run in,** and reads and writes what `pmj` would: its input, its output and its errors are `pmj`'s own.
+- **What `pmj` has to say of the build goes to standard error,** so that standard output holds what the program wrote and nothing else.
+- **`pmj run` ends with the status the program ended with.** When the application could not be built, it ends with 1 and nothing is run.
+- **A library has no program.** In one, `pmj run` is `run.not-an-app`.
 
 ## What pmj prints
 

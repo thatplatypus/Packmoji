@@ -33,6 +33,7 @@ namespace Packmoji.Cli
                 Pack(host),
                 Verify(host),
                 Building(host),
+                Running(host),
             };
 
             // Given no command there is nothing to do, and saying nothing would look like success.
@@ -190,6 +191,20 @@ namespace Packmoji.Cli
             var command = new Command("build", "Compile what packmoji.lock holds, each package once for the whole machine, and then the project.") { release, dependenciesOnly, json };
             command.SetAction((parseResult, cancellationToken) =>
                 BuildCommand.RunAsync(host, parseResult.GetValue(release), parseResult.GetValue(dependenciesOnly), parseResult.GetValue(json), cancellationToken));
+            return command;
+        }
+
+        private static Command Running(PmjHost host)
+        {
+            var release = new Option<bool>("--release") { Description = "Have the compiler optimize, and run what that builds." };
+            var arguments = new Argument<string[]>("arguments")
+            {
+                Arity = ArgumentArity.ZeroOrMore,
+                Description = "What the program is given. Write -- before them, so that pmj takes none of them for an option of its own.",
+            };
+            var command = new Command("run", "Build this application, and run it.") { release, arguments };
+            command.SetAction((parseResult, cancellationToken) =>
+                RunCommand.RunAsync(host, parseResult.GetValue(release), parseResult.GetValue(arguments) ?? [], cancellationToken));
             return command;
         }
 

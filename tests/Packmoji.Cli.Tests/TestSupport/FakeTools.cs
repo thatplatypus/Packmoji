@@ -40,6 +40,9 @@ namespace Packmoji.Cli.Tests.TestSupport
         /// <summary>Tools that end with status 1 whatever they are asked, each by the name its file gives it.</summary>
         public HashSet<string> Fails { get; } = new(StringComparer.Ordinal);
 
+        /// <summary>Tools that are there and cannot be started, each by the name its file gives it.</summary>
+        public HashSet<string> Unstartable { get; } = new(StringComparer.Ordinal);
+
         /// <summary>Tools that end with status 0 and have done nothing, each by the name its file gives it.</summary>
         public HashSet<string> Idle { get; } = new(StringComparer.Ordinal);
 
@@ -51,7 +54,7 @@ namespace Packmoji.Cli.Tests.TestSupport
 
         public async Task<ToolRun?> RunAsync(string program, IReadOnlyList<string> arguments, string workingDirectory, CancellationToken cancellationToken)
         {
-            if (Kind(program) is not { } tool)
+            if (Kind(program) is not { } tool || Unstartable.Contains(tool.Name))
             {
                 return null;
             }
