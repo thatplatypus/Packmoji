@@ -24,7 +24,7 @@
 
 ## What a build does
 
-1. **It reads `packmoji.json` and `packmoji.lock`.** A build chooses no version. A lockfile that is missing, or that no longer answers the manifest, is `lock.out-of-date`: run `pmj install`. A project that asks for no package needs no lockfile.
+1. **It reads `packmoji.json` and `packmoji.lock`.** A build chooses no version. A lockfile that is missing, or that no longer answers the manifest, is `lock.out-of-date`: run `pmj install`. A project that asks for no package needs no lockfile. Where `PACKMOJI_SCOPES` limits the scopes that may be depended on, a package outside the list stops the build here, with `scope.not-allowed`.
 2. **It waits for any other build of the same project.** Two builds do not write into one project at once.
 3. **It holds each locked package to what is published, and fetches what the cache does not hold.** This is what `pmj install` does. With the cache filled, nothing is asked of GitHub.
 4. **It finds the compiler and asks which it is.** The version comes from the first line of the compiler's help, which is the only place the compiler says it.
@@ -197,6 +197,7 @@ A package may have C and C++ beside its Emojicode. Its manifest says which files
 | `built.unusable` | `pmj` could not read or write what it keeps of built packages | Check that `~/.packmoji/built` is yours to use, or set `PACKMOJI_HOME` |
 | `packages.foreign` | A folder in `packages/` has a locked package's name and is not `pmj`'s | Move it away, or delete it |
 | `project.unreadable` | The project's directory could not be written, or a directory that a build writes into is a symbolic link | Check that the directory is yours to write. Delete a link: `pmj` makes the directory itself |
+| `scope.not-allowed` | A package the project asks for or locks is of a scope that `PACKMOJI_SCOPES` does not allow | Depend only on packages of the scopes that are allowed. The list is set by whoever runs `pmj` on that machine |
 | `run.not-an-app` | `pmj run` was run in a library | Run `pmj build`, or run an application that depends on it |
 | `run.failed` | The program was built, and the machine would not start it | Check that the compiler and the C++ compiler both build for this machine |
 

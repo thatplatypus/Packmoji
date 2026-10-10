@@ -21,12 +21,16 @@ namespace Packmoji.Cli.Commands
     /// </summary>
     internal sealed class ProjectSession
     {
-        private ProjectSession(PmjHost host, Manifest manifest, Lockfile? lockfile)
+        private ProjectSession(PmjHost host, Manifest manifest, Lockfile? lockfile, ScopeLimit allowed)
         {
             Host = host;
             Manifest = manifest;
             Lockfile = lockfile;
+            Allowed = allowed;
             Store = new FileAssetStore(host.HomeDirectory);
+
+            // The last line of a limit on scopes: whatever asks, an owner outside it is asked nothing.
+            Releases = allowed.IsSet ? new ScopedReleaseHost(host.Releases, allowed) : host.Releases;
         }
 
         public PmjHost Host { get; }
@@ -36,6 +40,12 @@ namespace Packmoji.Cli.Commands
         public Lockfile? Lockfile { get; }
 
         public FileAssetStore Store { get; }
+
+        /// <summary>The scopes this project's packages may be of. Both files have been held to it by the time a command has the project.</summary>
+        public ScopeLimit Allowed { get; }
+
+        /// <summary>Where releases are asked for. An owner outside <see cref="Allowed"/> is asked nothing.</summary>
+        public IReleaseHost Releases { get; }
 
         /// <summary>Whether there is a lockfile and it still answers what the manifest asks for. When it does, nothing needs to be chosen.</summary>
         [MemberNotNullWhen(true, nameof(Lockfile))]
@@ -51,9 +61,40 @@ namespace Packmoji.Cli.Commands
             }
 
             var lockfile = ProjectFiles.ReadLockfile(host.WorkingDirectory);
-            return lockfile is { Succeeded: false }
-                ? Outcome<ProjectSession>.Failed(lockfile.Diagnostics, lockfile.Omitted)
-                : Outcome<ProjectSession>.Of(new ProjectSession(host, manifest.Value, lockfile?.Value));
+            if (lockfile is { Succeeded: false })
+            {
+                return Outcome<ProjectSession>.Failed(lockfile.Diagnostics, lockfile.Omitted);
+            }
+
+            // Held before anything else is done with either file, and so before anything is asked of anyone.
+            var allowed = host.Scopes();
+            if (!allowed.Succeeded)
+            {
+                return Outcome<ProjectSession>.Failed(allowed.Diagnostics);
+            }
+
+            var refused = Outside(allowed.Value, manifest.Value, lockfile?.Value);
+            return refused.Count > 0
+                ? Outcome<ProjectSession>.Failed(refused)
+                : Outcome<ProjectSession>.Of(new ProjectSession(host, manifest.Value, lockfile?.Value, allowed.Value));
+        }
+
+        // Every package of a scope that is not allowed, each once and in order of name: those the
+        // manifest asks for, and those that only the lockfile holds.
+        private static List<Diagnostic> Outside(ScopeLimit allowed, Manifest manifest, Lockfile? lockfile)
+        {
+            var met = new SortedDictionary<PackageName, string>();
+            foreach (var locked in lockfile?.Packages ?? [])
+            {
+                met[locked.Name] = $"{LockfileReader.FileName} holds it";
+            }
+
+            foreach (var asked in (manifest.Dependencies ?? []).Concat(manifest.DevDependencies ?? []))
+            {
+                met[asked.Name] = $"{ManifestReader.FileName} asks for it";
+            }
+
+            return met.Where(package => !allowed.Allows(package.Key)).Select(package => allowed.Refuses(package.Key, package.Value)).ToList();
         }
 
         /// <summary>
@@ -72,7 +113,7 @@ namespace Packmoji.Cli.Commands
         /// <param name="alsoLookIn">Repositories that were named as places to look in as well.</param>
         /// <param name="told">Where a package lives, for a package someone has said it of.</param>
         public DirectPackageSource Source(IReadOnlyList<RepositoryRef> alsoLookIn, IReadOnlyDictionary<PackageName, RepositoryRef>? told = null) =>
-            new(Host.Releases, Store, Manifest, Lockfile, told, alsoLookIn);
+            new(Releases, Store, Manifest, Lockfile, told, alsoLookIn);
 
         /// <summary>
         /// A changed manifest as its file will read. The rules that hold across a manifest are the
@@ -141,7 +182,7 @@ namespace Packmoji.Cli.Commands
         /// <param name="json">Whether to answer a tool, with one JSON object.</param>
         public async Task<int> ResolveAsync(Manifest manifest, DirectPackageSource source, string? said, bool json, CancellationToken cancellationToken)
         {
-            var result = await DirectResolver.ResolveAsync(manifest, Lockfile, source, cancellationToken);
+            var result = await DirectResolver.ResolveAsync(manifest, Lockfile, source, Allowed, cancellationToken);
             if (!result.Succeeded)
             {
                 return DiagnosticPrinter.Report(Host, result.Diagnostics, result.OmittedDiagnostics, json);
@@ -170,7 +211,7 @@ namespace Packmoji.Cli.Commands
         /// <param name="json">Whether to answer a tool, with one JSON object.</param>
         public async Task<int> PreviewAsync(Manifest manifest, DirectPackageSource source, string? said, bool json, CancellationToken cancellationToken)
         {
-            var result = await DirectResolver.ResolveAsync(manifest, Lockfile, source, cancellationToken);
+            var result = await DirectResolver.ResolveAsync(manifest, Lockfile, source, Allowed, cancellationToken);
             if (!result.Succeeded)
             {
                 return DiagnosticPrinter.Report(Host, result.Diagnostics, result.OmittedDiagnostics, json);

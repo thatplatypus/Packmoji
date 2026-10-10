@@ -34,6 +34,12 @@ namespace Packmoji.Cli.Commands
                 return reply.Stop(invalid);
             }
 
+            // Said before its versions are asked for: nothing is asked of GitHub about a package that may not be depended on.
+            if (!project.Allowed.Allows(name))
+            {
+                return reply.Stop(project.Allowed.Refuses(name, "it was asked for"));
+            }
+
             // With no requirement there is still something to do for a package that is asked for
             // already, when it is to be moved, or when pmj is told where to look for it.
             var existing = ManifestEditor.Find(project.Manifest, name, out var wasDev);

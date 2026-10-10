@@ -146,7 +146,7 @@ namespace Packmoji.Cli.Tests.Docs
 
             (await sandbox.RunAsync("build")).Status.ShouldBe(0);
 
-            sandbox.Asked.Distinct().Order(StringComparer.Ordinal).ShouldBe(["AR", "CC", "CXX", "EMOJICODEC", "EMOJICODE_INCLUDE", "EMOJICODE_PACKAGES_PATH", "PATH"]);
+            sandbox.Asked.Distinct().Order(StringComparer.Ordinal).ShouldBe(["AR", "CC", "CXX", "EMOJICODEC", "EMOJICODE_INCLUDE", "EMOJICODE_PACKAGES_PATH", "PACKMOJI_SCOPES", "PATH"]);
             foreach (var variable in sandbox.Asked.Distinct())
             {
                 Guide("cli.md").ShouldContain($"`{variable}`");
