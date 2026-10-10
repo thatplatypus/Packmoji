@@ -75,20 +75,21 @@ pmj add <@scope/name>[@<requirement>] [--dev] [--repository <github.com/owner/re
 - **With a requirement, it is written as you gave it.** `pmj add @thatplatypus/crypto@1.2` asks for 1.2.0 or anything later on the line `1.x`. See [How pmj chooses versions](resolution.md).
 - **A pre-release is added only by naming it,** as in `pmj add @thatplatypus/crypto@2.0.0-rc.1`.
 - **`--dev` puts it under `devDependencies`:** needed to develop this project, and not by what depends on it.
-- **`--repository` says where the package lives.** It is needed once, and only in the one case described under [How a package is found](#how-a-package-is-found).
+- **`--repository` says where the package lives.** It is needed only in the cases described under [How a package is found](#how-a-package-is-found).
 
 A package the project already depends on:
 
-- **With no requirement, it is an error.** Nothing would change.
+- **With no requirement and nothing else, it is an error.** Nothing would change.
 - **With a requirement, its requirement is changed.** It stays in the table it is in.
-- **With `--dev`, it is moved to `devDependencies`.** To move one the other way, remove it and add it again.
+- **With `--dev`, it is moved to `devDependencies`,** and goes on asking for what it asked. To move one the other way, remove it and add it again.
+- **With `--repository`, it is looked for there and locked again.** The manifest is left as it is.
 
 `add` resolves and fetches what the resolution chose before it writes anything. So when a package cannot be found, or the resolution is stopped, neither `packmoji.json` nor `packmoji.lock` is changed.
 
 ### pmj remove
 
 ```
-pmj remove <@scope/name>
+pmj remove <@scope/name> [--repository <github.com/owner/repo>]...
 ```
 
 Takes the package out of whichever table has it, and resolves what is left. The lockfile then holds only what something still needs.
@@ -96,7 +97,7 @@ Takes the package out of whichever table has it, and resolves what is left. The 
 ### pmj install
 
 ```
-pmj install [--locked]
+pmj install [--locked] [--repository <github.com/owner/repo>]...
 ```
 
 - **When `packmoji.lock` still answers `packmoji.json`, nothing is chosen.** Each locked package is fetched and held to the digest the lockfile records. A package whose locked bytes are already in the cache is not asked of GitHub at all, so `install` then works with no network.
@@ -106,7 +107,7 @@ pmj install [--locked]
 ### pmj update
 
 ```
-pmj update [<@scope/name>...] [--dry-run]
+pmj update [<@scope/name>...] [--dry-run] [--repository <github.com/owner/repo>]...
 ```
 
 A build never moves to a newer version by itself, so this is how you move it.
@@ -184,7 +185,7 @@ Downloads every locked package again, whatever the cache holds, and checks three
 ```
 error[package.not-found]: No release of "@thatplatypus/crypto" was found.
   why: pmj looked in github.com/thatplatypus/crypto for a release tagged crypto-v and a version, and there is none
-  fix: if the package shares a repository with others, say which, once: pmj add @thatplatypus/crypto --repository github.com/thatplatypus/<repository>
+  fix: if the package shares a repository with others, run this again with --repository github.com/thatplatypus/<repository>; pmj reads public repositories only
 ```
 
 - **Every code is listed** in [the manifest reference](manifest.md#diagnostics), and those of a resolution are explained in [How pmj chooses versions](resolution.md).
@@ -304,21 +305,28 @@ Each file `pmj` writes is written whole beside its place and then put there in o
 A version of `@scope/name` is the release tagged `<name>-v<version>` that carries the file `<name>-<version>.pmj.tar.gz`, in a repository that the scope owns. Without a registry, `pmj` has to work out which repository. It looks in these, in this order, and takes the first that has the release:
 
 1. The repository `packmoji.lock` records for the package.
-2. The repository given with `--repository`, for the package being added.
+2. The repository given to `pmj add` with `--repository`, for the package being added.
 3. `github.com/<scope>/<name>`: a repository of the package's own name.
-4. The other repositories of the same owner that it knows by now: the project's own, those of packages the lockfile holds, and those of packages it has just found.
+4. The other repositories of the same owner that it knows by now: the project's own, those of packages the lockfile holds, those of packages it has just found, and any that were named with `--repository`.
 
 - **A release counts only if it says it is what was looked for.** The manifest inside its archive has to give that name and that version, and has to say that the package lives in the repository it was found in.
 - **What is found is remembered in `packmoji.lock`,** so it is worked out once.
 - **Packages that share a repository are found beside each other.** `@thatplatypus/grapevine` is in `github.com/thatplatypus/grapevine`, and so are the two packages it depends on. Adding `grapevine` finds all three.
+- **Only public repositories are read.** A release's file is downloaded with no token, so one in a private repository is not found, though GitHub's API may list it.
 
-One case cannot be worked out: a project that depends on a package in a shared repository, and on nothing else of that owner. Say where it is, once:
+One case cannot be worked out: a package in a shared repository that nothing already found leads to. That is a project that depends on such a package and on nothing else of its owner, or a package that needs one that is not released beside it. Say where to look:
 
 ```
 $ pmj add @thatplatypus/crypto --repository github.com/thatplatypus/grapevine
 Added @thatplatypus/crypto 1.0.0 to dependencies.
 packmoji.lock now holds 1 package:
   + @thatplatypus/crypto 1.0.0
+```
+
+`packmoji.lock` is the only record of where such a package was found. A project whose lockfile is gone, or was never committed, has to be told again, and every command that resolves takes `--repository` for that. It can be given more than once, and a repository named this way is looked in for every package of its owner:
+
+```
+pmj install --repository github.com/thatplatypus/grapevine
 ```
 
 ### What is asked of GitHub

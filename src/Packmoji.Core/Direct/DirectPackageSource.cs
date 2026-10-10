@@ -39,12 +39,14 @@ namespace Packmoji.Core.Direct
         /// <param name="project">The project's manifest, for the repository the project itself is in.</param>
         /// <param name="lockfile">The project's lockfile when it has one, for where its packages live and for the digests that the cache may answer for.</param>
         /// <param name="told">Where a package lives, for packages someone has said it of.</param>
+        /// <param name="alsoLookIn">Repositories to look in as well, for any package of their owners: what someone names when nothing else leads there.</param>
         public DirectPackageSource(
             IReleaseHost host,
             IAssetStore store,
             Manifest project,
             Lockfile? lockfile,
-            IReadOnlyDictionary<PackageName, RepositoryRef>? told = null)
+            IReadOnlyDictionary<PackageName, RepositoryRef>? told = null,
+            IEnumerable<RepositoryRef>? alsoLookIn = null)
         {
             ArgumentNullException.ThrowIfNull(host);
             ArgumentNullException.ThrowIfNull(store);
@@ -54,6 +56,11 @@ namespace Packmoji.Core.Direct
             _told = told ?? new Dictionary<PackageName, RepositoryRef>();
 
             Learn(project.Repository);
+            foreach (var repository in alsoLookIn ?? [])
+            {
+                Learn(repository);
+            }
+
             foreach (var package in lockfile?.Packages ?? [])
             {
                 _locked.TryAdd(package.Name, package.Source);
@@ -178,7 +185,7 @@ namespace Packmoji.Core.Direct
                 version is null
                     ? $"pmj looked in {places} for a release tagged {name.Name}-v and a version, and there is none"
                     : $"pmj looked for the release {ReleaseTag.For(name, version)} in {places}, and it is not there{(askedFor is null ? "" : $"; it is asked for: {askedFor}")}",
-                $"if the package shares a repository with others, say which, once: pmj add {name} --repository github.com/{name.Scope}/<repository>");
+                $"if the package shares a repository with others, run this again with --repository github.com/{name.Scope}/<repository>; pmj reads public repositories only");
         }
 
         // In the order they are tried. Every one of them is owned by the package's scope: that is

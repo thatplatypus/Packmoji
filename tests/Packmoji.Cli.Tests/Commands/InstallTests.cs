@@ -282,6 +282,35 @@ namespace Packmoji.Cli.Tests.Commands
             sandbox.GitHub.Requests.ShouldBeEmpty();
         }
 
+        [Theory]
+        [InlineData("https://github.com/thatplatypus/Grapevine", "repository.invalid")]
+        [InlineData("grapevine", "repository.invalid")]
+        public async Task A_place_to_look_that_is_not_a_repository_is_refused_before_anything_is_asked(string repository, string code)
+        {
+            using var sandbox = Sandbox.WithGrapevine();
+            sandbox.Project("@someone/app", "@thatplatypus/crypto@1.0");
+
+            var run = await sandbox.RunAsync("install", "--repository", repository);
+
+            run.Status.ShouldBe(1);
+            run.Error.ShouldContain($"error[{code}]: ");
+            sandbox.GitHub.Requests.ShouldBeEmpty();
+            sandbox.Has("packmoji.lock").ShouldBeFalse();
+        }
+
+        [Fact]
+        public async Task Several_places_to_look_can_be_given_and_one_of_another_owner_is_never_asked_for_this_owners_packages()
+        {
+            using var sandbox = Sandbox.WithGrapevine();
+            sandbox.Project("@someone/app", "@thatplatypus/crypto@1.0");
+
+            var run = await sandbox.RunAsync("install", "--repository", "github.com/someone/else", "--repository", Sandbox.Grapevine);
+
+            run.Status.ShouldBe(0);
+            sandbox.Locked().ShouldBe(["@thatplatypus/crypto 1.0.0 in github.com/thatplatypus/grapevine"]);
+            sandbox.GitHub.Downloads.ShouldNotContain(path => path.StartsWith("/someone/", StringComparison.Ordinal));
+        }
+
         [Fact]
         public async Task A_lockfile_that_cannot_be_written_is_a_problem_that_names_the_file_and_leaves_nothing_behind()
         {

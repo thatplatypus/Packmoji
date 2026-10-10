@@ -237,6 +237,23 @@ namespace Packmoji.Core.Tests.Direct
         }
 
         [Fact]
+        public async Task A_repository_that_pmj_was_told_to_look_in_as_well_is_looked_in_for_every_package_of_its_owner_and_for_no_other()
+        {
+            var host = Grapevine().Release("github.com/someone/tools", "@someone/tools", "1.0.0");
+            var source = new DirectPackageSource(host, new MemoryAssetStore(), Outsider, null, alsoLookIn: [Sample.Repository(Shared)]);
+
+            (await Find(source, "@thatplatypus/deflate", "0.1.0")).ShouldNotBeNull().Source.ShouldBe(Sample.Repository(Shared));
+            (await Find(source, "@thatplatypus/crypto", "1.0.0")).ShouldNotBeNull().Source.ShouldBe(Sample.Repository(Shared));
+            (await Find(source, "@someone/tools", "1.0.0")).ShouldNotBeNull();
+            (await Find(source, "@someone/other", "1.0.0")).ShouldBeNull();
+
+            // A repository of its own name comes first, and the one that was named after it.
+            host.Downloads.Take(2).ShouldBe(["github.com/thatplatypus/deflate deflate-v0.1.0", "github.com/thatplatypus/grapevine deflate-v0.1.0"]);
+            host.Downloads.ShouldNotContain(download => download.StartsWith("github.com/thatplatypus/", StringComparison.Ordinal) && download.Contains("tools", StringComparison.Ordinal));
+            host.Downloads.ShouldNotContain(download => download.StartsWith("github.com/thatplatypus/", StringComparison.Ordinal) && download.Contains("other", StringComparison.Ordinal));
+        }
+
+        [Fact]
         public async Task Each_version_is_downloaded_once_however_often_it_is_asked_for()
         {
             var host = new FakeReleaseHost().Release("github.com/thatplatypus/crypto", "@thatplatypus/crypto", "1.0.0");

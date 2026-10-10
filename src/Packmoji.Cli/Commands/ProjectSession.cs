@@ -68,9 +68,10 @@ namespace Packmoji.Cli.Commands
         }
 
         /// <summary>Where this project's packages are found. One is made for a command and used for all of it, because it learns as it goes.</summary>
+        /// <param name="alsoLookIn">Repositories that were named as places to look in as well.</param>
         /// <param name="told">Where a package lives, for a package someone has said it of.</param>
-        public DirectPackageSource Source(IReadOnlyDictionary<PackageName, RepositoryRef>? told = null) =>
-            new(Host.Releases, Store, Manifest, Lockfile, told);
+        public DirectPackageSource Source(IReadOnlyList<RepositoryRef> alsoLookIn, IReadOnlyDictionary<PackageName, RepositoryRef>? told = null) =>
+            new(Host.Releases, Store, Manifest, Lockfile, told, alsoLookIn);
 
         /// <summary>
         /// A changed manifest as its file will read. The rules that hold across a manifest are the
@@ -91,9 +92,9 @@ namespace Packmoji.Cli.Commands
         /// is held to what is published, and one whose locked bytes are in the cache is not asked of
         /// GitHub at all.
         /// </summary>
-        public async Task<int> InstallLockedAsync(CancellationToken cancellationToken)
+        public async Task<int> InstallLockedAsync(IReadOnlyList<RepositoryRef> alsoLookIn, CancellationToken cancellationToken)
         {
-            var check = await LockCheck.CheckAsync(Lockfile!, Source(), cancellationToken);
+            var check = await LockCheck.CheckAsync(Lockfile!, Source(alsoLookIn), cancellationToken);
             DiagnosticPrinter.Print(Host.Error, check.Diagnostics, check.OmittedDiagnostics);
             if (!check.Succeeded)
             {

@@ -32,8 +32,11 @@ namespace Packmoji.Cli.Commands
                 return DiagnosticPrinter.Report(host, invalid);
             }
 
+            // With no requirement there is still something to do for a package that is asked for
+            // already, when it is to be moved, or when pmj is told where to look for it.
             var existing = ManifestEditor.Find(project.Manifest, name, out var wasDev);
-            if (existing is not null && requirement is null)
+            var moves = existing is not null && dev && !wasDev;
+            if (existing is not null && requirement is null && repository is null && !moves)
             {
                 return DiagnosticPrinter.Report(host, new Diagnostic(
                     DiagnosticCodes.DependencyExists,
@@ -56,13 +59,16 @@ namespace Packmoji.Cli.Commands
                         DiagnosticCodes.RepositoryOwnerMismatch,
                         $"\"{name}\" cannot live in {where}.",
                         $"a package lives in a repository of the owner its scope names, and the scope of \"{name}\" is \"{name.Scope}\"",
-                        $"give a repository of {name.Scope}: --repository github.com/{name.Scope}/<repository>"));
+                        $"give a repository of {name.Scope}: {RepositoryOption.Name} github.com/{name.Scope}/<repository>"));
                 }
 
                 told.Add(name, where);
             }
 
-            var source = project.Source(told);
+            // The repository is where this package is looked for first, and a place to look for
+            // whatever it needs: what is released beside a package is what it most often depends on.
+            var source = project.Source([.. told.Values], told);
+            requirement ??= existing?.Requirement;
             if (requirement is null)
             {
                 if (await source.ListVersionsAsync(name, cancellationToken) is not { } listed)
@@ -85,25 +91,32 @@ namespace Packmoji.Cli.Commands
             // A package that is asked for already stays in the table it is in, unless it is being moved.
             var asDev = dev || (existing is not null && wasDev);
             var asked = new Dependency(name, requirement!);
-            if (existing is not null && existing.Requirement.Text == asked.Requirement.Text && wasDev == asDev)
+            if (existing is null || existing.Requirement.Text != asked.Requirement.Text || wasDev != asDev)
+            {
+                var changed = ProjectSession.Checked(ManifestEditor.With(project.Manifest, asked, asDev));
+                if (!changed.Succeeded)
+                {
+                    return DiagnosticPrinter.Report(host, changed.Diagnostics, changed.Omitted);
+                }
+
+                var said = existing switch
+                {
+                    null => $"Added {name} {asked.Requirement} to {(asDev ? DevDependencies : Dependencies)}.",
+                    _ when wasDev != asDev => $"Moved {name} to {DevDependencies}, asking for {asked.Requirement}.",
+                    _ => $"Changed the requirement on {name} from {existing.Requirement} to {asked.Requirement}.",
+                };
+                return await project.ResolveAsync(changed.Value, source, said, cancellationToken);
+            }
+
+            // Nothing to change in the manifest. There is still a lockfile to write when the project
+            // has none that answers it, or when pmj has just been told where to look.
+            if (project.IsLocked && repository is null)
             {
                 host.Out.WriteLine($"{ManifestReader.FileName} already asks for {name} at {existing.Requirement}.");
                 return ExitStatus.Success;
             }
 
-            var changed = ProjectSession.Checked(ManifestEditor.With(project.Manifest, asked, asDev));
-            if (!changed.Succeeded)
-            {
-                return DiagnosticPrinter.Report(host, changed.Diagnostics, changed.Omitted);
-            }
-
-            var said = existing switch
-            {
-                null => $"Added {name} {asked.Requirement} to {(asDev ? DevDependencies : Dependencies)}.",
-                _ when wasDev != asDev => $"Moved {name} to {DevDependencies}, asking for {asked.Requirement}.",
-                _ => $"Changed the requirement on {name} from {existing.Requirement} to {asked.Requirement}.",
-            };
-            return await project.ResolveAsync(changed.Value, source, said, cancellationToken);
+            return await project.ResolveAsync(project.Manifest, source, said: null, cancellationToken);
         }
     }
 }

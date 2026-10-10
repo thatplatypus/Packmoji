@@ -10,7 +10,7 @@ This page is how to do that by hand. `pmj publish`, and a workflow that releases
 
 | It has | Which must be |
 |---|---|
-| A repository | Owned by `scope`, and the one the package's manifest names |
+| A repository | Public, owned by `scope`, and the one the package's manifest names |
 | A tag | Exactly `<name>-v<X.Y.Z>`, such as `crypto-v1.2.0` |
 | One file | Named `<name>-<X.Y.Z>.pmj.tar.gz`, written by `pmj pack` |
 | A state | Published. A draft is not seen |

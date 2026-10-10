@@ -156,7 +156,7 @@ namespace Packmoji.Cli.Tests.Commands
             lost.Status.ShouldBe(1);
             lost.Error.ShouldContain("error[package.not-found]: No release of \"@thatplatypus/crypto\" was found.");
             lost.Error.ShouldContain("pmj looked in github.com/thatplatypus/crypto");
-            lost.Error.ShouldContain("fix: if the package shares a repository with others, say which, once: pmj add @thatplatypus/crypto --repository github.com/thatplatypus/<repository>");
+            lost.Error.ShouldContain("fix: if the package shares a repository with others, run this again with --repository github.com/thatplatypus/<repository>; pmj reads public repositories only");
             sandbox.Has("packmoji.lock").ShouldBeFalse();
 
             var told = await sandbox.RunAsync("add", "@thatplatypus/crypto", "--repository", Sandbox.Grapevine);
@@ -169,6 +169,110 @@ namespace Packmoji.Cli.Tests.Commands
             (await sandbox.RunAsync("install")).Status.ShouldBe(0);
             (await sandbox.RunAsync("add", "@thatplatypus/deflate")).Status.ShouldBe(0);
             sandbox.Locked().ShouldContain("@thatplatypus/deflate 0.1.0 in github.com/thatplatypus/grapevine");
+        }
+
+        [Fact]
+        public async Task A_project_whose_lockfile_is_gone_is_locked_again_by_saying_where_to_look_and_by_the_very_command_pmj_names()
+        {
+            using var sandbox = Sandbox.WithGrapevine();
+            sandbox.Project("@someone/app");
+            (await sandbox.RunAsync("add", "@thatplatypus/crypto", "--repository", Sandbox.Grapevine)).Status.ShouldBe(0);
+            var manifest = sandbox.Read("packmoji.json");
+
+            // The lockfile was the only record of where crypto lives. A clone without it, or a merge that lost it, is here.
+            File.Delete(sandbox.PathOf("packmoji.lock"));
+            sandbox.ForgetCache();
+
+            var lost = await sandbox.RunAsync("install");
+            lost.Status.ShouldBe(1);
+            lost.Error.ShouldContain("error[package.not-found]: No release of \"@thatplatypus/crypto\" 1.0.0 was found.");
+            lost.Error.ShouldContain("run this again with --repository github.com/thatplatypus/<repository>");
+
+            var found = await sandbox.RunAsync("install", "--repository", Sandbox.Grapevine);
+
+            found.Error.ShouldBeEmpty();
+            found.Status.ShouldBe(0);
+            sandbox.Locked().ShouldBe(["@thatplatypus/crypto 1.0.0 in github.com/thatplatypus/grapevine"]);
+            sandbox.Read("packmoji.json").ShouldBe(manifest);
+        }
+
+        [Fact]
+        public async Task Add_of_what_is_already_asked_for_takes_a_place_to_look_and_locks_again_without_changing_the_manifest()
+        {
+            using var sandbox = Sandbox.WithGrapevine();
+            sandbox.Project("@someone/app");
+            await sandbox.RunAsync("add", "@thatplatypus/crypto", "--repository", Sandbox.Grapevine);
+            var manifest = sandbox.Read("packmoji.json");
+            File.Delete(sandbox.PathOf("packmoji.lock"));
+
+            var again = await sandbox.RunAsync("add", "@thatplatypus/crypto", "--repository", Sandbox.Grapevine);
+
+            again.Error.ShouldBeEmpty();
+            again.Status.ShouldBe(0);
+            again.Output.ShouldBe($"packmoji.lock now holds 1 package:{Environment.NewLine}  + @thatplatypus/crypto 1.0.0{Environment.NewLine}");
+            sandbox.Read("packmoji.json").ShouldBe(manifest);
+
+            File.Delete(sandbox.PathOf("packmoji.lock"));
+            var withTheSameRequirement = await sandbox.RunAsync("add", "@thatplatypus/crypto@1.0.0", "--repository", Sandbox.Grapevine);
+
+            withTheSameRequirement.Status.ShouldBe(0);
+            sandbox.Has("packmoji.lock").ShouldBeTrue();
+            sandbox.Read("packmoji.json").ShouldBe(manifest);
+        }
+
+        [Fact]
+        public async Task The_same_requirement_again_still_locks_a_project_that_is_not_locked()
+        {
+            using var sandbox = WithCrypto();
+            await sandbox.RunAsync("add", "@thatplatypus/crypto@1.2");
+            File.Delete(sandbox.PathOf("packmoji.lock"));
+
+            var run = await sandbox.RunAsync("add", "@thatplatypus/crypto@1.2");
+
+            run.Status.ShouldBe(0);
+            run.Output.ShouldBe($"packmoji.lock now holds 1 package:{Environment.NewLine}  + @thatplatypus/crypto 1.2.0{Environment.NewLine}");
+        }
+
+        [Fact]
+        public async Task A_package_that_only_another_package_needs_is_found_in_a_repository_pmj_is_told_to_look_in_as_well()
+        {
+            // The tool is in a repository of its own name. What it needs is in one that nothing leads to.
+            using var sandbox = new Sandbox();
+            sandbox.Release("github.com/thatplatypus/tool", "@thatplatypus/tool", "1.0.0", "@thatplatypus/helper@2.0");
+            sandbox.Release("github.com/thatplatypus/mono", "@thatplatypus/helper", "2.0.0");
+            sandbox.Project("@someone/app");
+
+            var lost = await sandbox.RunAsync("add", "@thatplatypus/tool");
+
+            lost.Status.ShouldBe(1);
+            lost.Error.ShouldStartWith("error[package.not-found]: No release of \"@thatplatypus/helper\" 2.0.0 was found.");
+            lost.Error.ShouldContain("it is asked for: @someone/app → @thatplatypus/tool@1.0.0 → @thatplatypus/helper@2.0");
+
+            var found = await sandbox.RunAsync("add", "@thatplatypus/tool", "--repository", "github.com/thatplatypus/mono");
+
+            found.Error.ShouldBeEmpty();
+            found.Status.ShouldBe(0);
+            sandbox.Locked().ShouldBe(["@thatplatypus/helper 2.0.0 in github.com/thatplatypus/mono", "@thatplatypus/tool 1.0.0 in github.com/thatplatypus/tool"]);
+
+            // And again from the manifest alone, by any of the commands that resolve.
+            File.Delete(sandbox.PathOf("packmoji.lock"));
+            (await sandbox.RunAsync("update", "--repository", "github.com/thatplatypus/mono")).Status.ShouldBe(0);
+            sandbox.Locked().Count.ShouldBe(2);
+        }
+
+        [Fact]
+        public async Task With_dev_and_no_requirement_a_dependency_is_moved_and_goes_on_asking_for_what_it_asked()
+        {
+            using var sandbox = WithCrypto();
+            await sandbox.RunAsync("add", "@thatplatypus/crypto@1.2");
+
+            var moved = await sandbox.RunAsync("add", "@thatplatypus/crypto", "--dev");
+
+            moved.Status.ShouldBe(0);
+            moved.Output.ShouldStartWith("Moved @thatplatypus/crypto to devDependencies, asking for 1.2.");
+            sandbox.Manifest().Dependencies.ShouldBeNull();
+            sandbox.Manifest().DevDependencies!.Single().Requirement.Text.ShouldBe("1.2");
+            sandbox.GitHub.Listings.ShouldBeEmpty();
         }
 
         [Theory]

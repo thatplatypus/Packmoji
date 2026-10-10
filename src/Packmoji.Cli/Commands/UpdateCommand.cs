@@ -16,7 +16,8 @@ namespace Packmoji.Cli.Commands
     {
         /// <param name="packages">The packages to raise, each as it was typed. Every dependency when none is named.</param>
         /// <param name="dryRun">Whether to say what would change and write nothing.</param>
-        public static async Task<int> RunAsync(PmjHost host, IReadOnlyList<string> packages, bool dryRun, CancellationToken cancellationToken)
+        /// <param name="repositories">Repositories to look in as well, each as it was typed.</param>
+        public static async Task<int> RunAsync(PmjHost host, IReadOnlyList<string> packages, bool dryRun, IReadOnlyList<string> repositories, CancellationToken cancellationToken)
         {
             var opened = ProjectSession.OpenToFetch(host);
             if (!opened.Succeeded)
@@ -47,13 +48,15 @@ namespace Packmoji.Cli.Commands
                 }
             }
 
+            var alsoLookIn = RepositoryOption.Read(repositories);
+            refused.AddRange(alsoLookIn.Diagnostics);
             if (refused.Count > 0)
             {
                 return DiagnosticPrinter.Report(host, refused);
             }
 
             var every = (project.Manifest.Dependencies ?? []).Concat(project.Manifest.DevDependencies ?? []).Select(dependency => dependency.Name);
-            var source = project.Source();
+            var source = project.Source(alsoLookIn.Value!);
             var manifest = project.Manifest;
             var raised = new List<string>();
             foreach (var name in (named.Count > 0 ? named : every).Distinct().Order())

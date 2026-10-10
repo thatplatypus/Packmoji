@@ -6,7 +6,8 @@ namespace Packmoji.Cli.Commands
     /// <summary><c>pmj remove</c>: one package fewer that the project asks for, and a lockfile that holds only what is still needed.</summary>
     internal static class RemoveCommand
     {
-        public static async Task<int> RunAsync(PmjHost host, string package, CancellationToken cancellationToken)
+        /// <param name="repositories">Repositories to look in as well, each as it was typed.</param>
+        public static async Task<int> RunAsync(PmjHost host, string package, IReadOnlyList<string> repositories, CancellationToken cancellationToken)
         {
             var opened = ProjectSession.OpenToFetch(host);
             if (!opened.Succeeded)
@@ -30,9 +31,15 @@ namespace Packmoji.Cli.Commands
                 return DiagnosticPrinter.Report(host, CommandDiagnostics.NotADependency(name));
             }
 
+            var alsoLookIn = RepositoryOption.Read(repositories);
+            if (!alsoLookIn.Succeeded)
+            {
+                return DiagnosticPrinter.Report(host, alsoLookIn.Diagnostics);
+            }
+
             var changed = ProjectSession.Checked(without);
             return changed.Succeeded
-                ? await project.ResolveAsync(changed.Value, project.Source(), $"Removed {name}.", cancellationToken)
+                ? await project.ResolveAsync(changed.Value, project.Source(alsoLookIn.Value), $"Removed {name}.", cancellationToken)
                 : DiagnosticPrinter.Report(host, changed.Diagnostics, changed.Omitted);
         }
     }

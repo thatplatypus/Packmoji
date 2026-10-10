@@ -113,9 +113,9 @@ namespace Packmoji.Cli
                 Description = "The package to depend on, as @scope/name. To ask for a version, write @scope/name@1.2: without one, the latest is asked for.",
             };
             var dev = new Option<bool>("--dev") { Description = "The package is needed only to develop this project, and not by what depends on it." };
-            var repository = new Option<string?>("--repository")
+            var repository = new Option<string?>(RepositoryOption.Name)
             {
-                Description = "Where the package lives, as github.com/owner/repo. It is needed once, and only for a package that shares its repository with others and cannot be found beside something already depended on.",
+                Description = "Where the package lives, as github.com/owner/repo. It is needed only for a package that shares its repository with others and cannot be found beside something already depended on.",
             };
 
             var command = new Command("add", "Depend on a package: write it into packmoji.json, lock it and fetch it.") { package, dev, repository };
@@ -127,8 +127,10 @@ namespace Packmoji.Cli
         private static Command Remove(PmjHost host)
         {
             var package = new Argument<string>("package") { Description = "The package to stop depending on, as @scope/name." };
-            var command = new Command("remove", "Stop depending on a package: take it out of packmoji.json and lock what is left.") { package };
-            command.SetAction((parseResult, cancellationToken) => RemoveCommand.RunAsync(host, parseResult.GetValue(package)!, cancellationToken));
+            var repositories = AlsoLookIn();
+            var command = new Command("remove", "Stop depending on a package: take it out of packmoji.json and lock what is left.") { package, repositories };
+            command.SetAction((parseResult, cancellationToken) =>
+                RemoveCommand.RunAsync(host, parseResult.GetValue(package)!, parseResult.GetValue(repositories) ?? [], cancellationToken));
             return command;
         }
 
@@ -138,8 +140,10 @@ namespace Packmoji.Cli
             {
                 Description = "Fail if packmoji.lock would have to be written or changed. This is for CI, where nobody is there to see it change.",
             };
-            var command = new Command("install", "Fetch exactly what packmoji.lock holds. Versions are chosen only if packmoji.json asks for something else.") { locked };
-            command.SetAction((parseResult, cancellationToken) => InstallCommand.RunAsync(host, parseResult.GetValue(locked), cancellationToken));
+            var repositories = AlsoLookIn();
+            var command = new Command("install", "Fetch exactly what packmoji.lock holds. Versions are chosen only if packmoji.json asks for something else.") { locked, repositories };
+            command.SetAction((parseResult, cancellationToken) =>
+                InstallCommand.RunAsync(host, parseResult.GetValue(locked), parseResult.GetValue(repositories) ?? [], cancellationToken));
             return command;
         }
 
@@ -151,9 +155,10 @@ namespace Packmoji.Cli
                 Description = "The packages whose requirements to raise, each as @scope/name. Every dependency, when none is named.",
             };
             var dryRun = new Option<bool>("--dry-run") { Description = "Say what would change, and write nothing." };
-            var command = new Command("update", "Raise what packmoji.json asks for to the latest version on each requirement's line, and lock what that gives.") { packages, dryRun };
+            var repositories = AlsoLookIn();
+            var command = new Command("update", "Raise what packmoji.json asks for to the latest version on each requirement's line, and lock what that gives.") { packages, dryRun, repositories };
             command.SetAction((parseResult, cancellationToken) =>
-                UpdateCommand.RunAsync(host, parseResult.GetValue(packages) ?? [], parseResult.GetValue(dryRun), cancellationToken));
+                UpdateCommand.RunAsync(host, parseResult.GetValue(packages) ?? [], parseResult.GetValue(dryRun), parseResult.GetValue(repositories) ?? [], cancellationToken));
             return command;
         }
 
@@ -172,6 +177,12 @@ namespace Packmoji.Cli
             command.SetAction((parseResult, cancellationToken) => VerifyCommand.RunAsync(host, parseResult.GetValue(json), cancellationToken));
             return command;
         }
+
+        private static Option<string[]> AlsoLookIn() =>
+            new(RepositoryOption.Name)
+            {
+                Description = "A repository to look in as well, as github.com/owner/repo. It is needed only when packmoji.lock is not there to say where a package lives. It can be given more than once.",
+            };
 
         private static Option<bool> Json() =>
             new("--json") { Description = "Answer a tool: one JSON object on standard output, with what was found and any problems in it." };

@@ -69,6 +69,23 @@ namespace Packmoji.Cli.Tests.Commands
             ManifestText(sandbox).ShouldBe(ManifestText(bare));
         }
 
+        [Fact]
+        public async Task With_no_lockfile_remove_takes_a_place_to_look_as_every_command_that_resolves_does()
+        {
+            using var sandbox = Sandbox.WithGrapevine();
+            sandbox.Release("github.com/thatplatypus/extra", "@thatplatypus/extra", "2.1.0");
+            sandbox.Project("@someone/app", "@thatplatypus/crypto@1.0", "@thatplatypus/extra@2.1");
+
+            var lost = await sandbox.RunAsync("remove", "@thatplatypus/extra");
+            lost.Status.ShouldBe(1);
+            lost.Error.ShouldContain("error[package.not-found]: ");
+
+            var run = await sandbox.RunAsync("remove", "@thatplatypus/extra", "--repository", Sandbox.Grapevine);
+
+            run.Status.ShouldBe(0);
+            sandbox.Locked().ShouldBe(["@thatplatypus/crypto 1.0.0 in github.com/thatplatypus/grapevine"]);
+        }
+
         [Theory]
         [InlineData("@thatplatypus/crypto", "dependency.not-found", "\"@thatplatypus/crypto\" is not a dependency of this project.")]
         [InlineData("@thatplatypus/grapevine@0.3", "name.invalid", "fix: run pmj remove @thatplatypus/grapevine")]

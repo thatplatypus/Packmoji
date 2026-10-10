@@ -16,6 +16,7 @@ The first real user is Grapevine: three packages in one repository, of which two
 - **A package is looked for in a fixed order:** where the project's lockfile says it lives, where `--repository` says, in a repository of its own name, and then in the other repositories of its owner that `pmj` has come to know. Those are the project's own, and those of packages the lockfile holds or that have just been found.
 - **A release is taken only if it says it is what was looked for.** The manifest in its archive has to give the name and the version, and has to say the package lives in the repository it was found in.
 - **What is found is written into the lockfile,** and read from there the next time.
+- **Every command that resolves takes `--repository`,** as a place to look in as well for any package of that owner. The lockfile is the only record of where a package was found, and a lockfile can be lost.
 - **A resolution that could not find a version is run again when a repository has been learned of since.** It ends when nothing new is learned.
 - **A file is downloaded by the release's own address,** with no API call and no token. Only the list of a repository's releases comes from the API, for `add` with no requirement and for `update`.
 - **A token is sent to the API and to nothing else.**
@@ -61,7 +62,8 @@ These were seen on 2026-10-09, with no token, and are what the client and its te
 ## Consequences
 
 - **A package in a shared repository costs one request that finds nothing,** the first time: a repository of its own name is tried before its neighbours. The lockfile remembers, so it is once.
-- **One case needs to be told.** A project that depends on a package in a shared repository, and on nothing else of that owner, has nothing to find it beside. `pmj add` takes `--repository` once.
+- **Some cases need to be told.** A project that depends on a package in a shared repository, and on nothing else of that owner, has nothing to find it beside. Neither has a package that needs one that is not released beside it. And a project whose lockfile is gone has lost what it was told. Each is told with `--repository`, on whichever command is resolving.
+- **Only public repositories are read.** A release's file is downloaded with no token. GitHub's API lists a private repository's releases to a token that may see them, and the file is then not found by its own address.
 - **A package that moves to another repository has to be pointed to again.** `pmj update` lists a package's versions from the first place that has any, which is the repository the lockfile records, so versions released somewhere else are not seen. `pmj add` with the version and `--repository` moves a project to the new place. A version that is published again there is another file, and `pmj install` reports it as `lock.mismatch`.
 - **The first use of a version is trusted.** Nothing but the lockfile records what a version's bytes were. Two people who first fetch a version at different times are protected from each other only once one of their lockfiles is shared.
 - **`add` and `update` can meet the API's limit,** and say so, with how to raise it. `install` cannot.
