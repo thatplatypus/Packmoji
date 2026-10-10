@@ -40,7 +40,9 @@
          this is, so that the names of a release's programs and their digests are held without a release. -->
     <None Include="..\..\scripts\release-assets.sh" Link="scripts\release-assets.sh" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\scripts\release-assets.sh')" />
     <None Include="..\..\scripts\glibc-floor.sh" Link="scripts\glibc-floor.sh" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\scripts\glibc-floor.sh')" />
+    <None Include="..\..\scripts\release-tag.sh" Link="scripts\release-tag.sh" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\scripts\release-tag.sh')" />
     <None Include="..\..\Directory.Build.props" Link="Directory.Build.props" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\.github\workflows\*.yml" Link="workflows\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
