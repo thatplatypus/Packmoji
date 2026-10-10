@@ -90,14 +90,15 @@ namespace Packmoji.Core.Tests.TestSupport
             return null;
         }
 
-        public Universe Universe(bool reordered = false)
+        /// <param name="yanks">Whether the versions that were generated as yanked are. A source with no registry behind it knows of none.</param>
+        public Universe Universe(bool reordered = false, bool yanks = true)
         {
             var universe = new Universe();
             foreach (var (package, version) in Published(reordered))
             {
                 var text = VersionsOf(package)[version];
                 universe.Publish(PackageName(package), text, InOrder(AsksOf(package, Packages[package].Versions[version]), reordered, (package * 10) + version));
-                if (Packages[package].Versions[version].Yanked)
+                if (yanks && Packages[package].Versions[version].Yanked)
                 {
                     universe.Yank(PackageName(package), text);
                 }
@@ -105,6 +106,13 @@ namespace Packmoji.Core.Tests.TestSupport
 
             return universe;
         }
+
+        /// <summary>Every version that is published, with what it asks for, for a test that publishes them somewhere else.</summary>
+        public IEnumerable<(string Name, string Version, string[] Asks)> Released() =>
+            Published(reordered: false).Select(published => (
+                PackageName(published.Package),
+                VersionsOf(published.Package)[published.Version],
+                AsksOf(published.Package, Packages[published.Package].Versions[published.Version])));
 
         /// <summary>The project as a person would write it down, for when a property fails.</summary>
         public string Describe()
