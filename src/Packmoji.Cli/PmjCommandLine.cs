@@ -23,6 +23,7 @@ namespace Packmoji.Cli
                 },
                 Scaffolding(host, "new", "Make a project in a new directory named after it.", inPlace: false),
                 Scaffolding(host, "init", "Make a project in this directory.", inPlace: true),
+                Pack(host),
             };
 
             // Given no command there is nothing to do, and saying nothing would look like success.
@@ -84,6 +85,13 @@ namespace Packmoji.Cli
                 }
             });
             command.SetAction(parseResult => Scaffold.Run(host, parseResult.GetValue(package)!, parseResult.GetValue(library), inPlace));
+            return command;
+        }
+
+        private static Command Pack(PmjHost host)
+        {
+            var command = new Command("pack", "Write the file that a release of this package carries, into target/.");
+            command.SetAction(_ => PackCommand.Run(host));
             return command;
         }
 
