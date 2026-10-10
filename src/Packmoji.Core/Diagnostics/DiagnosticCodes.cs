@@ -54,5 +54,21 @@ namespace Packmoji.Core.Diagnostics
         public const string ResolveNameCollision = "resolve.name-collision";
         public const string ResolveCycle = "resolve.cycle";
         public const string ResolveGraphTooLarge = "resolve.graph-too-large";
+        public const string ProjectNotFound = "project.not-found";
+        public const string ProjectExists = "project.exists";
+        public const string ProjectUnreadable = "project.unreadable";
+        public const string DependencyExists = "dependency.exists";
+        public const string DependencyNotFound = "dependency.not-found";
+        public const string PackageNotFound = "package.not-found";
+        public const string VersionNoneReleased = "version.none-released";
+        public const string ReleaseInvalid = "release.invalid";
+        public const string ArchiveInvalid = "archive.invalid";
+        public const string PackNothing = "pack.nothing";
+        public const string PackUnportable = "pack.unportable";
+        public const string LockOutOfDate = "lock.out-of-date";
+        public const string AttestationUnverifiable = "attestation.unverifiable";
+        public const string GitHubUnreachable = "github.unreachable";
+        public const string GitHubRateLimited = "github.rate-limited";
+        public const string CacheUnusable = "cache.unusable";
     }
 }

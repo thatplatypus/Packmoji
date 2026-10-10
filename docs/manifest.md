@@ -373,3 +373,19 @@ The codes that begin with `resolve.`, and `lock.mismatch`, are raised when `pmj`
 | `resolve.name-collision` | Two packages of one build, or one of them and the project itself, share a bare name |
 | `resolve.cycle` | Packages depend on one another in a circle, in a graph being resolved or in a lockfile being read |
 | `resolve.graph-too-large` | A graph of dependencies has more than 10,000 versions in it, or would make a lockfile over its limit of 4 MiB |
+| `project.not-found` | A command that works on a project was run where there is no `packmoji.json` |
+| `project.exists` | `pmj new` or `pmj init` would write over a project that is there |
+| `project.unreadable` | A project's file could not be read or written |
+| `dependency.exists` | `pmj add` was given a package the manifest already has, and no requirement to change it to |
+| `dependency.not-found` | `pmj remove` or `pmj update` named a package the manifest does not have |
+| `package.not-found` | No release of a package is in any repository `pmj` looked in |
+| `version.none-released` | Every released version of a package is a pre-release, and none was asked for by name |
+| `release.invalid` | A release is there, and its archive is not that package at that version in that repository |
+| `archive.invalid` | An archive is not in the form `pmj pack` writes, or is over a limit |
+| `pack.nothing` | `pmj pack` found no source file, or the entry file is not among the files it selects |
+| `pack.unportable` | A file to be packed has a name that another platform could not hold, or is a symbolic link |
+| `lock.out-of-date` | The lockfile is missing or no longer answers the manifest, where a command needs one that does |
+| `attestation.unverifiable` | A project requires attestation, and `pmj` cannot verify one |
+| `github.unreachable` | GitHub could not be reached, or answered with something `pmj` did not expect |
+| `github.rate-limited` | GitHub's API refused a request because of its limit on requests |
+| `cache.unusable` | The cache could not be read or written |
