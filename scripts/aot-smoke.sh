@@ -225,7 +225,9 @@ chmod +x "$tools/emojicodec" "$tools/c++" "$tools/ar"
 export EMOJICODEC="$tools/emojicodec" CXX="$tools/c++" AR="$tools/ar" EMOJICODE_PACKAGES_PATH="$work/stock"
 
 # The native pmj starts each of them, reads what it printed, and puts what was built where it belongs.
-"$pmj" build > "$work/built.log" 2> "$work/built.err" || { cat "$work/built.err" >&2; fail "pmj build ended with status $?"; }
+status=0
+"$pmj" build > "$work/built.log" 2> "$work/built.err" || status=$?
+[ "$status" -eq 0 ] || { cat "$work/built.err" >&2; fail "pmj build ended with status $status"; }
 cat "$work/built.log"
 grep -qx "Building @smoke/greeter 0.1.0" "$work/built.log" || fail "the library was not built"
 grep -qx "Built the application target/debug/app." "$work/built.log" || fail "the application was not built"
