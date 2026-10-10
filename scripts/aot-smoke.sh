@@ -12,6 +12,12 @@
 # The server answers a download as GitHub does, by sending pmj on to another address, and it keeps
 # which requests came with a token. So this is also where pmj is held, over real HTTP, to following
 # a download where it is sent and to giving its token to the API alone.
+#
+# Last, the native pmj builds the application and runs it. The compiler, the C++ compiler and the
+# archiver are stood in for by small scripts, since no Emojicode compiler runs on every machine
+# this runs on. What that shows is the native binary starting programs, reading what they print,
+# running what was built with its own streams, and ending as the program ended. The real compiler
+# is scripts/real-compiler.sh's to run.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -175,5 +181,71 @@ unpacked="$PACKMOJI_HOME/cache/smoke/greeter/0.1.0/$digest/src/lib.🍇"
 
 "$pmj" tree
 "$pmj" verify
+
+# The tools of a build, stood in for. Each writes what it is asked to write, and the program the
+# linker makes says what it was given and ends with a status of its own.
+tools="$work/tools"
+mkdir -p "$tools" "$work/stock/s" "$work/stock/runtime"
+touch "$work/stock/s/libs.a" "$work/stock/runtime/libruntime.a"
+cat > "$tools/emojicodec" <<'TOOL'
+#!/bin/sh
+out=""; interface=""; report=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --help) echo "  emojicodec file {OPTIONS}"; echo; echo "    Emojicode Compiler 1.0 beta 2. Visit https://www.emojicode.org for help."; exit 0 ;;
+    -o) out="$2"; shift ;;
+    -i) interface="$2"; shift ;;
+    -r) report="yes" ;;
+    -p|-S) shift ;;
+  esac
+  shift
+done
+echo "a stand-in object" > "$out"
+[ -z "$interface" ] || echo "💭 a stand-in interface" > "$interface"
+[ -z "$report" ] || echo '{ "types": [] }' > "$(dirname "$out")/documentation.json"
+echo "the stand-in compiler has a word to say" >&2
+TOOL
+cat > "$tools/c++" <<'TOOL'
+#!/bin/sh
+out=""
+for argument in "$@"; do
+  [ "$previous" = "-o" ] && out="$argument"
+  previous="$argument"
+done
+printf '#!/bin/sh\necho "the program was given: $*"\nexit 3\n' > "$out"
+chmod +x "$out"
+TOOL
+cat > "$tools/ar" <<'TOOL'
+#!/bin/sh
+shift
+out="$1"; shift
+cat "$@" > "$out"
+TOOL
+chmod +x "$tools/emojicodec" "$tools/c++" "$tools/ar"
+export EMOJICODEC="$tools/emojicodec" CXX="$tools/c++" AR="$tools/ar" EMOJICODE_PACKAGES_PATH="$work/stock"
+
+# The native pmj starts each of them, reads what it printed, and puts what was built where it belongs.
+"$pmj" build > "$work/built.log" 2> "$work/built.err" || { cat "$work/built.err" >&2; fail "pmj build ended with status $?"; }
+cat "$work/built.log"
+grep -qx "Building @smoke/greeter 0.1.0" "$work/built.log" || fail "the library was not built"
+grep -qx "Built the application target/debug/app." "$work/built.log" || fail "the application was not built"
+grep -qx "\[greeter\] the stand-in compiler has a word to say" "$work/built.err" || fail "what the compiler printed was not passed on behind the package's name"
+for made in "packages/greeter/🏛" packages/greeter/libgreeter.a packages/greeter/documentation.json packages/greeter/pmj-build.json target/debug/app; do
+  [ -f "$made" ] || fail "the build did not leave $made"
+done
+
+# A tool is answered with one object, and what was built is not built again.
+answer="$("$pmj" build --dependencies-only --json 2> /dev/null)"
+case "$answer" in
+  '{'*'"ok": true'*'"bareName": "greeter"'*'"built": false'*) ;;
+  *) echo "$answer" >&2; fail "pmj build --json did not answer with the package, built before" ;;
+esac
+
+# The program is run with pmj's own streams, is given what follows the two dashes, and pmj ends as it ended.
+status=0
+said="$("$pmj" run -- one "two words" 2> "$work/run.err")" || status=$?
+[ "$said" = "the program was given: one two words" ] || fail "pmj run printed \"$said\", and not what the program says"
+[ "$status" -eq 3 ] || fail "pmj run ended with status $status, and not with the program's 3"
+grep -qx "Built the application target/debug/app." "$work/run.err" || fail "what pmj run says of the build is not on standard error"
 
 echo "pmj runs as a native binary for $rid ($(wc -c < "$pmj" | tr -d ' ') bytes)"
