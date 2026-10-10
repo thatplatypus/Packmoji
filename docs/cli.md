@@ -172,6 +172,10 @@ Downloads every locked package again, whatever the cache holds, and checks three
 
 `verify` changes nothing. It does not repair the cache and does not write what it downloads: what it finds is for you to act on. It ends with status 0 only if every package is exactly what the lockfile holds.
 
+- **Every package is checked,** whatever was wrong with the one before, and every problem is reported.
+- **A release that is not what was locked is `lock.mismatch`.** A copy in the cache that is not is `cache.mismatch`.
+- **It says how much of what is locked the cache holds.** A cache that holds nothing has nothing wrong with it.
+
 ## What pmj prints
 
 - **What a command did goes to standard output,** in plain sentences. Problems go to standard error.

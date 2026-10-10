@@ -32,7 +32,12 @@ namespace Packmoji.Cli.Tests.Commands
 
             run.Error.ShouldBeEmpty();
             run.Status.ShouldBe(0);
-            run.Output.ShouldBe($"Verified 3 packages: each is what packmoji.lock holds, in its release and in the cache.{Environment.NewLine}");
+            run.Output.ShouldBe(
+                """
+                Verified 3 packages: the release of each is what packmoji.lock holds.
+                The cache's copy of each is what was locked too.
+
+                """.ReplaceLineEndings(Environment.NewLine));
             sandbox.GitHub.Downloads.Count().ShouldBe(3);
             sandbox.GitHub.Listings.ShouldBeEmpty();
         }
@@ -47,6 +52,12 @@ namespace Packmoji.Cli.Tests.Commands
             var run = await sandbox.RunAsync("verify");
 
             run.Status.ShouldBe(0);
+            run.Output.ShouldBe(
+                """
+                Verified 3 packages: the release of each is what packmoji.lock holds.
+                The cache holds none of them.
+
+                """.ReplaceLineEndings(Environment.NewLine));
             sandbox.GitHub.Downloads.Count().ShouldBe(3);
             sandbox.Cached().ShouldBeEmpty();
             Directory.Exists(sandbox.Home).ShouldBeFalse();
@@ -79,7 +90,7 @@ namespace Packmoji.Cli.Tests.Commands
             var run = await sandbox.RunAsync("verify");
 
             run.Status.ShouldBe(1);
-            run.Error.ShouldContain("error[cache.unusable]: The cache's copy of \"@thatplatypus/crypto\" 1.0.0 is not what it should be.");
+            run.Error.ShouldContain("error[cache.mismatch]: The cache's copy of \"@thatplatypus/crypto\" 1.0.0 is not what it should be.");
             run.Error.ShouldContain($"fix: delete \"{archive}\"");
             run.Error.ShouldContain("run pmj install");
             File.ReadAllText(archive).ShouldBe("spoiled");
@@ -117,7 +128,7 @@ namespace Packmoji.Cli.Tests.Commands
             var run = await sandbox.RunAsync("verify");
 
             run.Status.ShouldBe(1);
-            run.Error.ShouldContain("error[cache.unusable]: The cache's copy of \"@thatplatypus/crypto\" 1.0.0 is not what it should be.");
+            run.Error.ShouldContain("error[cache.mismatch]: The cache's copy of \"@thatplatypus/crypto\" 1.0.0 is not what it should be.");
             run.Error.ShouldContain($"fix: delete \"{directory}\"");
         }
 
@@ -134,7 +145,51 @@ namespace Packmoji.Cli.Tests.Commands
 
             run.Status.ShouldBe(1);
             run.Error.ShouldContain("error[github.unreachable]: ");
-            run.Error.ShouldContain("error[cache.unusable]: ");
+            run.Error.ShouldContain("error[cache.mismatch]: ");
+
+            // What cannot be reached for one package cannot be reached for the next, and is said once.
+            run.Error.Split("error[github.unreachable]").Length.ShouldBe(2);
+            sandbox.GitHub.Requests.Count.ShouldBe(1);
+        }
+
+        [Fact]
+        public async Task Every_package_is_checked_and_every_problem_is_reported_whatever_is_wrong_with_the_one_before()
+        {
+            using var sandbox = await InstalledAsync();
+            var grapevine = CacheOf(sandbox, sandbox.Lockfile().Packages.Single(package => package.Name.Name == "grapevine"), ".pmj.tar.gz");
+            File.SetAttributes(grapevine, FileAttributes.Normal);
+            File.WriteAllText(grapevine, "spoiled");
+            sandbox.Upload(Sandbox.Grapevine, "@thatplatypus/crypto", "1.0.0", TestPackage.Archive("@thatplatypus/crypto", "1.0.0", Sandbox.Grapevine, "@thatplatypus/deflate@0.1"));
+            sandbox.Upload(Sandbox.Grapevine, "@thatplatypus/deflate", "0.1.0", System.Text.Encoding.UTF8.GetBytes("no archive at all"));
+
+            var run = await sandbox.RunAsync("verify");
+
+            run.Status.ShouldBe(1);
+            run.Output.ShouldBeEmpty();
+            run.Error.ShouldContain("error[lock.mismatch]: packmoji.lock does not agree with what is published for \"@thatplatypus/crypto\" 1.0.0.");
+            run.Error.ShouldContain("error[lock.mismatch]: packmoji.lock does not agree with what is published for \"@thatplatypus/deflate\" 0.1.0.");
+            run.Error.ShouldContain("error[cache.mismatch]: The cache's copy of \"@thatplatypus/grapevine\" 0.3.0 is not what it should be.");
+            sandbox.GitHub.Downloads.Count().ShouldBe(3);
+        }
+
+        [Fact]
+        public async Task The_cache_is_said_to_hold_what_it_holds_and_no_more()
+        {
+            using var sandbox = await InstalledAsync();
+            var crypto = Crypto(sandbox);
+            File.SetAttributes(CacheOf(sandbox, crypto, ".pmj.tar.gz"), FileAttributes.Normal);
+            File.Delete(CacheOf(sandbox, crypto, ".pmj.tar.gz"));
+            foreach (var file in Directory.EnumerateFiles(CacheOf(sandbox, crypto, ""), "*", SearchOption.AllDirectories))
+            {
+                File.SetAttributes(file, FileAttributes.Normal);
+            }
+
+            Directory.Delete(CacheOf(sandbox, crypto, ""), recursive: true);
+
+            var run = await sandbox.RunAsync("verify");
+
+            run.Status.ShouldBe(0);
+            run.Output.ShouldEndWith($"The cache holds 2 of them, and each of those is what was locked too.{Environment.NewLine}");
         }
 
         [Fact]
@@ -212,6 +267,25 @@ namespace Packmoji.Cli.Tests.Commands
 
             run.Status.ShouldBe(0);
             run.Output.ShouldBe($"Nothing to verify: the project depends on no package.{Environment.NewLine}");
+        }
+
+        [Fact]
+        public async Task One_package_is_spoken_of_as_one()
+        {
+            using var sandbox = new Sandbox();
+            sandbox.Release("github.com/thatplatypus/crypto", "@thatplatypus/crypto", "1.0.0");
+            sandbox.Project("@someone/app", "@thatplatypus/crypto@1.0");
+            await sandbox.RunAsync("install");
+
+            var run = await sandbox.RunAsync("verify");
+
+            run.Status.ShouldBe(0);
+            run.Output.ShouldBe(
+                """
+                Verified 1 package: its release is what packmoji.lock holds.
+                The cache's copy of it is what was locked too.
+
+                """.ReplaceLineEndings(Environment.NewLine));
         }
     }
 }

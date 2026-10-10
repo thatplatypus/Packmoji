@@ -128,18 +128,20 @@ namespace Packmoji.Cli.Cache
         }
 
         /// <summary>
-        /// Every way in which what the cache holds of a package is not what it should be: an archive
-        /// that is not the bytes its name says, and unpacked files that are not the files of the
-        /// archive beside them. Nothing is changed. None when the cache holds nothing of the package.
+        /// Whether the cache holds anything of a package, and every way in which what it holds is not
+        /// what it should be: an archive that is not the bytes its name says, and unpacked files that
+        /// are not the files of the archive beside them. Nothing is changed.
         /// </summary>
-        public IReadOnlyList<Diagnostic> Examine(PackageName name, SemanticVersion version, Sha256Digest digest)
+        public CacheFinding Examine(PackageName name, SemanticVersion version, Sha256Digest digest)
         {
             var path = ArchivePath(name, version, digest);
             var directory = DirectoryPath(name, version, digest);
             var what = $"\"{name}\" {version}";
             var problems = new List<Diagnostic>();
+            var held = false;
             try
             {
+                held = File.Exists(path) || Directory.Exists(directory);
                 byte[]? sound = null;
                 var archive = new FileInfo(path);
                 if (archive.Exists && archive.Length > PackageArchive.MaxBytes)
@@ -176,7 +178,7 @@ namespace Packmoji.Cli.Cache
                 problems.Add(Unusable(path, "read", failure));
             }
 
-            return problems;
+            return new CacheFinding(held, problems);
         }
 
         // Never written over a file that is there. Two names that are different text can be one file
@@ -242,7 +244,7 @@ namespace Packmoji.Cli.Cache
 
         private static Diagnostic Spoiled(string what, string path, string reason) =>
             new(
-                DiagnosticCodes.CacheUnusable,
+                DiagnosticCodes.CacheMismatch,
                 $"The cache's copy of {what} is not what it should be.",
                 reason,
                 $"delete \"{path}\", and run pmj install, which fetches the package again");

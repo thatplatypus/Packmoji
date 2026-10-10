@@ -388,4 +388,5 @@ The codes that begin with `resolve.`, and `lock.mismatch`, are raised when `pmj`
 | `attestation.unverifiable` | A project requires attestation, and `pmj` cannot verify one |
 | `github.unreachable` | GitHub could not be reached, or answered with something `pmj` did not expect |
 | `github.rate-limited` | GitHub's API refused a request because of its limit on requests |
-| `cache.unusable` | The cache could not be read or written, or `pmj verify` found that what it holds of a package is not what it should be |
+| `cache.unusable` | The cache could not be read or written |
+| `cache.mismatch` | `pmj verify` found that what the cache holds of a package is not what `packmoji.lock` holds |

@@ -186,7 +186,7 @@ namespace Packmoji.Cli.Commands
             return string.Concat(lines.Select(line => line + Environment.NewLine));
         }
 
-        public static string Count(int packages) => packages switch { 0 => "no package", 1 => "1 package", _ => $"{packages} packages" };
+        private static string Count(int packages) => packages switch { 0 => "no package", 1 => "1 package", _ => $"{packages} packages" };
 
         // Every archive of a graph is in the cache by now: the source keeps what it downloads, and
         // what it did not download it took from the cache. Here each is unpacked beside itself.

@@ -33,23 +33,35 @@ namespace Packmoji.Cli.Commands
             var lockfile = project.Lockfile;
             var found = new List<Diagnostic>();
             var omitted = 0;
-            try
-            {
-                // Asked of a store that holds nothing, so that every package is downloaded again and nothing is kept.
-                var releases = new DirectPackageSource(host.Releases, new NoStore(), project.Manifest, lockfile);
-                var check = await LockCheck.CheckAsync(lockfile, releases, cancellationToken);
-                found.AddRange(check.Diagnostics);
-                omitted = check.OmittedDiagnostics;
-            }
-            catch (PackageSourceException failure)
-            {
-                // What could not be asked of GitHub does not stop the cache being held to the lockfile.
-                found.Add(failure.Diagnostic);
-            }
+            var held = 0;
 
+            // Asked of a store that holds nothing, so that every package is downloaded again and nothing is kept.
+            var releases = new DirectPackageSource(host.Releases, new NoStore(), project.Manifest, lockfile);
+            var reachable = true;
             foreach (var package in lockfile.Packages.OrderBy(package => package.Name).ThenBy(package => package.Version))
             {
-                found.AddRange(project.Store.Examine(package.Name, package.Version, package.Sha256));
+                if (reachable)
+                {
+                    try
+                    {
+                        // Each on its own, so that what is wrong with one release does not keep the next from being looked at.
+                        var check = await LockCheck.CheckAsync(lockfile with { Packages = [package] }, releases, cancellationToken);
+                        found.AddRange(check.Diagnostics);
+                        omitted += check.OmittedDiagnostics;
+                    }
+                    catch (PackageSourceException failure)
+                    {
+                        found.Add(failure.Diagnostic);
+
+                        // What GitHub could not be asked of one package it cannot be asked of the next, and saying so once is enough.
+                        reachable = failure.Diagnostic.Code is not (DiagnosticCodes.GitHubUnreachable or DiagnosticCodes.GitHubRateLimited);
+                    }
+                }
+
+                // Whatever GitHub said or could not say, the cache is held to the lockfile.
+                var cached = project.Store.Examine(package.Name, package.Version, package.Sha256);
+                found.AddRange(cached.Problems);
+                held += cached.Held ? 1 : 0;
             }
 
             var problems = found.OrderBy(diagnostic => diagnostic.Severity == DiagnosticSeverity.Warning).ToList();
@@ -63,13 +75,32 @@ namespace Packmoji.Cli.Commands
                 DiagnosticPrinter.Print(host.Error, problems, omitted);
                 if (sound)
                 {
-                    host.Out.WriteLine(lockfile.Packages.Count == 0
-                        ? "Nothing to verify: the project depends on no package."
-                        : $"Verified {ProjectSession.Count(lockfile.Packages.Count)}: each is what {LockfileReader.FileName} holds, in its release and in the cache.");
+                    host.Out.Write(Said(lockfile.Packages.Count, held));
                 }
             }
 
             return sound ? ExitStatus.Success : ExitStatus.Problem;
+        }
+
+        // What is said when nothing is wrong: what was held to the lockfile, and how much of it the cache had to hold.
+        private static string Said(int packages, int held)
+        {
+            if (packages == 0)
+            {
+                return "Nothing to verify: the project depends on no package." + Environment.NewLine;
+            }
+
+            var one = packages == 1;
+            var releases = one
+                ? $"Verified 1 package: its release is what {LockfileReader.FileName} holds."
+                : $"Verified {packages} packages: the release of each is what {LockfileReader.FileName} holds.";
+            var cache = held switch
+            {
+                0 => one ? "The cache holds nothing of it." : "The cache holds none of them.",
+                _ when held == packages => one ? "The cache's copy of it is what was locked too." : "The cache's copy of each is what was locked too.",
+                _ => $"The cache holds {held} of them, and each of those is what was locked too.",
+            };
+            return releases + Environment.NewLine + cache + Environment.NewLine;
         }
     }
 }
