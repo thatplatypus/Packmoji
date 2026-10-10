@@ -88,7 +88,7 @@ Only `package` and its first four keys are required. This is a whole manifest:
 | `native.includeDirs` | array of strings | no | Directories of the package's own headers |
 | `native.link` | array of strings | no | Libraries to link, each named as the linker's `-l` would name it |
 | `policy` | object | no | |
-| `policy.requireAttestation` | boolean | no | Whether every dependency must have a verified build attestation. Default `false` |
+| `policy.requireAttestation` | boolean | no | Whether every dependency must have a verified build attestation. Default `false`. `pmj` cannot verify one yet, so a project that sets it to `true` cannot install: see `attestation.unverifiable` |
 
 An unknown key is an error at every level, and the error lists the keys that are allowed there. The order of keys does not matter when a manifest is read. When `pmj` writes one, the keys are in the order of this table and the dependencies are sorted by name.
 
@@ -382,10 +382,10 @@ The codes that begin with `resolve.`, and `lock.mismatch`, are raised when `pmj`
 | `version.none-released` | Every released version of a package is a pre-release, and none was asked for by name |
 | `release.invalid` | A release is there, and its archive is not that package at that version in that repository |
 | `archive.invalid` | An archive is not in the form `pmj pack` writes, or is over a limit |
-| `pack.nothing` | `pmj pack` found no source file, or the entry file is not among the files it selects |
+| `pack.nothing` | `pmj pack` would write an archive without the package's entry file, because no pattern of the manifest selects it |
 | `pack.unportable` | A file to be packed has a name that another platform could not hold, or is a symbolic link |
 | `lock.out-of-date` | The lockfile is missing or no longer answers the manifest, where a command needs one that does |
 | `attestation.unverifiable` | A project requires attestation, and `pmj` cannot verify one |
 | `github.unreachable` | GitHub could not be reached, or answered with something `pmj` did not expect |
 | `github.rate-limited` | GitHub's API refused a request because of its limit on requests |
-| `cache.unusable` | The cache could not be read or written |
+| `cache.unusable` | The cache could not be read or written, or `pmj verify` found that what it holds of a package is not what it should be |
