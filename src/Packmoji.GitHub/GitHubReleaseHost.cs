@@ -36,21 +36,55 @@ namespace Packmoji.GitHub
         private readonly string _userAgent;
         private readonly TimeSpan _quiet;
 
-        /// <param name="site">Another address for <see cref="Site"/>, for a test of the native binary or a GitHub of one's own.</param>
+        /// <param name="site">Another address for <see cref="Site"/>, for a test of the native binary or a GitHub of one's own. One that <see cref="CanBeAddress"/> refuses is an <see cref="ArgumentException"/>.</param>
         /// <param name="api">Another address for <see cref="Api"/>.</param>
-        /// <param name="token">A token for the API, which raises its limit. Null for none.</param>
+        /// <param name="token">A token for the API, which raises its limit. Null for none. One that <see cref="CanBeToken"/> refuses is an <see cref="ArgumentException"/>.</param>
         /// <param name="userAgent">What pmj calls itself. GitHub's API refuses a request that does not say.</param>
         /// <param name="quiet">How long an answer may send nothing before it is given up. A minute, when it is not said.</param>
         public GitHubReleaseHost(HttpClient http, Uri? site = null, Uri? api = null, string? token = null, string userAgent = "pmj", TimeSpan? quiet = null)
         {
             ArgumentNullException.ThrowIfNull(http);
+
+            // What was given is in neither message: an address may hold a password, and a token is a secret.
+            if (token is not null && !CanBeToken(token))
+            {
+                throw new ArgumentException("A token is characters of ASCII that can be seen, with no space among them.", nameof(token));
+            }
+
             _http = http;
-            _site = (site?.AbsoluteUri ?? Site).TrimEnd('/');
-            _api = (api?.AbsoluteUri ?? Api).TrimEnd('/');
-            _token = string.IsNullOrWhiteSpace(token) ? null : token;
+            _site = Checked(site, nameof(site)) ?? Site;
+            _api = Checked(api, nameof(api)) ?? Api;
+            _token = token;
             _userAgent = userAgent;
             _quiet = quiet ?? TimeSpan.FromMinutes(1);
         }
+
+        /// <summary>
+        /// Whether GitHub, or its API, could be at an address: one that begins with <c>http://</c> or
+        /// <c>https://</c> and holds the name of a machine, a path if it needs one, and nothing else.
+        /// </summary>
+        public static bool CanBeAddress(Uri address)
+        {
+            ArgumentNullException.ThrowIfNull(address);
+            return address.IsAbsoluteUri
+                && (address.Scheme == Uri.UriSchemeHttp || address.Scheme == Uri.UriSchemeHttps)
+                && address.Host.Length > 0
+                && address.UserInfo.Length == 0
+                && address.Query.Length == 0
+                && address.Fragment.Length == 0;
+        }
+
+        /// <summary>Whether text could be sent as a token: characters of ASCII that can be seen, and at least one of them.</summary>
+        public static bool CanBeToken(string text)
+        {
+            ArgumentNullException.ThrowIfNull(text);
+            return text.Length > 0 && text.All(character => character is >= '!' and <= '~');
+        }
+
+        private static string? Checked(Uri? address, string parameter) =>
+            address is null || CanBeAddress(address)
+                ? address?.AbsoluteUri.TrimEnd('/')
+                : throw new ArgumentException("An address for GitHub begins with http:// or https://, and holds no name, password, query or fragment.", parameter);
 
         public async Task<ReadOnlyMemory<byte>?> DownloadAsync(RepositoryRef repository, string tag, string asset, int maxBytes, CancellationToken cancellationToken)
         {
@@ -61,6 +95,12 @@ namespace Packmoji.GitHub
             if (response.StatusCode == HttpStatusCode.NotFound)
             {
                 return null;
+            }
+
+            if (response.StatusCode == HttpStatusCode.Forbidden)
+            {
+                // No token went with it, so there is none to look at.
+                throw Refused(what, "wait a minute and try again");
             }
 
             if (response.StatusCode != HttpStatusCode.OK)
@@ -113,6 +153,13 @@ namespace Packmoji.GitHub
                         "GitHub refused the token it was given.",
                         $"the request for {what} was answered with status 401",
                         "check the token in GITHUB_TOKEN or GH_TOKEN, or unset it: a public repository's releases can be listed with none"));
+                }
+
+                if (response.StatusCode == HttpStatusCode.Forbidden)
+                {
+                    throw Refused(what, _token is null
+                        ? "wait a minute and try again; if it is refused again, set GITHUB_TOKEN to a token of yours, for GitHub allows more to someone it knows"
+                        : $"check that the token in GITHUB_TOKEN or GH_TOKEN may read {repository}, or unset it: a public repository's releases can be listed with none");
                 }
 
                 if (response.StatusCode != HttpStatusCode.OK)
@@ -233,8 +280,10 @@ namespace Packmoji.GitHub
 
                 return (document.RootElement.GetArrayLength(), published);
             }
-            catch (JsonException)
+            catch (Exception failure) when (failure is JsonException or InvalidOperationException)
             {
+                // The second is what a string is when it is good JSON and cannot be made into text,
+                // as one that holds half of a pair of surrogates is.
                 throw NotUnderstood(what);
             }
         }
@@ -269,12 +318,21 @@ namespace Packmoji.GitHub
                 $"the request for {what} failed: {why}",
                 "check the network, and try again"));
 
+        // Status 403 that is not the limit. It is GitHub saying no, which is not GitHub failing.
+        private static PackageSourceException Refused(string what, string fix) =>
+            new(new Diagnostic(
+                DiagnosticCodes.GitHubUnreachable,
+                $"GitHub refused the request for {what}.",
+                "it was answered with status 403, which says the request is not allowed",
+                fix));
+
+        // Only a status of 500 or more says that GitHub failed. Of any other, pmj does not know the cause, and does not guess one.
         private static PackageSourceException Unexpected(string what, HttpStatusCode status) =>
             new(new Diagnostic(
                 DiagnosticCodes.GitHubUnreachable,
                 "GitHub answered in a way pmj did not expect.",
                 $"the request for {what} was answered with status {(int)status}",
-                "try again in a while: if it goes on, GitHub may be having trouble"));
+                (int)status >= 500 ? "try again in a while: if it goes on, GitHub may be having trouble" : "try again in a while"));
 
         private static PackageSourceException NotUnderstood(string what) =>
             new(new Diagnostic(

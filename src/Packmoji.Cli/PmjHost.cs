@@ -1,4 +1,5 @@
 using System.Reflection;
+using Packmoji.Core.Diagnostics;
 using Packmoji.Core.Direct;
 using Packmoji.GitHub;
 
@@ -11,6 +12,11 @@ namespace Packmoji.Cli
     /// </summary>
     public sealed class PmjHost
     {
+        private const string SiteVariable = "PACKMOJI_GITHUB";
+        private const string ApiVariable = "PACKMOJI_GITHUB_API";
+
+        private static readonly string[] TokenVariables = ["GITHUB_TOKEN", "GH_TOKEN"];
+
         public required string WorkingDirectory { get; init; }
 
         /// <summary>The directory pmj keeps its own files in. The cache is inside it.</summary>
@@ -40,16 +46,91 @@ namespace Packmoji.Cli
             {
                 WorkingDirectory = workingDirectory,
                 HomeDirectory = string.IsNullOrEmpty(home) ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".packmoji") : home,
-                Releases = new GitHubReleaseHost(http, Address(variable("PACKMOJI_GITHUB")), Address(variable("PACKMOJI_GITHUB_API")), Set(variable("GITHUB_TOKEN")) ?? Set(variable("GH_TOKEN")), $"pmj/{Version}"),
+                Releases = GitHub(variable, http),
                 Out = output,
                 Error = error,
             };
         }
 
-        // A variable that is set to nothing says nothing, and does not hide the one after it.
-        private static string? Set(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+        // GitHub as the environment describes it. What the environment says and pmj cannot use is
+        // never passed over for what pmj does when nothing is said: someone who mistypes the address
+        // of a GitHub of their own would have their packages looked for, and their token sent, at
+        // the other one. The first such thing is kept, and is what a command that needs GitHub is told.
+        private static IReleaseHost GitHub(Func<string, string?> variable, HttpClient http)
+        {
+            Diagnostic? problem = null;
+            var site = Address(variable, SiteVariable, ref problem);
+            var api = Address(variable, ApiVariable, ref problem);
+            if (problem is null && (site is null) != (api is null))
+            {
+                var (set, unset) = site is null ? (ApiVariable, SiteVariable) : (SiteVariable, ApiVariable);
+                problem = new Diagnostic(
+                    DiagnosticCodes.ConfigInvalid,
+                    $"{set} is set and {unset} is not.",
+                    "with one of them alone, pmj would download releases from one GitHub and list versions from another",
+                    "set both, or neither: the two are the addresses of one GitHub");
+            }
 
-        // Another address for GitHub or for its API: for a test of the native binary, or a GitHub of one's own.
-        private static Uri? Address(string? text) => Uri.TryCreate(text, UriKind.Absolute, out var address) ? address : null;
+            var token = Token(variable, ref problem);
+            return problem is null ? new GitHubReleaseHost(http, site, api, token, $"pmj/{Version}") : new UnusableReleaseHost(problem);
+        }
+
+        // Another address for GitHub or for its API: for a test of the native binary, or a GitHub of
+        // one's own. A variable that is set to nothing says nothing.
+        private static Uri? Address(Func<string, string?> variable, string name, ref Diagnostic? problem)
+        {
+            var text = variable(name)?.Trim();
+            if (string.IsNullOrEmpty(text))
+            {
+                return null;
+            }
+
+            // Asked of the text, for .NET reads "localhost:8123" as an address whose scheme is "localhost", and a path as a file's.
+            var web = text.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || text.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+            var read = Uri.TryCreate(text, UriKind.Absolute, out var address);
+            if (web && read && GitHubReleaseHost.CanBeAddress(address!))
+            {
+                return address;
+            }
+
+            // What it holds is not said again: an address that was mistyped may have a password in it.
+            problem ??= new Diagnostic(
+                DiagnosticCodes.ConfigInvalid,
+                $"{name} is not an address pmj can use.",
+                !web ? "it does not begin with http:// or https://"
+                : !read ? "it cannot be read as an address"
+                : "it holds something other than the name of a machine and a path: a name and a password, a query, or a fragment",
+                $"set it to an address such as https://github.example.com, or unset it: without {SiteVariable} and {ApiVariable}, pmj speaks to github.com");
+            return null;
+        }
+
+        // The first of the two that is set to something is the token. One that is set and cannot be
+        // used is a problem, and is not passed over for the one after it.
+        private static string? Token(Func<string, string?> variable, ref Diagnostic? problem)
+        {
+            foreach (var name in TokenVariables)
+            {
+                // Space and line ends around a token are how it came to be in the variable, and no part of it.
+                var text = variable(name)?.Trim();
+                if (string.IsNullOrEmpty(text))
+                {
+                    continue;
+                }
+
+                if (GitHubReleaseHost.CanBeToken(text))
+                {
+                    return text;
+                }
+
+                problem ??= new Diagnostic(
+                    DiagnosticCodes.ConfigInvalid,
+                    $"{name} does not hold a token.",
+                    "it holds a character that cannot be sent as part of a token: a space, a line end, or one that is not ASCII",
+                    "set it to the token alone, as GitHub gave it, or unset it: a public repository's releases can be listed with none");
+                return null;
+            }
+
+            return null;
+        }
     }
 }

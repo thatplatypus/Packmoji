@@ -54,7 +54,7 @@ namespace Packmoji.Cli.Commands
                         found.Add(failure.Diagnostic);
 
                         // What GitHub could not be asked of one package it cannot be asked of the next, and saying so once is enough.
-                        reachable = failure.Diagnostic.Code is not (DiagnosticCodes.GitHubUnreachable or DiagnosticCodes.GitHubRateLimited);
+                        reachable = failure.Diagnostic.Code is not (DiagnosticCodes.GitHubUnreachable or DiagnosticCodes.GitHubRateLimited or DiagnosticCodes.ConfigInvalid);
                     }
                 }
 

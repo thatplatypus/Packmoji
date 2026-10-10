@@ -390,3 +390,4 @@ The codes that begin with `resolve.`, and `lock.mismatch`, are raised when `pmj`
 | `github.rate-limited` | GitHub's API refused a request because of its limit on requests |
 | `cache.unusable` | The cache could not be read or written |
 | `cache.mismatch` | `pmj verify` found that what the cache holds of a package is not what `packmoji.lock` holds |
+| `config.invalid` | Something `pmj` was told through its environment is not something it can use |

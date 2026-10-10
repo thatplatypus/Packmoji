@@ -238,16 +238,106 @@ namespace Packmoji.Cli.Tests.GitHub
             diagnostic.Reason.ShouldBe("its limit on requests has been reached");
         }
 
-        [Fact]
-        public async Task A_list_that_is_refused_for_another_reason_is_not_called_the_limit()
+        [Theory]
+        [InlineData(null, "wait a minute and try again")]
+        [InlineData(Token, "check that the token in GITHUB_TOKEN or GH_TOKEN may read github.com/thatplatypus/grapevine")]
+        public async Task A_list_that_is_refused_for_another_reason_is_not_called_the_limit_and_is_not_blamed_on_GitHub(string? token, string fix)
         {
             var github = WithCrypto();
             github.Answer = HttpStatusCode.Forbidden;
             github.AnswerHeaders["x-ratelimit-remaining"] = "41";
 
+            var diagnostic = await ShouldFail(() => Host(github, token).ListAsync(Grapevine, TestContext.Current.CancellationToken), DiagnosticCodes.GitHubUnreachable);
+
+            diagnostic.Message.ShouldBe("GitHub refused the request for the releases of github.com/thatplatypus/grapevine.");
+            diagnostic.Reason.ShouldContain("status 403");
+            diagnostic.Fix.ShouldStartWith(fix);
+            (diagnostic.Message + diagnostic.Reason + diagnostic.Fix).ShouldNotContain("having trouble");
+        }
+
+        [Fact]
+        public async Task A_download_that_is_refused_is_said_to_be_refused_and_no_token_is_spoken_of_for_none_went_with_it()
+        {
+            var github = WithCrypto();
+            github.Answer = HttpStatusCode.Forbidden;
+
+            var diagnostic = await ShouldFail(
+                () => Host(github, Token).DownloadAsync(Grapevine, "crypto-v1.0.0", "crypto-1.0.0.pmj.tar.gz", 1000, TestContext.Current.CancellationToken),
+                DiagnosticCodes.GitHubUnreachable);
+
+            diagnostic.Message.ShouldBe("GitHub refused the request for the release crypto-v1.0.0 of github.com/thatplatypus/grapevine.");
+            diagnostic.Reason.ShouldContain("status 403");
+            diagnostic.Fix.ShouldBe("wait a minute and try again");
+        }
+
+        [Theory]
+        [InlineData(HttpStatusCode.InternalServerError, true)]
+        [InlineData(HttpStatusCode.BadGateway, true)]
+        [InlineData(HttpStatusCode.ServiceUnavailable, true)]
+        [InlineData(HttpStatusCode.Gone, false)]
+        [InlineData(HttpStatusCode.UnprocessableEntity, false)]
+        [InlineData(HttpStatusCode.UnavailableForLegalReasons, false)]
+        public async Task Only_an_answer_that_says_GitHub_failed_is_said_to_be_GitHubs_trouble(HttpStatusCode status, bool githubs)
+        {
+            var github = WithCrypto();
+            github.Answer = status;
+
+            var listed = await ShouldFail(() => Host(github).ListAsync(Grapevine, TestContext.Current.CancellationToken), DiagnosticCodes.GitHubUnreachable);
+            var downloaded = await ShouldFail(
+                () => Host(github).DownloadAsync(Grapevine, "crypto-v1.0.0", "crypto-1.0.0.pmj.tar.gz", 1000, TestContext.Current.CancellationToken),
+                DiagnosticCodes.GitHubUnreachable);
+
+            foreach (var diagnostic in (Diagnostic[])[listed, downloaded])
+            {
+                diagnostic.Reason.ShouldContain($"status {(int)status}");
+                diagnostic.Fix.Contains("GitHub may be having trouble", StringComparison.Ordinal).ShouldBe(githubs);
+            }
+        }
+
+        [Fact]
+        public async Task A_list_whose_text_could_not_be_text_is_not_understood_and_is_no_fault_of_pmj()
+        {
+            // Half of a pair of surrogates, which is no character.
+            var github = WithCrypto();
+            github.ListBody = "[{\"tag_name\":\"\\ud800\",\"draft\":false,\"prerelease\":false,\"assets\":[{\"name\":\"x\"}]}]";
+
             var diagnostic = await ShouldFail(() => Host(github).ListAsync(Grapevine, TestContext.Current.CancellationToken), DiagnosticCodes.GitHubUnreachable);
 
-            diagnostic.Reason.ShouldContain("status 403");
+            diagnostic.Reason.ShouldContain("is not a list of releases");
+        }
+
+        [Theory]
+        [InlineData("ftp://ghe.example.com")]
+        [InlineData("file:///srv/mirror")]
+        [InlineData("ghe.example.com")]
+        [InlineData("https://someone:a-password@ghe.example.com")]
+        [InlineData("https://ghe.example.com/?page=2")]
+        [InlineData("https://ghe.example.com/#top")]
+        public void An_address_that_GitHub_could_not_be_at_is_refused_when_the_client_is_made(string address)
+        {
+            var given = new Uri(address, UriKind.RelativeOrAbsolute);
+
+            GitHubReleaseHost.CanBeAddress(given).ShouldBeFalse();
+            Should.Throw<ArgumentException>(() => new GitHubReleaseHost(new HttpClient(new FakeGitHub()), site: given)).Message.ShouldNotContain("a-password");
+            Should.Throw<ArgumentException>(() => new GitHubReleaseHost(new HttpClient(new FakeGitHub()), api: given)).Message.ShouldNotContain("a-password");
+        }
+
+        [Theory]
+        [InlineData("")]
+        [InlineData("ghp_tok en")]
+        [InlineData("ghp_token\n")]
+        [InlineData("ghp_tok\u00E9n")]
+        [InlineData("ghp_tok\u007Fn")]
+        public void A_token_that_could_not_be_sent_is_refused_when_the_client_is_made_and_is_not_in_what_is_said(string token)
+        {
+            GitHubReleaseHost.CanBeToken(token).ShouldBeFalse();
+            Should.Throw<ArgumentException>(() => new GitHubReleaseHost(new HttpClient(new FakeGitHub()), token: token)).Message.ShouldNotContain("ghp_tok");
+        }
+
+        [Fact]
+        public void Every_character_of_ASCII_that_can_be_seen_may_be_in_a_token()
+        {
+            GitHubReleaseHost.CanBeToken(string.Concat(Enumerable.Range('!', '~' - '!' + 1).Select(character => (char)character))).ShouldBeTrue();
         }
 
         [Fact]

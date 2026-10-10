@@ -297,8 +297,9 @@ Each file `pmj` writes is written whole beside its place and then put there in o
 | `PACKMOJI_GITHUB_API` | Another address for `https://api.github.com`, where versions are listed |
 | `PACKMOJI_DIRECT` | Accepted, as `--direct` is. Finding packages on GitHub directly is the only way there is yet |
 
-- **A token is sent to the API's address and to nothing else.** It is never sent with a download, and it is in nothing `pmj` prints or writes.
-- **The two addresses are for a GitHub of your own, and for tests.** A token goes to whatever address you give for the API.
+- **A token is sent to the API's address and to nothing else.** It is never sent with a download, and it is in nothing `pmj` prints or writes. Space and line ends around it are no part of it.
+- **The two addresses are for a GitHub of your own, and for tests.** Each begins with `http://` or `https://`, and they are set together or not at all: with one alone, `pmj` would download from one GitHub and list versions from another. A token goes to whatever address you give for the API.
+- **What `pmj` is told here and cannot use stops it,** with `config.invalid`, before anything is asked of anyone: an address that is not one, one address without the other, or a token that could not be sent. It is never passed over for what `pmj` does when nothing is said. A command that needs nothing of GitHub is not stopped, such as `pmj new`, or `pmj install` when the cache holds what is locked.
 
 ## How a package is found
 

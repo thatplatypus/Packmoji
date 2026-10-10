@@ -71,5 +71,6 @@ namespace Packmoji.Core.Diagnostics
         public const string GitHubRateLimited = "github.rate-limited";
         public const string CacheUnusable = "cache.unusable";
         public const string CacheMismatch = "cache.mismatch";
+        public const string ConfigInvalid = "config.invalid";
     }
 }

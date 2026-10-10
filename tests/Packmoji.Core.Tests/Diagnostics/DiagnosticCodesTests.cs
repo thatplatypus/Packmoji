@@ -14,7 +14,7 @@ namespace Packmoji.Core.Tests.Diagnostics
             .ToArray();
 
         [Fact]
-        public void There_are_the_65_codes_of_the_three_designs() => Codes.Length.ShouldBe(65);
+        public void There_are_the_66_codes_of_the_three_designs() => Codes.Length.ShouldBe(66);
 
         [Fact]
         public void No_two_codes_are_the_same() => Codes.Distinct(StringComparer.Ordinal).Count().ShouldBe(Codes.Length);
@@ -63,7 +63,7 @@ namespace Packmoji.Core.Tests.Diagnostics
         }
 
         [Fact]
-        public void The_commands_brought_seventeen_and_they_are_spelled_as_their_design_spells_them()
+        public void The_commands_brought_eighteen_and_they_are_spelled_as_their_design_spells_them()
         {
             string[] added =
             [
@@ -84,6 +84,7 @@ namespace Packmoji.Core.Tests.Diagnostics
                 DiagnosticCodes.GitHubRateLimited,
                 DiagnosticCodes.CacheUnusable,
                 DiagnosticCodes.CacheMismatch,
+                DiagnosticCodes.ConfigInvalid,
             ];
 
             added.ShouldBe(
@@ -105,6 +106,7 @@ namespace Packmoji.Core.Tests.Diagnostics
                 "github.rate-limited",
                 "cache.unusable",
                 "cache.mismatch",
+                "config.invalid",
             ]);
         }
     }
