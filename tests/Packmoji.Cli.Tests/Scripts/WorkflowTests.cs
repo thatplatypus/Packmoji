@@ -73,6 +73,47 @@ namespace Packmoji.Cli.Tests.Scripts
         }
 
         [Fact]
+        public void Every_pull_request_is_held_to_Windows_as_it_is_to_the_others()
+        {
+            var ci = Workflow("ci.yml");
+
+            var tests = Job(ci, "tests");
+            Regex.Matches(tests, @"os: (\S+)").Select(match => match.Groups[1].Value).ShouldBe(["ubuntu-latest", "windows-latest"]);
+            tests.ShouldContain("check: scripts/check.sh --coverage\n");
+            tests.ShouldContain("check: scripts/check.sh\n");
+            tests.ShouldContain("      run: ${{ matrix.check }}\n");
+
+            var native = Job(ci, "aot");
+            Regex.Matches(native, @"rid: (\S+)").Select(match => match.Groups[1].Value).Order(StringComparer.Ordinal).ShouldBe(["linux-x64", "osx-arm64", "win-x64"]);
+            native.ShouldContain("          - os: windows-latest\n            rid: win-x64\n");
+            native.ShouldContain("scripts/aot-smoke.sh ${{ matrix.rid }}");
+        }
+
+        // A script is run by bash on every machine. Without this, Windows would give it to PowerShell.
+        [Theory]
+        [InlineData("ci.yml", "tests")]
+        [InlineData("ci.yml", "aot")]
+        [InlineData("release.yml", "programs")]
+        public void A_job_that_runs_on_Windows_too_runs_its_scripts_with_bash(string workflow, string job)
+        {
+            Job(Workflow(workflow), job).ShouldContain("    defaults:\n      run:\n        shell: bash\n");
+        }
+
+        [Fact]
+        public void The_Linux_program_is_built_and_held_to_its_c_library_in_ci_exactly_as_in_a_release()
+        {
+            var built = new Regex(@"          - os: (\S+)\n            rid: linux-x64\n");
+            var held = new Regex(@"      if: runner\.os == 'Linux'\n      run: (scripts/glibc-floor\.sh .+)\n");
+            var ci = Job(Workflow("ci.yml"), "aot");
+            var release = Job(Workflow("release.yml"), "programs");
+
+            built.Match(release).Groups[1].Value.ShouldBe("ubuntu-22.04");
+            built.Match(ci).Groups[1].Value.ShouldBe("ubuntu-22.04");
+            held.Match(release).Groups[1].Value.ShouldBe("scripts/glibc-floor.sh src/Packmoji.Cli/bin/Release/net10.0/${{ matrix.rid }}/publish/pmj 2.35");
+            held.Match(ci).Groups[1].Value.ShouldBe(held.Match(release).Groups[1].Value);
+        }
+
+        [Fact]
         public void A_tag_that_is_not_the_version_stops_a_release_before_anything_is_built()
         {
             var programs = Job(Workflow("release.yml"), "programs");
