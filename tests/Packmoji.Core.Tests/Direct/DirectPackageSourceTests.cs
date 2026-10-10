@@ -164,7 +164,7 @@ namespace Packmoji.Core.Tests.Direct
             var host = Grapevine().Release(elsewhere, "@thatplatypus/crypto", "1.0.0");
             var locked = new Lockfile(
                 new RootRequirements([], []),
-                [new LockedPackage(Sample.Name("@thatplatypus/crypto"), Sample.Version("1.0.0"), Sample.Repository(Shared), Sample.Sha('a'), VerificationLevel.Checksum, [])]);
+                [new LockedPackage(Sample.Name("@thatplatypus/crypto"), Sample.Version("1.0.0"), Sample.Repository(Shared), Sha256Digest.Of(host.Archive(Shared, "@thatplatypus/crypto", "1.0.0")), VerificationLevel.Checksum, [])]);
             var told = new Dictionary<Packmoji.Core.Identity.PackageName, Packmoji.Core.Identity.RepositoryRef> { [Sample.Name("@thatplatypus/crypto")] = Sample.Repository(elsewhere) };
             var source = new DirectPackageSource(host, new MemoryAssetStore(), Outsider, locked, told);
 
@@ -208,6 +208,32 @@ namespace Packmoji.Core.Tests.Direct
             found.Name.ShouldBe(Sample.Name("@thatplatypus/crypto"));
             found.Sha256.ShouldBe(Sha256Digest.Of(archive));
             host.Downloads.ShouldBe(["github.com/thatplatypus/grapevine crypto-v1.0.0"]);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task A_release_that_is_not_the_bytes_the_lockfile_holds_is_refused_unread_and_is_not_kept(bool anArchive)
+        {
+            // The lockfile holds the digest of what crypto 1.0.0 was. What stands there now is
+            // another package's archive, or nothing that is an archive at all.
+            var host = Grapevine();
+            var was = Sha256Digest.Of(host.Archive(Shared, "@thatplatypus/crypto", "1.0.0"));
+            var now = anArchive ? host.Archive(Shared, "@thatplatypus/deflate", "0.1.0") : Encoding.UTF8.GetBytes("no archive");
+            host.Upload(Shared, "crypto-v1.0.0", "crypto-1.0.0.pmj.tar.gz", now);
+            var locked = new Lockfile(
+                new RootRequirements([], []),
+                [new LockedPackage(Sample.Name("@thatplatypus/crypto"), Sample.Version("1.0.0"), Sample.Repository(Shared), was, VerificationLevel.Checksum, [])]);
+            var store = new MemoryAssetStore();
+
+            var thrown = await Should.ThrowAsync<PackageSourceException>(async () => await Find(new DirectPackageSource(host, store, Outsider, locked), "@thatplatypus/crypto", "1.0.0"));
+
+            var diagnostic = thrown.Diagnostic.ShouldBeComplete();
+            diagnostic.Code.ShouldBe(DiagnosticCodes.LockMismatch);
+            diagnostic.Message.ShouldBe("packmoji.lock does not agree with what is published for \"@thatplatypus/crypto\" 1.0.0.");
+            diagnostic.Reason.ShouldContain($"the lockfile has the digest {was} and the release in {Shared} has {Sha256Digest.Of(now)}");
+            diagnostic.Fix.ShouldNotContain("delete");
+            store.Kept.ShouldBeEmpty();
         }
 
         [Fact]

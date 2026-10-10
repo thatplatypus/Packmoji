@@ -97,6 +97,14 @@ namespace Packmoji.Core.Direct
                     continue;
                 }
 
+                // What the lockfile holds of a version is its bytes. What was downloaded is held to
+                // that before anything else is done with it, so that what took a release's place is
+                // never read as an archive and never kept.
+                if (_digests.TryGetValue(key, out var locked) && Sha256Digest.Of(archive.Span) is var released && released != locked)
+                {
+                    throw new PackageSourceException(ResolveDiagnostics.ReleaseDiffers(name, version, repository, locked, released));
+                }
+
                 var published = Describe(name, version, repository, archive);
                 await _store.KeepAsync(name, version, published.Sha256, archive, cancellationToken);
                 Learn(repository);

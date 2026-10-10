@@ -160,7 +160,7 @@ namespace Packmoji.Core.Resolution
 
         /// <summary>A lockfile that records another digest or another repository for a version than the source does.</summary>
         public static Diagnostic LockMismatch(LockedPackage locked, PublishedVersion published) =>
-            Mismatch(published, WhereItIs(locked, published));
+            Mismatch(published.Name, published.Version, WhereItIs(locked, published));
 
         /// <summary>
         /// The same, for a lockfile that is being checked and not replaced: what it says the version
@@ -178,8 +178,16 @@ namespace Packmoji.Core.Resolution
                 differences.Add("more of its dependencies differ");
             }
 
-            return Mismatch(published, differences);
+            return Mismatch(published.Name, published.Version, differences);
         }
+
+        /// <summary>
+        /// A release whose bytes are not the bytes the lockfile holds for it. This is said of the
+        /// bytes alone, before they are read as anything: what is not what was locked is not looked
+        /// into, and is not kept.
+        /// </summary>
+        public static Diagnostic ReleaseDiffers(PackageName name, SemanticVersion version, RepositoryRef repository, Sha256Digest locked, Sha256Digest released) =>
+            Mismatch(name, version, [$"the lockfile has the digest {locked} and the release in {repository} has {released}"]);
 
         /// <summary>
         /// Where what a lockfile says a version depends on is not what the published version asks for:
@@ -229,10 +237,10 @@ namespace Packmoji.Core.Resolution
             }
         }
 
-        private static Diagnostic Mismatch(PublishedVersion published, IEnumerable<string> differences) =>
+        private static Diagnostic Mismatch(PackageName name, SemanticVersion version, IEnumerable<string> differences) =>
             new(
                 DiagnosticCodes.LockMismatch,
-                $"{Lock} does not agree with what is published for \"{published.Name}\" {published.Version}.",
+                $"{Lock} does not agree with what is published for \"{name}\" {version}.",
                 $"{string.Join(", and ", differences)}; a published version never changes, so one of the two is wrong",
                 $"find out which before going on: if {Lock} is as it was committed, the published version has been replaced and must not be used, and if the lockfile was edited or badly merged, restore it");
 

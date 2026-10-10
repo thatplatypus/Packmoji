@@ -124,6 +124,9 @@ namespace Packmoji.Cli.Tests.Commands
             run.Error.ShouldContain("@thatplatypus/crypto");
             sandbox.Read("packmoji.lock").ShouldBe(locked);
             sandbox.Cached().ShouldNotContain(file => file.EndsWith("/src/lib.🍇", StringComparison.Ordinal));
+
+            // What stands where the locked release was is not kept, under any name.
+            sandbox.Cached().ShouldNotContain(file => file.StartsWith("thatplatypus/crypto/", StringComparison.Ordinal));
         }
 
         [Fact]
