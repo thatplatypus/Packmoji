@@ -1,4 +1,5 @@
 using System.Reflection;
+using Packmoji.Cli.Building;
 using Packmoji.Core.Diagnostics;
 using Packmoji.Core.Direct;
 using Packmoji.GitHub;
@@ -7,8 +8,8 @@ namespace Packmoji.Cli
 {
     /// <summary>
     /// What pmj needs of the machine it runs on: a directory to work in, a place for its cache, a way
-    /// to reach releases, and somewhere to write. A test gives it a made-up one of each, and so no
-    /// command reads the environment or the clock for itself.
+    /// to reach releases, a way to start the tools of a build, and somewhere to write. A test gives it
+    /// a made-up one of each, and so no command reads the environment or the clock for itself.
     /// </summary>
     public sealed class PmjHost
     {
@@ -27,6 +28,15 @@ namespace Packmoji.Cli
         public required TextWriter Out { get; init; }
 
         public required TextWriter Error { get; init; }
+
+        /// <summary>Gives the value of a variable of the environment, or null when it is not set. A build asks it where its tools are.</summary>
+        public required Func<string, string?> Variable { get; init; }
+
+        /// <summary>Starts the programs a build needs, and the program it builds.</summary>
+        public required IToolRunner Tools { get; init; }
+
+        /// <summary>Whether this is macOS, whose linker is asked for less than any other's.</summary>
+        public bool IsMacOS { get; init; } = OperatingSystem.IsMacOS();
 
         /// <summary>The version of pmj, as <c>pmj --version</c> gives it.</summary>
         public static string Version { get; } =
@@ -49,6 +59,8 @@ namespace Packmoji.Cli
                 Releases = GitHub(variable, http),
                 Out = output,
                 Error = error,
+                Variable = variable,
+                Tools = new ProcessToolRunner(),
             };
         }
 

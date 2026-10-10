@@ -19,6 +19,8 @@ namespace Packmoji.Cli.Tests.TestSupport
             Root = Path.Combine(Path.GetTempPath(), "pmj-tests", Guid.NewGuid().ToString("N"));
             Work = Directory.CreateDirectory(Path.Combine(Root, "work")).FullName;
             Home = Path.Combine(Root, "home");
+            Tools = new FakeTools(Variable) { BuiltInPackages = Path.Combine(Root, "built-in-packages") };
+            InstallTools();
         }
 
         /// <summary>The repository that holds all three of Grapevine's packages.</summary>
@@ -34,6 +36,27 @@ namespace Packmoji.Cli.Tests.TestSupport
 
         public FakeGitHub GitHub { get; } = new();
 
+        /// <summary>The compiler and the other tools of a build, made up. They are on this machine's <c>PATH</c> from the start.</summary>
+        public FakeTools Tools { get; }
+
+        /// <summary>The environment pmj is run in. A test changes it as a person would theirs.</summary>
+        public Dictionary<string, string> Variables { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>Every variable pmj asked its environment for, in the order it asked.</summary>
+        public List<string> Asked { get; } = [];
+
+        /// <summary>Whether this machine is a Mac: pmj is told so, and the made-up linker behaves as the one of macOS does.</summary>
+        public bool MacOS { get; set; }
+
+        /// <summary>Where the made-up tools are: the one directory on this machine's <c>PATH</c>.</summary>
+        public string ToolsDirectory => Path.Combine(Root, "tools");
+
+        /// <summary>Where the compiler's own packages are, as <c>EMOJICODE_PACKAGES_PATH</c> says.</summary>
+        public string StockDirectory => Path.Combine(Root, "stock");
+
+        /// <summary>Where the compiler's headers are, as <c>EMOJICODE_INCLUDE</c> says.</summary>
+        public string IncludeDirectory => Path.Combine(Root, "include");
+
         /// <summary>Stands in for the standard output of the next run, for a test of what pmj does when it cannot write.</summary>
         public TextWriter? Output { get; set; }
 
@@ -47,6 +70,8 @@ namespace Packmoji.Cli.Tests.TestSupport
         {
             var output = Output ?? new StringWriter();
             var error = new StringWriter();
+            Tools.MacLinker = MacOS;
+            Tools.ProgramOutput = output;
             var host = new PmjHost
             {
                 WorkingDirectory = PathOf(directory),
@@ -54,6 +79,9 @@ namespace Packmoji.Cli.Tests.TestSupport
                 Releases = new GitHubReleaseHost(new HttpClient(GitHub, disposeHandler: false)),
                 Out = output,
                 Error = error,
+                Variable = Variable,
+                Tools = Tools,
+                IsMacOS = MacOS,
             };
 
             var status = await PmjCommandLine.RunAsync(args, host, Stop ?? TestContext.Current.CancellationToken);
@@ -71,6 +99,57 @@ namespace Packmoji.Cli.Tests.TestSupport
                 new HttpClient(GitHub, disposeHandler: false),
                 new StringWriter(),
                 new StringWriter());
+
+        /// <summary>
+        /// Puts a made-up tool on this machine, as a file whose first line says which tool it is.
+        /// What follows that line is what the tool says of itself: the compiler's banner, or what a C
+        /// or C++ compiler prints for <c>--version</c>.
+        /// </summary>
+        /// <param name="path">Where to put it, as a path inside <see cref="Root"/>.</param>
+        /// <returns>The file's full path.</returns>
+        public string Tool(string path, string tool, params string[] says)
+        {
+            var file = Path.Combine(Root, path.Replace('/', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+            File.WriteAllLines(file, [$"made-up {tool}", .. says]);
+            return file;
+        }
+
+        // A machine with Emojicode on it as its installer leaves it, but for where: the compiler and a
+        // C and C++ toolchain on the PATH, the six stock packages, and the headers.
+        private void InstallTools()
+        {
+            Tool("tools/emojicodec", "emojicodec", FakeTools.Banner);
+            Tool("tools/c++", "c++", "c++ (Made Up) 11.4.0");
+            Tool("tools/cc", "cc", "cc (Made Up) 11.4.0");
+            Tool("tools/ar", "ar");
+            foreach (var stock in new[] { "s", "runtime", "files", "sockets", "json", "testtube" })
+            {
+                var directory = Directory.CreateDirectory(Path.Combine(StockDirectory, stock)).FullName;
+                File.WriteAllLines(Path.Combine(directory, $"lib{stock}.a"), ["made-up archive", $"member {stock}.o", "  made-up object", $"  package {stock}"]);
+                if (stock != "runtime")
+                {
+                    File.WriteAllText(Path.Combine(directory, "🏛"), $"💭 made-up interface of {stock}\n");
+                }
+            }
+
+            foreach (var header in new[] { "runtime/Runtime.h", "s/String.h", "s/Data.h" })
+            {
+                var file = Path.Combine(IncludeDirectory, header.Replace('/', Path.DirectorySeparatorChar));
+                Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+                File.WriteAllText(file, "// made up\n");
+            }
+
+            Variables["PATH"] = ToolsDirectory;
+            Variables["EMOJICODE_PACKAGES_PATH"] = StockDirectory;
+            Variables["EMOJICODE_INCLUDE"] = IncludeDirectory;
+        }
+
+        private string? Variable(string name)
+        {
+            Asked.Add(name);
+            return Variables.GetValueOrDefault(name);
+        }
 
         /// <summary>A path inside <see cref="Work"/>, written with <c>/</c>, as a path on this machine.</summary>
         public string PathOf(string path) => path.Length == 0 ? Work : Path.Combine(Work, path.Replace('/', Path.DirectorySeparatorChar));
@@ -110,6 +189,48 @@ namespace Packmoji.Cli.Tests.TestSupport
         /// <summary>Makes the working directory an application that depends on what is given, each written <c>@owner/name@1.2</c>, or <c>dev:@owner/name@1.2</c>.</summary>
         public void Project(string name, params string[] dependencies) =>
             Write("packmoji.json", TestPackage.Manifest(name, "0.1.0", "app", null, dependencies));
+
+        /// <summary>Makes the working directory an application that depends on what is given, and installs it: the two files, and nothing built.</summary>
+        public async Task InstallAsync(string name, params string[] dependencies)
+        {
+            Project(name, dependencies);
+            var run = await RunAsync("install");
+            run.Error.ShouldBeEmpty();
+            run.Status.ShouldBe(0);
+        }
+
+        /// <summary>
+        /// Releases a version of a library whose one source file holds these lines, after an import
+        /// of each package it depends on. A line can be a mark that the made-up compiler acts on.
+        /// </summary>
+        public void ReleaseSource(string name, string version, string source, params string[] dependencies) =>
+            Upload(
+                "github.com/" + name[1..],
+                name,
+                version,
+                TestPackage.Archive(
+                    ("packmoji.json", TestPackage.Manifest(name, version, "library", null, dependencies)),
+                    ("src/lib.🍇", TestPackage.Source(name, version, dependencies) + source)));
+
+        /// <summary>The keys a package has been built under, each cut to its first eight characters, in order.</summary>
+        /// <param name="name">The package's bare name. Its owner is thatplatypus.</param>
+        public IReadOnlyList<string> Keys(string name) =>
+            Built().Where(file => file.StartsWith($"thatplatypus/{name}/", StringComparison.Ordinal)).Select(file => file.Split('/')[3]).Distinct(StringComparer.Ordinal).ToList();
+
+        /// <summary>The one key a package has been built under, cut to its first eight characters.</summary>
+        public string Key(string name) => Keys(name).ShouldHaveSingleItem();
+
+        /// <summary>A file of a built package that pmj keeps, when the package has been built under one key.</summary>
+        public string BuiltFile(string name, string file) =>
+            Directory.GetFiles(Path.Combine(Home, "built", "thatplatypus", name), file, SearchOption.AllDirectories).ShouldHaveSingleItem();
+
+        /// <summary>Every file on this machine that is neither in a project nor among pmj's own, each with its length: what no command should ever change.</summary>
+        public IReadOnlyList<string> Elsewhere() =>
+            Directory.EnumerateFiles(Root, "*", SearchOption.AllDirectories)
+                .Where(file => !file.StartsWith(Work + Path.DirectorySeparatorChar, StringComparison.Ordinal) && !file.StartsWith(Home + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+                .Select(file => $"{Path.GetRelativePath(Root, file).Replace(Path.DirectorySeparatorChar, '/')} {new FileInfo(file).Length}")
+                .Order(StringComparer.Ordinal)
+                .ToList();
 
         /// <summary>Makes the project in the working directory say that every package it uses must be attested.</summary>
         public void RequireAttestation() =>
@@ -154,25 +275,53 @@ namespace Packmoji.Cli.Tests.TestSupport
             Lockfile().Packages.Select(package => $"{package.Name} {package.Version} in {package.Source}").Order(StringComparer.Ordinal).ToList();
 
         /// <summary>Every file in the cache, each as a path inside it, with a digest cut to its first eight characters so that a test can be read.</summary>
-        public IReadOnlyList<string> Cached()
+        public IReadOnlyList<string> Cached() => Kept("cache");
+
+        /// <summary>Every file of every built package pmj keeps, each as a path inside <c>built</c>, with a key cut to its first eight characters.</summary>
+        public IReadOnlyList<string> Built() => Kept("built");
+
+        /// <summary>
+        /// A text with everything that differs from run to run taken out of it, so that a test can
+        /// say what it expects: this machine's own directory becomes <c>~</c>, a digest or a key its
+        /// first eight characters, and the name of a directory that is only on its way to its place
+        /// loses what was added to make it one of a kind.
+        /// </summary>
+        public string Plain(string text) =>
+            System.Text.RegularExpressions.Regex.Replace(
+                System.Text.RegularExpressions.Regex.Replace(text.Replace(Root, "~"), "[0-9a-f]{64}", match => match.Value[..8]),
+                "\\.tmp-[0-9a-f]{32}",
+                ".tmp").Replace(Path.DirectorySeparatorChar, '/');
+
+        /// <summary>What a made-up tool was given, as one line: the tool, then its arguments, made plain by <see cref="Plain"/>.</summary>
+        public string Plain(ToolCall call) => Plain(string.Join(' ', [call.Tool, .. call.Arguments]));
+
+        private IReadOnlyList<string> Kept(string directory)
         {
-            var cache = Path.Combine(Home, "cache");
-            return Directory.Exists(cache)
-                ? Directory.EnumerateFiles(cache, "*", SearchOption.AllDirectories)
-                    .Select(file => Path.GetRelativePath(cache, file).Replace(Path.DirectorySeparatorChar, '/'))
+            var kept = Path.Combine(Home, directory);
+            return Directory.Exists(kept)
+                ? Directory.EnumerateFiles(kept, "*", SearchOption.AllDirectories)
+                    .Select(file => Path.GetRelativePath(kept, file).Replace(Path.DirectorySeparatorChar, '/'))
                     .Select(file => System.Text.RegularExpressions.Regex.Replace(file, "[0-9a-f]{64}", match => match.Value[..8]))
                     .Order(StringComparer.Ordinal)
                     .ToList()
                 : [];
         }
 
-        /// <summary>Empties the cache, as on a machine that has never fetched anything.</summary>
-        public void ForgetCache()
+        /// <summary>Empties the cache, as on a machine that has never fetched anything. Nothing of pmj's is left on it.</summary>
+        public void ForgetCache() => Forget(Home);
+
+        /// <summary>Throws away what was downloaded and keeps what was built from it, as someone who deletes <c>cache</c> does.</summary>
+        public void ForgetDownloads() => Forget(Path.Combine(Home, "cache"));
+
+        /// <summary>Throws away every built package pmj keeps, as someone who deletes <c>built</c> does.</summary>
+        public void ForgetBuilt() => Forget(Path.Combine(Home, "built"));
+
+        private static void Forget(string directory)
         {
-            if (Directory.Exists(Home))
+            if (Directory.Exists(directory))
             {
-                Unlock(Home);
-                Directory.Delete(Home, recursive: true);
+                Unlock(directory);
+                Directory.Delete(directory, recursive: true);
             }
         }
 
