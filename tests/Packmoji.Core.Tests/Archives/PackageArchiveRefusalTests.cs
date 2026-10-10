@@ -213,11 +213,14 @@ namespace Packmoji.Core.Tests.Archives
             // A hundred megabytes of zeros is a hundred kilobytes when it is compressed. An archive is
             // not compressed at all, so there is nothing to unpack that is larger than the archive.
             var bomb = RawTar.Compressed(RawTar.Header("zeros.bin", 100L * 1024 * 1024), new byte[100 * 1024 * 1024], RawTar.End());
-            var before = GC.GetTotalAllocatedBytes(precise: true);
+
+            // Counted for this thread alone. Other tests run beside this one, and what they allocate
+            // meanwhile is no part of what reading the archive took.
+            var before = GC.GetAllocatedBytesForCurrentThread();
 
             bomb.Length.ShouldBeLessThan(1024 * 1024);
             ShouldBeRefused(bomb).Reason.ShouldContain("pmj pack");
-            (GC.GetTotalAllocatedBytes(precise: true) - before).ShouldBeLessThan(8L * 1024 * 1024);
+            (GC.GetAllocatedBytesForCurrentThread() - before).ShouldBeLessThan(8L * 1024 * 1024);
         }
 
         [Fact]
