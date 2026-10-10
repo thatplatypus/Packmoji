@@ -39,12 +39,19 @@ namespace Packmoji.Cli.Tests.Scripts
             }
         }
 
+        // A run is started by nothing else: a branch that is pushed is checked when a pull request is opened for it.
+        [Fact]
+        public void The_checks_run_for_a_pull_request_to_main_for_main_itself_and_by_hand()
+        {
+            Workflow("ci.yml").ShouldContain("\non:\n  pull_request:\n    branches: [ \"main\" ]\n  push:\n    branches: [ \"main\" ]\n  workflow_dispatch:\n\n");
+        }
+
         [Fact]
         public void A_release_is_made_for_a_pushed_tag_and_the_workflow_run_by_hand_releases_nothing()
         {
             var release = Workflow("release.yml");
 
-            release.ShouldContain("on:\n  push:\n    tags: [ \"v*\" ]\n  workflow_dispatch:\n");
+            release.ShouldContain("\non:\n  push:\n    tags: [ \"v*\" ]\n  workflow_dispatch:\n\n");
             Job(release, "release").ShouldContain("    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')\n");
             Regex.Matches(release, @"gh release ").Count.ShouldBe(1);
             Job(release, "release").ShouldContain("gh release create");
