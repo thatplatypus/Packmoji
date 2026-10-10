@@ -15,7 +15,7 @@ The brief asks for minimal version selection as Go has it: every requirement is 
 - **A reachable version that was never published is an error even when it is passed over.**
 - **A package that only a passed-over version asks for is selected for and is left out of the build.** What is built is what the project asks for and what the selected versions lead to.
 - **A circle among the versions a build would use is an error that shows the circle,** and so is one of them depending on the project itself.
-- **A graph of more than 10,000 versions is refused.**
+- **A graph of more than 10,000 versions is refused,** and so is one whose lockfile would be over the lockfile's own limit.
 - **While a manifest is unchanged, its lockfile is checked and not resolved again:** each locked version against what is published, what it depends on included.
 - **Errors are listed before warnings,** each kind in a fixed order.
 
@@ -27,7 +27,7 @@ The brief asks for minimal version selection as Go has it: every requirement is 
 - **A missing version is an error wherever it is, because otherwise publishing it later would change a build that no one touched.** Its requirements would start to count on the day it appeared.
 - **A package nothing built depends on is left out, because a lockfile lists what is fetched and built.** The lockfile reader already refuses an entry that nothing leads to.
 - **A circle is an error here because the compiler refuses circular imports.** Saying so before anything is fetched is kinder than a compiler error after everything is.
-- **A limit on the graph, because the resolver believes its source.** A source that answers wrongly could otherwise keep it going for ever.
+- **A limit on the graph, because the resolver believes its source.** A source that answers wrongly could otherwise keep it going for ever. And the two limits have to agree: a few hundred packages that each depend on all the rest are far inside the first and write a lockfile that its reader refuses, which is worse than no lockfile.
 - **Errors first, because only a hundred problems are listed.** A long run of warnings must not push the one error out of sight.
 
 ## Alternatives

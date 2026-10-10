@@ -1,4 +1,5 @@
 using Packmoji.Core.Diagnostics;
+using Packmoji.Core.Lockfiles;
 using Packmoji.Core.Resolution;
 using Packmoji.Core.Tests.TestSupport;
 using Shouldly;
@@ -35,6 +36,37 @@ namespace Packmoji.Core.Tests.Resolution
 
             graph.Packages.Count.ShouldBe(10_000);
             source.Asked.ShouldBe(10_000);
+        }
+
+        [Fact]
+        public async Task The_lockfile_of_the_largest_graph_that_resolves_is_read_back()
+        {
+            var manifest = Project.Asking($"{Name(0)}@1.0");
+            var graph = (await Resolve(Line(10_000), $"{Name(0)}@1.0")).ShouldSucceed();
+
+            var written = LockfileWriter.Write(graph.ToLockfile(manifest));
+
+            LockfileReader.Read(written).ShouldSucceed().Packages.Count.ShouldBe(10_000);
+        }
+
+        [Fact]
+        public async Task A_graph_whose_lockfile_could_not_be_read_back_is_refused()
+        {
+            // Five hundred packages, each depending on every one after it: far inside the limit on
+            // versions, and a lockfile of more than six megabytes, which its own reader refuses.
+            const int count = 500;
+            var source = new AnsweringSource((name, version) =>
+            {
+                var number = int.Parse(name.Name[1..]);
+                var later = Enumerable.Range(number + 1, count - number - 1).Select(next => $"{Name(next)}@1.0").ToArray();
+                return Sample.Published(name.ToString(), version.ToString(), later);
+            });
+
+            var diagnostic = (await Resolve(source, $"{Name(0)}@1.0")).ShouldFailWith(DiagnosticCodes.ResolveGraphTooLarge);
+
+            diagnostic.Message.ShouldBe("What \"@thatplatypus/app\" depends on makes a lockfile of more than 4194304 bytes.");
+            diagnostic.Reason.ShouldContain("refused when it is read");
+            source.Asked.ShouldBe(count);
         }
 
         [Fact]

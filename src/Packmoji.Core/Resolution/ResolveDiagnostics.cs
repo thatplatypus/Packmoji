@@ -144,6 +144,13 @@ namespace Packmoji.Core.Resolution
                 $"no real project is near that, so pmj stopped looking; the last requirement it followed was {graph.ChainTo(last)}",
                 "look at what that chain brings in, and at where pmj gets its package information from");
 
+        public static Diagnostic LockfileTooLarge(RequirementGraph graph) =>
+            new(
+                DiagnosticCodes.ResolveGraphTooLarge,
+                $"What \"{graph.Project}\" depends on makes a lockfile of more than {LockfileReader.MaxBytes} bytes.",
+                "a lockfile that large is refused when it is read, so this resolution could not be used, and no real project is near it",
+                "look at what brings so much in, and at where pmj gets its package information from");
+
         public static Diagnostic OwnerMismatch(RequirementGraph graph, RequirementGraph.Node node, PublishedVersion published) =>
             new(
                 DiagnosticCodes.RepositoryOwnerMismatch,

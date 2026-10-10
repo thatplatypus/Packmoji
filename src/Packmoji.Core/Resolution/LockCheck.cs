@@ -57,7 +57,7 @@ namespace Packmoji.Core.Resolution
                 packages.Add(new ResolvedPackage(published with { Verified = locked.Verified }, locked.Dependencies));
             }
 
-            return ResolveResult.From(errors, warnings, () => new ResolvedGraph(packages));
+            return ResolveResult.From(errors, warnings, new ResolvedGraph(packages));
         }
     }
 }

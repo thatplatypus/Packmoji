@@ -39,7 +39,7 @@ So one package asked for on two lines has no answer, and `pmj` stops and shows w
 
 ## What stops a resolution
 
-Each of these is an error, and `pmj` reports every one it finds, not only the first.
+Each of these is an error, and `pmj` reports every one it finds, not only the first. The one exception is a graph that is too large, which is reported alone: nothing else is known of a graph that was not looked through to its end.
 
 | Code | What happened | What to do |
 |---|---|---|
@@ -50,7 +50,7 @@ Each of these is an error, and `pmj` reports every one it finds, not only the fi
 | `resolve.line-conflict` | One package is asked for on two compatibility lines | Raise the minimums that lead to the older line |
 | `resolve.name-collision` | Two packages share a bare name, or one shares yours. Emojicode imports by bare name, so they cannot be in one build | Depend on only one of them |
 | `resolve.cycle` | Packages your build would use depend on one another in a circle, or one of them depends on your project. Emojicode cannot build that | Ask for later versions that do not need one another |
-| `resolve.graph-too-large` | What your project depends on is more than 10,000 versions | Look at what brings so much in, and at where `pmj` gets its package information |
+| `resolve.graph-too-large` | What your project depends on is more than 10,000 versions, or would make a lockfile too large to be read back | Look at what brings so much in, and at where `pmj` gets its package information |
 | `repository.owner-mismatch` | A version is said to live in a repository that its scope does not own | Do not build with it. What told `pmj` where it lives is wrong |
 | `lock.mismatch` | Your lockfile records a digest, a repository or dependencies for a version that are not what is published | Find out which is right before going on. See below |
 

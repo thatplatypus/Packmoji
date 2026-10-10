@@ -372,4 +372,4 @@ The codes that begin with `resolve.`, and `lock.mismatch`, are raised when `pmj`
 | `resolve.line-conflict` | One package is asked for on two compatibility lines |
 | `resolve.name-collision` | Two packages of one build, or one of them and the project itself, share a bare name |
 | `resolve.cycle` | Packages depend on one another in a circle, in a graph being resolved or in a lockfile being read |
-| `resolve.graph-too-large` | A graph of dependencies has more than 10,000 versions in it |
+| `resolve.graph-too-large` | A graph of dependencies has more than 10,000 versions in it, or would make a lockfile over its limit of 4 MiB |

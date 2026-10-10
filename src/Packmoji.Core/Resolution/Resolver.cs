@@ -1,3 +1,4 @@
+using System.Text;
 using Packmoji.Core.Diagnostics;
 using Packmoji.Core.Graphs;
 using Packmoji.Core.Identity;
@@ -117,7 +118,22 @@ namespace Packmoji.Core.Resolution
                 }
             }
 
-            return ResolveResult.From(errors, warnings, () => Resolved(selection));
+            if (errors.Count > 0)
+            {
+                return ResolveResult.From(errors, warnings, null);
+            }
+
+            // The lockfile's reader refuses a file over its limit. A graph can be far inside the limit
+            // on versions and still make a lockfile over that one, because what versions depend on
+            // grows with the square of their number: and a lockfile that cannot be read back is
+            // worse than none, so such a graph is refused here, where something can be said of it.
+            var resolved = Resolved(selection);
+            if (Encoding.UTF8.GetByteCount(LockfileWriter.Write(resolved.ToLockfile(manifest))) > LockfileReader.MaxBytes)
+            {
+                return ResolveResult.Stopped(ResolveDiagnostics.LockfileTooLarge(graph));
+            }
+
+            return ResolveResult.From(errors, warnings, resolved);
         }
 
         private static ResolvedGraph Resolved(Selection selection)

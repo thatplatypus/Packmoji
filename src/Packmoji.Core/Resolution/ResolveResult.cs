@@ -34,12 +34,17 @@ namespace Packmoji.Core.Resolution
         /// <summary>The result of a resolution that one problem stopped before anything else could be known.</summary>
         internal static ResolveResult Stopped(Diagnostic error) => new(null, [error], 0);
 
-        /// <param name="graph">Asked for only when there is no error, so that a graph that could not be whole is never made.</param>
-        internal static ResolveResult From(DiagnosticList errors, DiagnosticList warnings, Func<ResolvedGraph> graph)
+        /// <param name="graph">What the result holds when there is no error. With an error it holds none, whatever is given here.</param>
+        internal static ResolveResult From(DiagnosticList errors, DiagnosticList warnings, ResolvedGraph? graph)
         {
+            if (errors.Count == 0)
+            {
+                ArgumentNullException.ThrowIfNull(graph);
+            }
+
             var listed = errors.Concat(warnings).Take(DiagnosticList.Limit).ToList();
             var omitted = errors.Omitted + warnings.Omitted + (errors.Count + warnings.Count - listed.Count);
-            return new ResolveResult(errors.Count == 0 ? graph() : null, listed, omitted);
+            return new ResolveResult(errors.Count == 0 ? graph : null, listed, omitted);
         }
     }
 }
