@@ -45,6 +45,10 @@ namespace Packmoji.Core.Tests.Manifests
         [InlineData("src/{a,b}.emojic")]
         [InlineData("src/li\tb.emojic")]
         [InlineData("src/lib\n.emojic")]
+        [InlineData("src/a<b.emojic")]
+        [InlineData("src/a>b.emojic")]
+        [InlineData("src/\"quoted\".emojic")]
+        [InlineData("src/a|b.emojic")]
         public void Anything_else_is_refused(string text)
         {
             RelativePath.TryParse(text, out var path, out var error).ShouldBeFalse();
@@ -58,6 +62,26 @@ namespace Packmoji.Core.Tests.Manifests
         {
             RelativePath.TryParse(new string('a', 255), out _, out _).ShouldBeTrue();
             RelativePath.TryParse(new string('a', 256), out _, out _).ShouldBeFalse();
+        }
+
+        [Fact]
+        public void A_part_of_a_path_may_be_255_bytes_and_no_more_however_few_characters_that_is()
+        {
+            // Most disks hold a name of at most 255 bytes, and count them in UTF-8. Grapes are four bytes each.
+            var grapes = string.Concat(Enumerable.Repeat("🍇", 63));
+            RelativePath.TryParse($"src/{grapes}abc", out _, out _).ShouldBeTrue();
+
+            RelativePath.TryParse($"src/{grapes}abcd", out var path, out var error).ShouldBeFalse();
+            path.ShouldBeNull();
+            error.ShouldBeComplete().Reason.ShouldContain("255 bytes");
+        }
+
+        [Fact]
+        public void A_character_that_windows_keeps_for_itself_says_so()
+        {
+            RelativePath.TryParse("src/a<b.emojic", out _, out var error).ShouldBeFalse();
+
+            error.ShouldBeComplete().Reason.ShouldContain("Windows");
         }
 
         [Fact]

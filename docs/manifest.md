@@ -121,9 +121,9 @@ A path is written with `/` between its parts and stays inside the package.
 - No part is `.` or `..`.
 - No part begins with `-` or `@`, which a compiler would take for an option or for a file of options.
 - No part begins or ends with a space, and none ends with a dot. Some platforms drop both.
-- There is no `\`, no `:` and no control character.
+- There is no `\`, no `:` and no control character, and none of `<`, `>`, `"` and `|`, which Windows does not allow in a name.
 - There is no character that cannot be seen or that reorders text, such as a zero width space or a right-to-left override. The joiner and the tags that emoji are built with are the exception, so a file may be named with any emoji.
-- A path is at most 255 characters.
+- A path is at most 255 characters, and no part of it is more than 255 bytes in UTF-8, which is the most a name can be on most disks.
 
 A pattern is a path that may also hold these:
 

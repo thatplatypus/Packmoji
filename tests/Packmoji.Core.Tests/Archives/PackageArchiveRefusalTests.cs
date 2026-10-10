@@ -255,6 +255,8 @@ namespace Packmoji.Core.Tests.Archives
         [InlineData("src//double.txt")]
         [InlineData("./dot.txt")]
         [InlineData("-option.txt")]
+        [InlineData("src/a<b.txt")]
+        [InlineData("src/a|b.txt")]
         public void A_path_that_a_manifest_could_not_name_is_refused(string path)
         {
             var archive = RawTar.Gzip(RawTar.Entry(path, "x"), RawTar.Entry("packmoji.json", Manifest), RawTar.End());
