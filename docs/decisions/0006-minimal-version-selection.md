@@ -16,6 +16,7 @@ The brief asks for minimal version selection as Go has it: every requirement is 
 - **A package that only a passed-over version asks for is selected for and is left out of the build.** What is built is what the project asks for and what the selected versions lead to.
 - **A circle among the versions a build would use is an error that shows the circle,** and so is one of them depending on the project itself.
 - **A graph of more than 10,000 versions is refused.**
+- **While a manifest is unchanged, its lockfile is checked and not resolved again:** each locked version against what is published, what it depends on included.
 - **Errors are listed before warnings,** each kind in a fixed order.
 
 ## Why
@@ -43,4 +44,5 @@ The brief asks for minimal version selection as Go has it: every requirement is 
 - **A conflict of lines is reported even when one side comes from a passed-over version.** The fix is to raise the minimum that brings the older version into the graph.
 - **A package can be asked about and not built.** It still has to be published, and its requirements still count.
 - **Raising a minimum can lower another package's version.** The passed-over version's requirements stop counting once nothing reaches it. Only adding a requirement is sure never to lower anything.
+- **A check does not notice a locked version that is newer than anyone asked for.** It can see that every locked dependency answers what is asked of it, and not that it is the lowest that does. That takes a resolution, which the brief keeps for a manifest that has changed.
 - **The limit of 10,000 is on versions, not on requirements.** A version with a very long list of dependencies costs time in proportion, which the sources that read real manifests bound by the size of a manifest.

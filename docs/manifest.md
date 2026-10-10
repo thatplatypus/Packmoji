@@ -361,7 +361,7 @@ The codes that begin with `resolve.`, and `lock.mismatch`, are raised when `pmj`
 | `lock.dangling-dependency` | An entry depends on a package or a version the lockfile does not hold |
 | `lock.root-unsatisfied` | Nothing in the lockfile answers an entry of `root` |
 | `lock.unreachable` | Nothing leads to an entry |
-| `lock.mismatch` | A lockfile's digest or repository for a version is not what is published |
+| `lock.mismatch` | A lockfile's digest, repository or dependencies for a version are not what is published |
 | `pin.invalid` | A `<full name>@<version>` string in a lockfile has no `@` between its two parts |
 | `sha256.invalid` | A digest is not 64 hexadecimal digits in lowercase |
 | `verified.invalid` | `verified` is neither `checksum` nor `attestation` |

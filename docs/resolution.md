@@ -52,7 +52,7 @@ Each of these is an error, and `pmj` reports every one it finds, not only the fi
 | `resolve.cycle` | Packages your build would use depend on one another in a circle, or one of them depends on your project. Emojicode cannot build that | Ask for later versions that do not need one another |
 | `resolve.graph-too-large` | What your project depends on is more than 10,000 versions | Look at what brings so much in, and at where `pmj` gets its package information |
 | `repository.owner-mismatch` | A version is said to live in a repository that its scope does not own | Do not build with it. What told `pmj` where it lives is wrong |
-| `lock.mismatch` | Your lockfile records one digest or repository for a version, and what is published has another | Find out which is right before going on. See below |
+| `lock.mismatch` | Your lockfile records a digest, a repository or dependencies for a version that are not what is published | Find out which is right before going on. See below |
 
 One code is a warning, and does not stop anything:
 
@@ -94,15 +94,18 @@ The first step is your project. Each step after it is a version that asked. The 
 
 If your manifest still asks for exactly what the lockfile recorded, `pmj` chooses nothing. Reordering a table, or writing `1.2.0` where it said `1.2`, is not a change.
 
-It does still ask about each locked package, because what was locked may have been yanked or quarantined since:
+It does still ask about each locked package. What was locked may have been yanked or quarantined since, and a lockfile is a file, which can be edited or badly merged:
 
 | What is published now | Outcome |
 |---|---|
-| The same version, with the same digest and repository | Nothing |
+| The same version, with the same digest, repository and dependencies | Nothing |
 | It has been yanked | The warning `resolve.yanked-locked` |
 | It is quarantined | The error `resolve.quarantined` |
 | It is no longer published | The error `resolve.version-missing`. Keep the lockfile |
 | Another digest, or another repository | The error `lock.mismatch` |
+| It asks for a package the lockfile does not give it, or the lockfile gives it one it does not ask for, or one at a version that does not answer what it asks | The error `lock.mismatch` |
+
+This check chooses no versions, so one thing escapes it: a locked version that is newer than anything asks for. Seeing that takes a resolution, and one is made only when the manifest changes.
 
 ## The same answer every time
 

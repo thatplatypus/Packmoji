@@ -6,8 +6,15 @@ namespace Packmoji.Core.Resolution
     /// <summary>
     /// Checks a lockfile against what is published, without choosing any version. A manifest that has
     /// not changed is not resolved again, and yet what it locked may since have been yanked or
-    /// quarantined, or may no longer be what its release holds.
+    /// quarantined, or may no longer be what its release holds. And a lockfile is a file: it can be
+    /// edited or badly merged, so what it says each version depends on is held to what that version
+    /// asks for.
     /// </summary>
+    /// <remarks>
+    /// What a check cannot see is a locked version that is newer than anyone asked for. Saying which
+    /// version is the highest minimum takes a resolution, and a check asks one question for each
+    /// locked package and no more.
+    /// </remarks>
     public static class LockCheck
     {
         /// <returns>
@@ -35,9 +42,9 @@ namespace Packmoji.Core.Resolution
                     errors.Add(() => ResolveDiagnostics.LockedQuarantined(locked));
                 }
 
-                if (published.Sha256 != locked.Sha256 || published.Source != locked.Source)
+                if (published.Sha256 != locked.Sha256 || published.Source != locked.Source || ResolveDiagnostics.PinDifferences(locked, published).Any())
                 {
-                    errors.Add(() => ResolveDiagnostics.LockMismatch(locked, published));
+                    errors.Add(() => ResolveDiagnostics.LockedMismatch(locked, published));
                 }
 
                 if (published.Status == VersionStatus.Yanked)

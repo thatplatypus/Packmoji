@@ -42,8 +42,10 @@ namespace Packmoji.Core.Tests.Resolution
             diagnostic.Message.ShouldBe("packmoji.lock does not agree with what is published for \"@thatplatypus/crypto\" 1.0.0.");
             diagnostic.Reason.ShouldContain($"the lockfile has the digest {Sample.DigestOf("@thatplatypus/crypto@1.0.0")}");
             diagnostic.Reason.ShouldContain($"what is published has {Sample.Sha('b')}");
+            diagnostic.Fix.ShouldStartWith("find out which before going on");
             diagnostic.Fix.ShouldContain("must not be used");
             diagnostic.Fix.ShouldContain("restore it");
+            diagnostic.Fix.ShouldNotContain("delete");
         }
 
         [Fact]

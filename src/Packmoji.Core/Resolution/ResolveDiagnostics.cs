@@ -15,6 +15,7 @@ namespace Packmoji.Core.Resolution
     {
         private const string Manifest = ManifestReader.FileName;
         private const string Lock = LockfileReader.FileName;
+        private const int PinDifferencesShown = 3;
 
         public static Diagnostic RootDuplicate(PackageName project, PackageName name) =>
             new(
@@ -150,25 +151,83 @@ namespace Packmoji.Core.Resolution
                 $"a package is fetched from a repository owned by its scope, \"{node.Name.Scope}\", and version {node.Version} is said to be in this one; it is asked for: {graph.ChainTo(node.Via)}",
                 "do not build with it: what told pmj where this version lives is wrong");
 
-        public static Diagnostic LockMismatch(LockedPackage locked, PublishedVersion published)
+        /// <summary>A lockfile that records another digest or another repository for a version than the source does.</summary>
+        public static Diagnostic LockMismatch(LockedPackage locked, PublishedVersion published) =>
+            Mismatch(published, WhereItIs(locked, published));
+
+        /// <summary>
+        /// The same, for a lockfile that is being checked and not replaced: what it says the version
+        /// depends on is held to what the published version asks for as well. A lockfile whose
+        /// digests are all true can still pin a dependency below what is asked, or hang a package
+        /// that nothing asks for on one that is, and that is what an edit or a bad merge looks like.
+        /// </summary>
+        public static Diagnostic LockedMismatch(LockedPackage locked, PublishedVersion published)
         {
-            var differences = new List<string>();
+            // One more than is shown, to know whether there are more without making them all.
+            var pins = PinDifferences(locked, published).Take(PinDifferencesShown + 1).ToList();
+            var differences = WhereItIs(locked, published).Concat(pins.Take(PinDifferencesShown)).ToList();
+            if (pins.Count > PinDifferencesShown)
+            {
+                differences.Add("more of its dependencies differ");
+            }
+
+            return Mismatch(published, differences);
+        }
+
+        /// <summary>
+        /// Where what a lockfile says a version depends on is not what the published version asks for:
+        /// a dependency it leaves out, one it pins at a version that does not answer the requirement,
+        /// and one that the published version does not have. Nothing is made until it is asked for,
+        /// so asking only whether there is any costs next to nothing.
+        /// </summary>
+        public static IEnumerable<string> PinDifferences(LockedPackage locked, PublishedVersion published)
+        {
+            var pins = locked.Dependencies.ToLookup(pin => pin.Name);
+            var asked = new HashSet<PackageName>();
+            var requirements = published.Dependencies
+                .OrderBy(dependency => dependency.Name)
+                .ThenBy(dependency => dependency.Requirement.Minimum)
+                .ThenBy(dependency => dependency.Requirement.Text, StringComparer.Ordinal);
+
+            foreach (var dependency in requirements)
+            {
+                asked.Add(dependency.Name);
+                if (!pins.Contains(dependency.Name))
+                {
+                    yield return $"what is published asks for {dependency.Name}@{dependency.Requirement.Text}, and the lockfile gives it no such dependency";
+                }
+
+                foreach (var pin in pins[dependency.Name].Where(pin => !dependency.Requirement.IsSatisfiedBy(pin.Version)))
+                {
+                    yield return $"what is published asks for {dependency.Name}@{dependency.Requirement.Text}, and the lockfile gives it {pin.Name}@{pin.Version}";
+                }
+            }
+
+            foreach (var pin in locked.Dependencies.Where(pin => !asked.Contains(pin.Name)).OrderBy(pin => pin.Name).ThenBy(pin => pin.Version))
+            {
+                yield return $"the lockfile gives it a dependency on {pin.Name}@{pin.Version}, and what is published has none on that package";
+            }
+        }
+
+        private static IEnumerable<string> WhereItIs(LockedPackage locked, PublishedVersion published)
+        {
             if (locked.Sha256 != published.Sha256)
             {
-                differences.Add($"the lockfile has the digest {locked.Sha256} and what is published has {published.Sha256}");
+                yield return $"the lockfile has the digest {locked.Sha256} and what is published has {published.Sha256}";
             }
 
             if (locked.Source != published.Source)
             {
-                differences.Add($"the lockfile has the repository {locked.Source} and what is published is in {published.Source}");
+                yield return $"the lockfile has the repository {locked.Source} and what is published is in {published.Source}";
             }
+        }
 
-            return new Diagnostic(
+        private static Diagnostic Mismatch(PublishedVersion published, IEnumerable<string> differences) =>
+            new(
                 DiagnosticCodes.LockMismatch,
                 $"{Lock} does not agree with what is published for \"{published.Name}\" {published.Version}.",
                 $"{string.Join(", and ", differences)}; a published version never changes, so one of the two is wrong",
-                $"find out which before going on: if {Lock} is as it was committed, the published version has been replaced and must not be used, and if the lockfile was edited, restore it");
-        }
+                $"find out which before going on: if {Lock} is as it was committed, the published version has been replaced and must not be used, and if the lockfile was edited or badly merged, restore it");
 
         private static Diagnostic Quarantined(PackageName name, SemanticVersion version, string where) =>
             new(
