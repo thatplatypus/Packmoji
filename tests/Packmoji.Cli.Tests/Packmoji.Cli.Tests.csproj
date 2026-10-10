@@ -39,6 +39,7 @@
     <!-- The scripts that make a release travel with the tests, with the file that says which version
          this is, so that the names of a release's programs and their digests are held without a release. -->
     <None Include="..\..\scripts\release-assets.sh" Link="scripts\release-assets.sh" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\scripts\release-assets.sh')" />
+    <None Include="..\..\scripts\glibc-floor.sh" Link="scripts\glibc-floor.sh" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\scripts\glibc-floor.sh')" />
     <None Include="..\..\Directory.Build.props" Link="Directory.Build.props" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
