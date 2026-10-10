@@ -51,7 +51,8 @@ namespace Packmoji.Core.Resolution
         /// </summary>
         public Requirement? Overflow { get; private set; }
 
-        public static async Task<RequirementGraph> BuildAsync(Manifest manifest, IPackageSource source, CancellationToken cancellationToken)
+        /// <param name="allowed">The scopes that may be depended on. A package of another is never asked of the source.</param>
+        public static async Task<RequirementGraph> BuildAsync(Manifest manifest, IPackageSource source, ScopeLimit allowed, CancellationToken cancellationToken)
         {
             var graph = new RequirementGraph(manifest.Package.Name);
             var waiting = new Queue<Node>();
@@ -59,7 +60,12 @@ namespace Packmoji.Core.Resolution
 
             while (graph.Overflow is null && waiting.TryDequeue(out var node))
             {
-                if (await source.AskAsync(node.Name, node.Version, cancellationToken) is { } published)
+                if (!allowed.Allows(node.Name))
+                {
+                    // Nothing is asked about it, and so nothing it depends on is ever learned of.
+                    node.Refused = true;
+                }
+                else if (await source.AskAsync(node.Name, node.Version, cancellationToken) is { } published)
                 {
                     node.Published = published;
                     graph.Follow(node, published.Dependencies, waiting);
@@ -161,8 +167,11 @@ namespace Packmoji.Core.Resolution
 
             public SemanticVersion Version => Via.Asked.Requirement.Minimum;
 
-            /// <summary>What the source said of this version. Null when it was never published.</summary>
+            /// <summary>What the source said of this version. Null when it was never published, and when the source was never asked.</summary>
             public PublishedVersion? Published { get; set; }
+
+            /// <summary>Whether the package is of a scope that may not be depended on, so that the source was never asked for it.</summary>
+            public bool Refused { get; set; }
         }
 
         /// <summary>One line of a dependency table, and who wrote it.</summary>

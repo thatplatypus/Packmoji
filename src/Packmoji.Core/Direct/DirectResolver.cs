@@ -1,4 +1,5 @@
 using Packmoji.Core.Diagnostics;
+using Packmoji.Core.Identity;
 using Packmoji.Core.Lockfiles;
 using Packmoji.Core.Manifests;
 using Packmoji.Core.Resolution;
@@ -11,14 +12,19 @@ namespace Packmoji.Core.Direct
     /// </summary>
     public static class DirectResolver
     {
-        public static async Task<ResolveResult> ResolveAsync(Manifest manifest, Lockfile? existing, DirectPackageSource source, CancellationToken cancellationToken)
+        public static Task<ResolveResult> ResolveAsync(Manifest manifest, Lockfile? existing, DirectPackageSource source, CancellationToken cancellationToken) =>
+            ResolveAsync(manifest, existing, source, ScopeLimit.None, cancellationToken);
+
+        /// <param name="allowed">The scopes that may be depended on. A package of another is refused, and is never asked for.</param>
+        public static async Task<ResolveResult> ResolveAsync(Manifest manifest, Lockfile? existing, DirectPackageSource source, ScopeLimit allowed, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(manifest);
             ArgumentNullException.ThrowIfNull(source);
+            ArgumentNullException.ThrowIfNull(allowed);
             while (true)
             {
                 var known = source.KnownRepositories;
-                var result = await Resolver.ResolveAsync(manifest, existing, source, cancellationToken);
+                var result = await Resolver.ResolveAsync(manifest, existing, source, allowed, cancellationToken);
 
                 // A package can be asked for before the package that shows where its owner keeps
                 // things. If something was not found, and a repository was learned of since this

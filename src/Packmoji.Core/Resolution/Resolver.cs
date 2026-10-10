@@ -21,16 +21,40 @@ namespace Packmoji.Core.Resolution
     {
         /// <param name="manifest">The project's manifest, as <see cref="ManifestReader"/> gives one.</param>
         /// <param name="existing">The lockfile the project already has, or null when it has none.</param>
-        public static async Task<ResolveResult> ResolveAsync(Manifest manifest, Lockfile? existing, IPackageSource source, CancellationToken cancellationToken)
+        public static Task<ResolveResult> ResolveAsync(Manifest manifest, Lockfile? existing, IPackageSource source, CancellationToken cancellationToken) =>
+            ResolveAsync(manifest, existing, source, ScopeLimit.None, cancellationToken);
+
+        /// <param name="manifest">The project's manifest, as <see cref="ManifestReader"/> gives one.</param>
+        /// <param name="existing">The lockfile the project already has, or null when it has none.</param>
+        /// <param name="allowed">
+        /// The scopes that may be depended on. A package of another scope stops the resolution
+        /// wherever a requirement leads to it, and the source is never asked for it.
+        /// </param>
+        public static async Task<ResolveResult> ResolveAsync(Manifest manifest, Lockfile? existing, IPackageSource source, ScopeLimit allowed, CancellationToken cancellationToken)
         {
             ArgumentNullException.ThrowIfNull(manifest);
             ArgumentNullException.ThrowIfNull(source);
+            ArgumentNullException.ThrowIfNull(allowed);
 
-            var graph = await RequirementGraph.BuildAsync(manifest, source, cancellationToken);
+            var graph = await RequirementGraph.BuildAsync(manifest, source, allowed, cancellationToken);
             if (graph.Overflow is { } overflow)
             {
                 // Nothing else can be said of a graph that was not looked through to its end.
                 return ResolveResult.Stopped(ResolveDiagnostics.GraphTooLarge(graph, overflow));
+            }
+
+            // Nor of one that holds a package that may not be depended on. What lies behind such a
+            // package was never looked at, so whatever else seems wrong with the graph might not be.
+            // Each is named once: it is the package that is refused, at whatever version.
+            var refused = new DiagnosticList();
+            foreach (var node in graph.Nodes.Where(node => node.Refused).OrderBy(node => node.Name).ThenBy(node => node.Version).DistinctBy(node => node.Name))
+            {
+                refused.Add(ResolveDiagnostics.ScopeNotAllowed(graph, node, allowed));
+            }
+
+            if (refused.Count > 0)
+            {
+                return ResolveResult.From(refused, new DiagnosticList(), null);
             }
 
             var selection = Selection.Of(graph, manifest);
