@@ -21,7 +21,9 @@ What follows was checked against Emojicode 1.0 beta 2 on 2026-10-10, in a contai
 - **`pmj` links,** with every package's archive and every archive of the compiler's own packages in one group, then `-l` for each `native.link`, then `-lm -lpthread`. On macOS the group flags are left out.
 - **A build that a tool stopped ends with status 1.** `pmj run` ends with the status of the program.
 - **What a tool printed goes to standard error,** each line behind the name of what was being built, and made fit to print as a diagnostic's text is. It goes there with `--json` too.
-- **A build holds a lock on the project,** the file `target/.pmj-lock`, and a second build of the same project waits for it.
+- **A build holds a lock on the project,** the file `target/.pmj-lock`, and a second build of the same project waits for it. It waits only for a lock that is held: a project that cannot be written is a problem to report.
+- **Nothing is cleared or written through a symbolic link.** A build stops, with `project.unreadable` and before it writes anything, when `packages`, `target`, `target/obj`, `target/debug` or `target/release`, or the lock, is one.
+- **What is missing is found before anything is compiled:** the compiler, the archiver, the compilers of every native file that is to be compiled, the project's own among them, the headers and the compiler's own packages.
 - **Packages are built one at a time,** each after all it depends on, and by name among those that are ready.
 
 ## Where this leaves the brief
@@ -37,6 +39,7 @@ What follows was checked against Emojicode 1.0 beta 2 on 2026-10-10, in a contai
 - **A flag from a package would be someone else's option given to the compiler of whoever builds it.** `-fplugin` and `-include` are flags.
 - **`m` and `pthread` are the link hints of the compiler's own package `s`,** the only one of the six that has any (seen in a run, in the installed `🏛` files). `pmj` does not read hints out of interface files: a package's manifest says what to link.
 - **The linker of macOS refuses `--start-group`,** and links archives that need each other in either order without it. That was seen with Apple clang 17 on archives of C. No Emojicode compiler runs on the machine it was seen on, so a link of a real program on macOS has not been seen.
+- **A project's directory may have come from someone else, links and all.** A build clears what is at the places it writes to and then writes there. With `target/debug` a link to a directory, and a package named for a folder in that directory, a build would delete the folder. On a disk that does not tell case apart, a package called `documents` is enough for a home directory's `Documents`.
 - **What a tool prints may repeat a line of a package's code,** and the code is someone else's. A character that could drive a terminal is shown as its number.
 
 ## Alternatives
@@ -53,4 +56,5 @@ What follows was checked against Emojicode 1.0 beta 2 on 2026-10-10, in a contai
 - **A package whose native code needs a flag cannot be built.** None is known.
 - **Linking on macOS is untried with a real program.** The compiler is released for macOS on x86-64, and nobody has run this there.
 - **Nothing limits how long a tool may take.** A tool that drives `pmj` sets its own limit, and a `pmj` that is stopped stops the tool it started and waits for it to be gone.
+- **A `target` or a `packages` that someone linked to another disk on purpose is refused,** and there is no way round it yet. Letting one through later, by a setting of the person's own, would break nothing.
 - **A program that ends with 1, 2, 70 or 130 cannot be told from `pmj run` itself ending so.** That is what passing a program's status on means.
