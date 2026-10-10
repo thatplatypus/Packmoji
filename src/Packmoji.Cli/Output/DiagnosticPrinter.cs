@@ -1,4 +1,5 @@
 using Packmoji.Core.Diagnostics;
+using Packmoji.Core.Reports;
 
 namespace Packmoji.Cli.Output
 {
@@ -32,9 +33,18 @@ namespace Packmoji.Cli.Output
         }
 
         /// <summary>Prints what stopped a command where problems go, and gives the status a command ends with when it has reported one.</summary>
-        public static int Report(PmjHost host, IReadOnlyList<Diagnostic> diagnostics, int omitted = 0)
+        /// <param name="json">Whether the command was asked to answer a tool. Its answer is then one object on the output, with the problems in it, and nothing is printed for a person.</param>
+        public static int Report(PmjHost host, IReadOnlyList<Diagnostic> diagnostics, int omitted = 0, bool json = false)
         {
-            Print(host.Error, diagnostics, omitted);
+            if (json)
+            {
+                host.Out.Write(ProblemReport.Json(diagnostics, omitted));
+            }
+            else
+            {
+                Print(host.Error, diagnostics, omitted);
+            }
+
             return ExitStatus.Problem;
         }
 

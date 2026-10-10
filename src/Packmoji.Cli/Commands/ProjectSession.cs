@@ -146,22 +146,47 @@ namespace Packmoji.Cli.Commands
             return ExitStatus.Success;
         }
 
+        /// <summary>
+        /// Resolves a manifest and says what would follow, and writes nothing to the project. What it
+        /// has to download to find out stays in the cache, where it does no harm.
+        /// </summary>
+        public async Task<int> PreviewAsync(Manifest manifest, DirectPackageSource source, string? said, CancellationToken cancellationToken)
+        {
+            var result = await DirectResolver.ResolveAsync(manifest, Lockfile, source, cancellationToken);
+            DiagnosticPrinter.Print(Host.Error, result.Diagnostics, result.OmittedDiagnostics);
+            if (!result.Succeeded)
+            {
+                return ExitStatus.Problem;
+            }
+
+            if (said is not null)
+            {
+                Host.Out.WriteLine(said);
+            }
+
+            Host.Out.Write(Summary(Lockfile, result.Graph.ToLockfile(manifest), done: false));
+            Host.Out.WriteLine("Nothing was written.");
+            return ExitStatus.Success;
+        }
+
         /// <summary>What a new lockfile holds, said against the one before it. Each line ends with the host's line ending.</summary>
-        public static string Summary(Lockfile? before, Lockfile after)
+        /// <param name="done">Whether the new lockfile has been written, as against only worked out.</param>
+        public static string Summary(Lockfile? before, Lockfile after, bool done = true)
         {
             var changes = LockChanges.Between(before, after);
+            var count = Count(after.Packages.Count);
             var lines = changes.Count > 0
-                ? [$"{LockfileReader.FileName} now holds {Count(after.Packages.Count)}:", .. changes.Select(change => "  " + change)]
+                ? [$"{LockfileReader.FileName} {(done ? "now holds" : "would hold")} {count}:", .. changes.Select(change => "  " + change)]
                 : new List<string>
                 {
                     before is null
-                        ? $"{LockfileReader.FileName} holds no package: the project depends on none."
-                        : $"{LockfileReader.FileName} holds the same {Count(after.Packages.Count)} as before.",
+                        ? $"{LockfileReader.FileName} {(done ? "holds" : "would hold")} no package: the project depends on none."
+                        : $"{LockfileReader.FileName} {(done ? "holds" : "would hold")} the same {count} as before.",
                 };
             return string.Concat(lines.Select(line => line + Environment.NewLine));
         }
 
-        private static string Count(int packages) => packages switch { 0 => "no package", 1 => "1 package", _ => $"{packages} packages" };
+        public static string Count(int packages) => packages switch { 0 => "no package", 1 => "1 package", _ => $"{packages} packages" };
 
         // Every archive of a graph is in the cache by now: the source keeps what it downloads, and
         // what it did not download it took from the cache. Here each is unpacked beside itself.

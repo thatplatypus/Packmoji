@@ -122,6 +122,58 @@ namespace Packmoji.Cli.Cache
             }
         }
 
+        /// <summary>
+        /// Every way in which what the cache holds of a package is not what it should be: an archive
+        /// that is not the bytes its name says, and unpacked files that are not the files of the
+        /// archive beside them. Nothing is changed. None when the cache holds nothing of the package.
+        /// </summary>
+        public IReadOnlyList<Diagnostic> Examine(PackageName name, SemanticVersion version, Sha256Digest digest)
+        {
+            var path = ArchivePath(name, version, digest);
+            var directory = DirectoryPath(name, version, digest);
+            var what = $"\"{name}\" {version}";
+            var problems = new List<Diagnostic>();
+            try
+            {
+                byte[]? sound = null;
+                var archive = new FileInfo(path);
+                if (archive.Exists && archive.Length > PackageArchive.MaxBytes)
+                {
+                    problems.Add(Spoiled(what, path, $"\"{path}\" is {archive.Length} bytes, which is more than an archive may be"));
+                }
+                else if (archive.Exists)
+                {
+                    var bytes = File.ReadAllBytes(path);
+                    var actual = Sha256Digest.Of(bytes);
+                    if (actual == digest)
+                    {
+                        sound = bytes;
+                    }
+                    else
+                    {
+                        problems.Add(Spoiled(what, path, $"\"{path}\" is kept as the archive with the digest {digest}, and its bytes have the digest {actual}"));
+                    }
+                }
+
+                if (Directory.Exists(directory) && problems.Count == 0)
+                {
+                    var difference = sound is null
+                        ? "the archive they were unpacked from is no longer beside them, so there is nothing to hold them to"
+                        : PackageArchive.Read(sound) is { Succeeded: true } files ? Difference(directory, files.Value) : null;
+                    if (difference is not null)
+                    {
+                        problems.Add(Spoiled(what, directory, $"the files unpacked in \"{directory}\" cannot be trusted: {difference}"));
+                    }
+                }
+            }
+            catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
+            {
+                problems.Add(Unusable(path, "read", failure));
+            }
+
+            return problems;
+        }
+
         public string DirectoryPath(PackageName name, SemanticVersion version, Sha256Digest digest) =>
             Path.Combine(_root, name.Scope, name.Name, version.ToString(), digest.Hex);
 
@@ -140,6 +192,35 @@ namespace Packmoji.Cli.Cache
             var bytes = await File.ReadAllBytesAsync(path, cancellationToken);
             return Sha256Digest.Of(bytes) == digest ? bytes : null;
         }
+
+        // The first way in which a directory is not exactly the files given, or null when it is exactly them.
+        // Each file is looked for by its own path, so that a disk which spells a name another way still finds it.
+        private static string? Difference(string directory, IReadOnlyList<ArchiveFile> files)
+        {
+            foreach (var file in files)
+            {
+                var unpacked = new FileInfo(Path.Combine(directory, file.Path.Value.Replace('/', Path.DirectorySeparatorChar)));
+                if (!unpacked.Exists)
+                {
+                    return $"\"{file.Path}\" is missing";
+                }
+
+                if (unpacked.LinkTarget is not null || unpacked.Length != file.Content.Length || !File.ReadAllBytes(unpacked.FullName).AsSpan().SequenceEqual(file.Content.Span))
+                {
+                    return $"\"{file.Path}\" is not the file the archive holds";
+                }
+            }
+
+            var found = FileTree.List(directory).Count;
+            return found == files.Count ? null : $"there are {found} files there, and the archive holds {files.Count}";
+        }
+
+        private static Diagnostic Spoiled(string what, string path, string reason) =>
+            new(
+                DiagnosticCodes.CacheUnusable,
+                $"The cache's copy of {what} is not what it should be.",
+                reason,
+                $"delete \"{path}\", and run pmj install, which fetches the package again");
 
         private static void Discard(string path)
         {

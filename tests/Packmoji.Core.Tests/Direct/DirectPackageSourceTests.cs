@@ -315,6 +315,21 @@ namespace Packmoji.Core.Tests.Direct
         }
 
         [Fact]
+        public async Task A_repository_is_asked_for_its_releases_once_however_many_of_its_packages_are_listed()
+        {
+            var host = Grapevine();
+            var source = new DirectPackageSource(host, new MemoryAssetStore(), Project.Named("@thatplatypus/grapevine", [], []), null);
+
+            foreach (var name in new[] { "@thatplatypus/grapevine", "@thatplatypus/crypto", "@thatplatypus/deflate", "@thatplatypus/crypto" })
+            {
+                (await source.ListVersionsAsync(Sample.Name(name), TestContext.Current.CancellationToken)).ShouldNotBeNull();
+            }
+
+            // The API answers sixty times an hour to someone it does not know, so nothing is asked twice.
+            host.Listings.ShouldBe(["github.com/thatplatypus/grapevine", "github.com/thatplatypus/crypto", "github.com/thatplatypus/deflate"]);
+        }
+
+        [Fact]
         public async Task A_package_with_no_release_anywhere_pmj_looks_has_no_versions()
         {
             var source = new DirectPackageSource(Grapevine(), new MemoryAssetStore(), Outsider, null);

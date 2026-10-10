@@ -35,6 +35,14 @@ namespace Packmoji.Cli.Commands
                 $"pmj {command} takes a package by its name alone, and this has a requirement after it",
                 $"run pmj {command} {name}");
 
+        /// <summary>For a command that reads what is locked, and finds no lockfile, or one the manifest has moved on from.</summary>
+        public static Diagnostic NotInstalled(bool missing) =>
+            new(
+                DiagnosticCodes.LockOutOfDate,
+                missing ? $"There is no {LockfileReader.FileName}." : $"{LockfileReader.FileName} no longer answers what {ManifestReader.FileName} asks for.",
+                "this command reads what is locked, and chooses nothing itself",
+                $"run pmj install, which writes {LockfileReader.FileName}");
+
         /// <summary>For a command that is forbidden to write the lockfile, and finds that it would have to.</summary>
         /// <param name="missing">Whether there is no lockfile at all, as against one the manifest has moved on from.</param>
         public static Diagnostic LockWouldChange(bool missing) =>

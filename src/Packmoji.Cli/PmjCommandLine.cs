@@ -28,7 +28,10 @@ namespace Packmoji.Cli
                 Add(host),
                 Remove(host),
                 Install(host),
+                Update(host),
+                Tree(host),
                 Pack(host),
+                Verify(host),
             };
 
             // Given no command there is nothing to do, and saying nothing would look like success.
@@ -139,6 +142,39 @@ namespace Packmoji.Cli
             command.SetAction((parseResult, cancellationToken) => InstallCommand.RunAsync(host, parseResult.GetValue(locked), cancellationToken));
             return command;
         }
+
+        private static Command Update(PmjHost host)
+        {
+            var packages = new Argument<string[]>("packages")
+            {
+                Arity = ArgumentArity.ZeroOrMore,
+                Description = "The packages whose requirements to raise, each as @scope/name. Every dependency, when none is named.",
+            };
+            var dryRun = new Option<bool>("--dry-run") { Description = "Say what would change, and write nothing." };
+            var command = new Command("update", "Raise what packmoji.json asks for to the latest version on each requirement's line, and lock what that gives.") { packages, dryRun };
+            command.SetAction((parseResult, cancellationToken) =>
+                UpdateCommand.RunAsync(host, parseResult.GetValue(packages) ?? [], parseResult.GetValue(dryRun), cancellationToken));
+            return command;
+        }
+
+        private static Command Tree(PmjHost host)
+        {
+            var json = Json();
+            var command = new Command("tree", "Show the packages that packmoji.lock holds, and what each depends on.") { json };
+            command.SetAction(parseResult => TreeCommand.Run(host, parseResult.GetValue(json)));
+            return command;
+        }
+
+        private static Command Verify(PmjHost host)
+        {
+            var json = Json();
+            var command = new Command("verify", "Download every locked package again, and hold it and the cache's copy to packmoji.lock.") { json };
+            command.SetAction((parseResult, cancellationToken) => VerifyCommand.RunAsync(host, parseResult.GetValue(json), cancellationToken));
+            return command;
+        }
+
+        private static Option<bool> Json() =>
+            new("--json") { Description = "Answer a tool: one JSON object on standard output, with what was found and any problems in it." };
 
         private static Command Pack(PmjHost host)
         {

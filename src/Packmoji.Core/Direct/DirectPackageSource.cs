@@ -33,6 +33,7 @@ namespace Packmoji.Core.Direct
         private readonly Dictionary<(PackageName Name, SemanticVersion Version), PublishedVersion> _found = [];
         private readonly Dictionary<(PackageName Name, SemanticVersion Version), List<RepositoryRef>> _lookedIn = [];
         private readonly Dictionary<PackageName, List<RepositoryRef>> _listedIn = [];
+        private readonly Dictionary<string, IReadOnlyList<ReleaseInfo>> _releases = new(StringComparer.Ordinal);
 
         /// <param name="project">The project's manifest, for the repository the project itself is in.</param>
         /// <param name="lockfile">The project's lockfile when it has one, for where its packages live and for the digests that the cache may answer for.</param>
@@ -116,7 +117,14 @@ namespace Packmoji.Core.Direct
             foreach (var repository in Candidates(name).ToList())
             {
                 listedIn.Add(repository);
-                var versions = VersionCatalog.Of(name, await _host.ListAsync(repository, cancellationToken));
+                // One repository can hold many packages, and its releases are one list for all of
+                // them, so the list is asked for once.
+                if (!_releases.TryGetValue(repository.ToString(), out var releases))
+                {
+                    _releases[repository.ToString()] = releases = await _host.ListAsync(repository, cancellationToken);
+                }
+
+                var versions = VersionCatalog.Of(name, releases);
                 if (versions.Count > 0)
                 {
                     Learn(repository);
