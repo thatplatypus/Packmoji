@@ -14,7 +14,7 @@ namespace Packmoji.Core.Tests.Diagnostics
             .ToArray();
 
         [Fact]
-        public void There_are_the_48_codes_of_the_two_designs() => Codes.Length.ShouldBe(48);
+        public void There_are_the_66_codes_of_the_three_designs() => Codes.Length.ShouldBe(66);
 
         [Fact]
         public void No_two_codes_are_the_same() => Codes.Distinct(StringComparer.Ordinal).Count().ShouldBe(Codes.Length);
@@ -59,6 +59,54 @@ namespace Packmoji.Core.Tests.Diagnostics
                 "resolve.name-collision",
                 "resolve.cycle",
                 "resolve.graph-too-large",
+            ]);
+        }
+
+        [Fact]
+        public void The_commands_brought_eighteen_and_they_are_spelled_as_their_design_spells_them()
+        {
+            string[] added =
+            [
+                DiagnosticCodes.ProjectNotFound,
+                DiagnosticCodes.ProjectExists,
+                DiagnosticCodes.ProjectUnreadable,
+                DiagnosticCodes.DependencyExists,
+                DiagnosticCodes.DependencyNotFound,
+                DiagnosticCodes.PackageNotFound,
+                DiagnosticCodes.VersionNoneReleased,
+                DiagnosticCodes.ReleaseInvalid,
+                DiagnosticCodes.ArchiveInvalid,
+                DiagnosticCodes.PackNothing,
+                DiagnosticCodes.PackUnportable,
+                DiagnosticCodes.LockOutOfDate,
+                DiagnosticCodes.AttestationUnverifiable,
+                DiagnosticCodes.GitHubUnreachable,
+                DiagnosticCodes.GitHubRateLimited,
+                DiagnosticCodes.CacheUnusable,
+                DiagnosticCodes.CacheMismatch,
+                DiagnosticCodes.ConfigInvalid,
+            ];
+
+            added.ShouldBe(
+            [
+                "project.not-found",
+                "project.exists",
+                "project.unreadable",
+                "dependency.exists",
+                "dependency.not-found",
+                "package.not-found",
+                "version.none-released",
+                "release.invalid",
+                "archive.invalid",
+                "pack.nothing",
+                "pack.unportable",
+                "lock.out-of-date",
+                "attestation.unverifiable",
+                "github.unreachable",
+                "github.rate-limited",
+                "cache.unusable",
+                "cache.mismatch",
+                "config.invalid",
             ]);
         }
     }

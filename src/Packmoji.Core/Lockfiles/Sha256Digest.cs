@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Security.Cryptography;
 using Packmoji.Core.Diagnostics;
 
 namespace Packmoji.Core.Lockfiles
@@ -19,6 +20,9 @@ namespace Packmoji.Core.Lockfiles
         public string Hex { get; }
 
         public override string ToString() => Hex;
+
+        /// <summary>The digest of some bytes, which is how an archive is known to be the one that was locked.</summary>
+        public static Sha256Digest Of(ReadOnlySpan<byte> bytes) => new(Convert.ToHexStringLower(SHA256.HashData(bytes)));
 
         public static bool TryParse(string text, [NotNullWhen(true)] out Sha256Digest? digest, [NotNullWhen(false)] out Diagnostic? error)
         {

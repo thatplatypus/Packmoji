@@ -21,4 +21,11 @@
     <ProjectReference Include="..\..\src\Packmoji.Cli\Packmoji.Cli.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The guides travel with the tests, so that a test can hold what they show to what pmj does.
+         A test that finds no guide fails, and says which. -->
+    <None Include="..\..\docs\cli.md" Link="docs\cli.md" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\docs\cli.md')" />
+    <None Include="..\..\docs\publishing.md" Link="docs\publishing.md" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\docs\publishing.md')" />
+  </ItemGroup>
+
 </Project>

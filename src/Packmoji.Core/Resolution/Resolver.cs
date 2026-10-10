@@ -50,7 +50,7 @@ namespace Packmoji.Core.Resolution
             {
                 errors.Add(() => locked.Contains((node.Name, node.Version))
                     ? ResolveDiagnostics.VersionGone(graph, node)
-                    : ResolveDiagnostics.VersionMissing(graph, node));
+                    : (source as IExplainsMissing)?.Missing(node.Name, node.Version, graph.ChainTo(node.Via)) ?? ResolveDiagnostics.VersionMissing(graph, node));
             }
 
             foreach (var (node, published) in selection.Used.Where(use => use.Published.Status == VersionStatus.Yanked))

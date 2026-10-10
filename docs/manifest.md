@@ -88,7 +88,7 @@ Only `package` and its first four keys are required. This is a whole manifest:
 | `native.includeDirs` | array of strings | no | Directories of the package's own headers |
 | `native.link` | array of strings | no | Libraries to link, each named as the linker's `-l` would name it |
 | `policy` | object | no | |
-| `policy.requireAttestation` | boolean | no | Whether every dependency must have a verified build attestation. Default `false` |
+| `policy.requireAttestation` | boolean | no | Whether every dependency must have a verified build attestation. Default `false`. `pmj` cannot verify one yet, so a project that sets it to `true` cannot install: see `attestation.unverifiable` |
 
 An unknown key is an error at every level, and the error lists the keys that are allowed there. The order of keys does not matter when a manifest is read. When `pmj` writes one, the keys are in the order of this table and the dependencies are sorted by name.
 
@@ -121,9 +121,9 @@ A path is written with `/` between its parts and stays inside the package.
 - No part is `.` or `..`.
 - No part begins with `-` or `@`, which a compiler would take for an option or for a file of options.
 - No part begins or ends with a space, and none ends with a dot. Some platforms drop both.
-- There is no `\`, no `:` and no control character.
+- There is no `\`, no `:` and no control character, and none of `<`, `>`, `"` and `|`, which Windows does not allow in a name.
 - There is no character that cannot be seen or that reorders text, such as a zero width space or a right-to-left override. The joiner and the tags that emoji are built with are the exception, so a file may be named with any emoji.
-- A path is at most 255 characters.
+- A path is at most 255 characters, and no part of it is more than 255 bytes in UTF-8, which is the most a name can be on most disks.
 
 A pattern is a path that may also hold these:
 
@@ -351,7 +351,7 @@ The codes that begin with `resolve.`, and `lock.mismatch`, are raised when `pmj`
 | `list.empty` | `build.sources` is present and empty |
 | `list.duplicate` | An array holds the same entry twice |
 | `entry.suffix` | `build.entry` does not end in `.emojic` or `.🍇` |
-| `entry.not-found` | No entry is named and neither conventional file exists |
+| `entry.not-found` | No entry is named and neither conventional file exists, or `pmj pack` did not find the entry that is named |
 | `entry.ambiguous` | No entry is named and both conventional files exist |
 | `lock.unsupported-version` | A lockfile's `version` is not `1` |
 | `lock.duplicate-package` | A lockfile has two entries for one package |
@@ -373,3 +373,21 @@ The codes that begin with `resolve.`, and `lock.mismatch`, are raised when `pmj`
 | `resolve.name-collision` | Two packages of one build, or one of them and the project itself, share a bare name |
 | `resolve.cycle` | Packages depend on one another in a circle, in a graph being resolved or in a lockfile being read |
 | `resolve.graph-too-large` | A graph of dependencies has more than 10,000 versions in it, or would make a lockfile over its limit of 4 MiB |
+| `project.not-found` | A command that works on a project was run where there is no `packmoji.json` |
+| `project.exists` | `pmj new` or `pmj init` would write over a project that is there |
+| `project.unreadable` | A project's file could not be read or written |
+| `dependency.exists` | `pmj add` was given a package the manifest already has, and no requirement to change it to |
+| `dependency.not-found` | `pmj remove` or `pmj update` named a package the manifest does not have |
+| `package.not-found` | No release of a package is in any repository `pmj` looked in |
+| `version.none-released` | Every released version of a package is a pre-release, and none was asked for by name |
+| `release.invalid` | A release is there, and its archive is not that package at that version in that repository |
+| `archive.invalid` | An archive is not the bytes `pmj pack` writes, is over a limit, or holds two files that the disk it is unpacked on keeps as one |
+| `pack.nothing` | `pmj pack` would write an archive without the package's entry file, because no pattern of the manifest selects it |
+| `pack.unportable` | A file to be packed has a name that another platform could not hold, or is a symbolic link |
+| `lock.out-of-date` | The lockfile is missing or no longer answers the manifest, where a command needs one that does |
+| `attestation.unverifiable` | A project requires attestation, and `pmj` cannot verify one |
+| `github.unreachable` | GitHub could not be reached, refused a request for a reason other than its limit, or answered with something `pmj` did not expect |
+| `github.rate-limited` | GitHub's API refused a request because of its limit on requests |
+| `cache.unusable` | The cache could not be read or written |
+| `cache.mismatch` | `pmj verify` found that what the cache holds of a package is not what `packmoji.lock` holds |
+| `config.invalid` | Something `pmj` was told through its environment is not something it can use |

@@ -2,7 +2,7 @@
 
 `pmj` turns what your `packmoji.json` asks for into the exact packages your build uses, and records them in `packmoji.lock`. This page says how it chooses, what stops it, and what to do then.
 
-The rule is in `Packmoji.Core` today. The `pmj` commands that use it come with the next milestone.
+The commands that resolve are `pmj add`, `remove`, `install` and `update`. [The pmj command line](cli.md) says what each does.
 
 ## The rule
 

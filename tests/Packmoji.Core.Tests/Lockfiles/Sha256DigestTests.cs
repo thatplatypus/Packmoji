@@ -1,3 +1,4 @@
+using System.Text;
 using Packmoji.Core.Diagnostics;
 using Packmoji.Core.Lockfiles;
 using Packmoji.Core.Tests.TestSupport;
@@ -50,6 +51,23 @@ namespace Packmoji.Core.Tests.Lockfiles
         {
             Sample.Sha('a').ShouldBe(Sample.Sha('a'));
             Sample.Sha('a').ShouldNotBe(Sample.Sha('b'));
+        }
+
+        [Fact]
+        public void The_digest_of_some_bytes_is_their_sha_256_in_lowercase()
+        {
+            // The two examples every description of SHA-256 gives.
+            Sha256Digest.Of([]).Hex.ShouldBe("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+            Sha256Digest.Of(Encoding.ASCII.GetBytes("abc")).Hex.ShouldBe("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");
+        }
+
+        [Fact]
+        public void A_digest_made_from_bytes_is_the_digest_read_from_its_text()
+        {
+            var made = Sha256Digest.Of(Encoding.ASCII.GetBytes("abc"));
+
+            Sha256Digest.TryParse(made.Hex, out var read, out _).ShouldBeTrue();
+            read.ShouldBe(made);
         }
     }
 }

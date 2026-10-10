@@ -10,6 +10,9 @@ namespace Packmoji.Core.Manifests
     {
         public const int MaxLength = 255;
 
+        /// <summary>The most bytes one part of a path may be, in UTF-8: what a name can be on most disks.</summary>
+        public const int MaxPartBytes = 255;
+
         /// <summary>
         /// Says why a text is not a path, or not a glob pattern when <paramref name="glob"/> is set.
         /// Null when it is one.
@@ -36,6 +39,11 @@ namespace Packmoji.Core.Manifests
                 if (c == ':')
                 {
                     return "it holds a colon";
+                }
+
+                if (c is '<' or '>' or '"' or '|')
+                {
+                    return "it holds a character that Windows does not allow in a name";
                 }
 
                 if (c is '[' or ']' or '{' or '}')
@@ -74,6 +82,11 @@ namespace Packmoji.Core.Manifests
                 if (part.Contains("**", StringComparison.Ordinal) && part != "**")
                 {
                     return "** must be a whole part of the pattern, as in src/**/x";
+                }
+
+                if (System.Text.Encoding.UTF8.GetByteCount(part) > MaxPartBytes)
+                {
+                    return $"a part of it is longer than {MaxPartBytes} bytes, which is more than most disks hold in one name";
                 }
 
                 if (part[0] is '-' or '@')
