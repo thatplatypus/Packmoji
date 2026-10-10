@@ -33,5 +33,8 @@ namespace Packmoji.Core.Diagnostics
             get => _fix;
             init => _fix = Printable.Text(value);
         }
+
+        /// <summary>A problem is an error unless it is said to be a warning, so that none becomes one by being forgotten.</summary>
+        public DiagnosticSeverity Severity { get; init; } = DiagnosticSeverity.Error;
     }
 }

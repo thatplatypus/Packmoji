@@ -14,16 +14,36 @@ namespace Packmoji.Core.Manifests
     {
         public const string FileName = "packmoji.json";
 
+        /// <summary>
+        /// The most bytes a manifest may be: 1 MiB, where a real one is a few hundred bytes. It is
+        /// public so that whatever takes a manifest from a disk or an archive can refuse it by its
+        /// length, before reading it at all.
+        /// </summary>
+        public const int MaxBytes = 1_048_576;
+
         private const string ConflictFix = "resolve the conflict by hand, keeping one side of each marked region";
 
         public static ReadResult<Manifest> Read(string text, string file = FileName)
         {
             ArgumentNullException.ThrowIfNull(text);
+
+            // A text is never fewer bytes than it has characters, so one that is far too long is
+            // refused without being counted, and none that is too long is ever copied.
+            if (text.Length > MaxBytes || Encoding.UTF8.GetByteCount(text) > MaxBytes)
+            {
+                return TooLarge(file);
+            }
+
             return Read(Encoding.UTF8.GetBytes(text), file);
         }
 
         public static ReadResult<Manifest> Read(ReadOnlyMemory<byte> utf8, string file = FileName)
         {
+            if (utf8.Length > MaxBytes)
+            {
+                return TooLarge(file);
+            }
+
             var diagnostics = new DiagnosticList();
             var tree = JsonTreeReader.Read(utf8, file, ConflictFix, diagnostics);
             if (tree is null)
@@ -63,6 +83,18 @@ namespace Packmoji.Core.Manifests
                 native,
                 policy));
         }
+
+        private static ReadResult<Manifest> TooLarge(string file) =>
+            ReadResult<Manifest>.Failure(
+                [
+                    new Diagnostic(
+                        DiagnosticCodes.FileTooLarge,
+                        $"\"{file}\" is too large to be a manifest.",
+                        $"a manifest is at most {MaxBytes} bytes, which is 1 MiB, and a real one is a few hundred",
+                        "check that this is the file you meant: a manifest holds a package's name, its version and what it depends on",
+                        new SourceLocation(file, 1, 1)),
+                ],
+                0);
 
         private static PackageSection? ReadPackage(JsonItem? item, DiagnosticList diagnostics)
         {

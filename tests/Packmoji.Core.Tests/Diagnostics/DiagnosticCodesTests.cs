@@ -14,7 +14,7 @@ namespace Packmoji.Core.Tests.Diagnostics
             .ToArray();
 
         [Fact]
-        public void There_are_the_38_codes_of_the_design() => Codes.Length.ShouldBe(38);
+        public void There_are_the_48_codes_of_the_two_designs() => Codes.Length.ShouldBe(48);
 
         [Fact]
         public void No_two_codes_are_the_same() => Codes.Distinct(StringComparer.Ordinal).Count().ShouldBe(Codes.Length);
@@ -27,6 +27,39 @@ namespace Packmoji.Core.Tests.Diagnostics
             {
                 shape.IsMatch(code).ShouldBeTrue(code);
             }
+        }
+
+        // A code is public and tools match on it, so the spelling of each is held here as well as chosen there.
+        [Fact]
+        public void The_resolver_brought_ten_and_they_are_spelled_as_its_design_spells_them()
+        {
+            string[] added =
+            [
+                DiagnosticCodes.FileTooLarge,
+                DiagnosticCodes.LockMismatch,
+                DiagnosticCodes.ResolveVersionMissing,
+                DiagnosticCodes.ResolveYanked,
+                DiagnosticCodes.ResolveYankedLocked,
+                DiagnosticCodes.ResolveQuarantined,
+                DiagnosticCodes.ResolveLineConflict,
+                DiagnosticCodes.ResolveNameCollision,
+                DiagnosticCodes.ResolveCycle,
+                DiagnosticCodes.ResolveGraphTooLarge,
+            ];
+
+            added.ShouldBe(
+            [
+                "file.too-large",
+                "lock.mismatch",
+                "resolve.version-missing",
+                "resolve.yanked",
+                "resolve.yanked-locked",
+                "resolve.quarantined",
+                "resolve.line-conflict",
+                "resolve.name-collision",
+                "resolve.cycle",
+                "resolve.graph-too-large",
+            ]);
         }
     }
 }
