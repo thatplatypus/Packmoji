@@ -34,7 +34,7 @@ namespace Packmoji.Cli.Building
                 {
                     return new ProjectLock(new FileStream(Path.Combine(target, FileName), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None));
                 }
-                catch (IOException)
+                catch (IOException) when (said || CanBeWrittenIn(target))
                 {
                     if (!said)
                     {
@@ -44,6 +44,25 @@ namespace Packmoji.Cli.Building
 
                     await Task.Delay(100, cancellationToken);
                 }
+            }
+        }
+
+        // Opening the lock fails in the same way when another pmj holds it and when nothing can be
+        // written here at all, as on a disk that is read-only. Only the first is worth waiting
+        // for, and the second would be waited for without end. A file made beside the lock tells
+        // them apart, and what could not be written is then the problem that is reported.
+        private static bool CanBeWrittenIn(string target)
+        {
+            var beside = Path.Combine(target, FileName + ".tmp-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                File.WriteAllBytes(beside, []);
+                File.Delete(beside);
+                return true;
+            }
+            catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
+            {
+                return false;
             }
         }
 
