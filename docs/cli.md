@@ -6,6 +6,45 @@ Packages are found on GitHub directly, as releases of their repositories. There 
 
 `pmj` builds with the Emojicode compiler, which it does not bring with it. [How pmj builds](building.md) says what a build needs and what it does.
 
+## Getting pmj
+
+A release of Packmoji on GitHub carries `pmj` for three machines, and one file of digests:
+
+| File | Holds |
+|---|---|
+| `pmj-<version>-linux-x64` | `pmj` for Linux on x86-64 with glibc 2.35 or newer, which is Ubuntu 22.04 and what came after it |
+| `pmj-<version>-osx-arm64` | `pmj` for macOS on Apple silicon |
+| `pmj-<version>-win-x64.exe` | `pmj` for Windows on x86-64 |
+| `pmj-<version>.sha256` | The SHA-256 of each of the three, a line for each, as `sha256sum` writes and checks them |
+
+Each of the first three is the program itself: one file, with nothing to unpack, which needs no .NET. Fetch the one for your machine and the digests, hold the program to its digest, and mark it as a program:
+
+```sh
+version=0.1.0
+machine=linux-x64
+from=https://github.com/thatplatypus/Packmoji/releases/download/v$version
+
+curl -fsSLO "$from/pmj-$version-$machine"
+curl -fsSLO "$from/pmj-$version.sha256"
+sha256sum --check --ignore-missing "pmj-$version.sha256"
+chmod +x "pmj-$version-$machine"
+```
+
+Then put it, under the name `pmj`, in a directory of your `PATH`.
+
+- **On macOS the machine is `osx-arm64`,** and the digest is checked with `shasum -a 256 --check --ignore-missing`.
+- **On Windows the file is `pmj-<version>-win-x64.exe`,** and there is nothing to mark. PowerShell holds it to its digest so:
+
+```powershell
+$version = "0.1.0"
+$expected = (Select-String -Path "pmj-$version.sha256" -Pattern "win-x64\.exe$").Line.Split(" ")[0]
+if ((Get-FileHash "pmj-$version-win-x64.exe" -Algorithm SHA256).Hash -ne $expected) { throw "this is not the program the release holds" }
+```
+
+- **A digest that comes with a program shows that the program arrived whole, and not who made it.** A tool that fetches `pmj` keeps the digest it expects with its own code, and holds the program to that.
+- **No program is signed.** macOS holds back a program that a browser fetched, until the mark the browser left on it is taken away: `xattr -d com.apple.quarantine pmj`. `curl` leaves no such mark.
+- **What `pmj` does on Windows is less than elsewhere:** see [pmj on Windows](#pmj-on-windows).
+
 ## A first project
 
 ```
@@ -239,6 +278,7 @@ error[package.not-found]: No release of "@thatplatypus/crypto" was found.
 
 - **Every code is listed** in [the manifest reference](manifest.md#diagnostics), and those of a resolution are explained in [How pmj chooses versions](resolution.md).
 - **There is no color and no prompt.** `pmj` never waits for an answer, so it behaves the same in a terminal and in CI.
+- **Through a pipe or into a file, it is UTF-8 on every machine,** whatever characters the machine calls its own: that is where a tool reads it, and the name of a source file is not ASCII. What goes to a console is written as the console asks.
 
 ### For a tool: --json
 
@@ -556,10 +596,23 @@ A package is compiled once for the whole machine, and what was built is kept bes
 
 [How pmj builds](building.md#once-for-the-whole-machine) says exactly what a key holds.
 
+## pmj on Windows
+
+On Windows `pmj` manages packages, and builds nothing.
+
+- **`new`, `init`, `add`, `remove`, `install`, `update`, `tree`, `pack` and `verify` do there what they do everywhere,** with `--json` and with `PACKMOJI_SCOPES`.
+- **`build` and `run` end with `compiler.not-found`.** No Emojicode compiler runs on Windows, and `pmj` brings none.
+- **The two files of a project are the same bytes there as anywhere.** `packmoji.json` and `packmoji.lock` are written with `/` in every path and a line feed at the end of every line.
+- **What `pmj` prints for a person ends its lines as Windows does. A JSON answer does not:** its lines end with a line feed on every machine.
+- **`pmj pack` packs the files as they are on the disk.** Git on Windows can check a file out with other line ends than the repository holds, and a package packed from such a checkout is not the bytes that another machine would pack. A `.gitattributes` with `* text=auto eol=lf` keeps the files the same everywhere.
+
 ## What pmj does not do yet
 
 | Not yet | Comes with |
 |---|---|
+| `build` and `run` on Windows | An Emojicode compiler that runs there |
+| `pmj` for other machines: Linux on ARM, macOS on Intel, Windows on ARM | Later |
+| A signed program, and an installer | Later |
 | `test` | Later. Emojicode has no way of its own to say what a package's tests are, and one has to be chosen first |
 | Building several packages at once, and compiling a project only when it has changed | Later |
 | A registry, and `search` and `info` | The registry |

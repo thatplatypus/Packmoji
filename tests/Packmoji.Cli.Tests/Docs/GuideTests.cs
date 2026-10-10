@@ -53,6 +53,22 @@ namespace Packmoji.Cli.Tests.Docs
             }
         }
 
+        // A command that is added has to be said to work there or not: nothing of it is tried on Windows until it is.
+        [Fact]
+        public void The_guide_says_of_every_command_what_it_does_on_Windows()
+        {
+            using var sandbox = new Sandbox();
+            var guide = Guide("cli.md");
+            var start = guide.IndexOf("\n## pmj on Windows\n", StringComparison.Ordinal);
+            start.ShouldBeGreaterThan(0, "the guide has no section on Windows");
+            var section = guide[start..guide.IndexOf("\n## ", start + 1, StringComparison.Ordinal)];
+
+            foreach (var command in PmjCommandLine.Build(sandbox.Host()).Subcommands)
+            {
+                section.ShouldContain($"`{command.Name}`");
+            }
+        }
+
         [Fact]
         public void Every_way_pmj_ends_is_in_the_guide_with_its_number()
         {

@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 using Packmoji.Cli.Building;
 using Shouldly;
 using Xunit;
@@ -42,6 +43,19 @@ namespace Packmoji.Cli.Tests.Scripts
         }
 
         private static string Digest(string content) => Convert.ToHexStringLower(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(content)));
+
+        [Fact]
+        public async Task The_guide_names_the_assets_of_a_release_as_the_script_names_them()
+        {
+            BuildAllThree();
+
+            await RunAsync();
+
+            var guide = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "docs", "cli.md"));
+            var named = Regex.Matches(guide, @"^\| `(pmj-<version>[^`]*)` \|", RegexOptions.Multiline).Select(match => match.Groups[1].Value);
+            named.Order(StringComparer.Ordinal).ShouldBe(
+                Directory.GetFiles(Assets).Select(file => Path.GetFileName(file).Replace(PmjHost.Version, "<version>", StringComparison.Ordinal)).Order(StringComparer.Ordinal));
+        }
 
         [Fact]
         public async Task The_three_programs_are_named_for_the_version_and_the_machine_and_their_digests_are_written_beside_them()

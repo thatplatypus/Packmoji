@@ -274,11 +274,13 @@ esac
 [ ! -s "$work/json.err" ] || { cat "$work/json.err" >&2; fail "pmj install --json wrote to standard error"; }
 
 if [ -n "$windows" ]; then
-  status=0
-  pmj build > /dev/null 2> "$work/build.said" || status=$?
-  plain < "$work/build.said" > "$work/build.err"
-  [ "$status" -eq 1 ] || { cat "$work/build.err" >&2; fail "pmj build ended with status $status on a machine with no compiler"; }
-  grep -qx 'error\[compiler.not-found\]: The Emojicode compiler was not found.' "$work/build.err" || { cat "$work/build.err" >&2; fail "pmj build did not say that there is no compiler"; }
+  for command in build run; do
+    status=0
+    pmj "$command" > /dev/null 2> "$work/$command.said" || status=$?
+    plain < "$work/$command.said" > "$work/$command.err"
+    [ "$status" -eq 1 ] || { cat "$work/$command.err" >&2; fail "pmj $command ended with status $status on a machine with no compiler"; }
+    grep -qx 'error\[compiler.not-found\]: The Emojicode compiler was not found.' "$work/$command.err" || { cat "$work/$command.err" >&2; fail "pmj $command did not say that there is no compiler"; }
+  done
   echo "pmj runs as a native binary for $rid ($(wc -c < "$native" | tr -d ' ') bytes), and builds nothing there"
   exit 0
 fi

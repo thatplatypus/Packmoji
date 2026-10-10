@@ -121,6 +121,17 @@ namespace Packmoji.Cli.Tests.Scripts
         }
 
         [Fact]
+        public void The_notes_of_a_release_and_the_guide_promise_the_c_library_the_program_is_held_to()
+        {
+            var release = Workflow("release.yml");
+            var held = Regex.Match(release, @"scripts/glibc-floor\.sh .+ ([0-9.]+)\n").Groups[1].Value;
+
+            held.ShouldNotBeEmpty();
+            release.ShouldContain($"glibc {held} or newer");
+            File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "docs", "cli.md")).ShouldContain($"glibc {held} or newer");
+        }
+
+        [Fact]
         public void A_tag_that_is_not_the_version_stops_a_release_before_anything_is_built()
         {
             var programs = Job(Workflow("release.yml"), "programs");
