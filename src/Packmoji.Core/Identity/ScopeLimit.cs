@@ -29,6 +29,7 @@ namespace Packmoji.Core.Identity
         /// <summary>The scopes that are allowed, in order. Empty when there is no limit.</summary>
         public IReadOnlyList<string> Scopes { get; }
 
+        /// <summary>Whether a package may be depended on, which its scope decides.</summary>
         public bool Allows(PackageName name)
         {
             ArgumentNullException.ThrowIfNull(name);

@@ -19,9 +19,11 @@ namespace Packmoji.Core.Resolution
     /// </remarks>
     public static class Resolver
     {
-        /// <param name="manifest">The project's manifest, as <see cref="ManifestReader"/> gives one.</param>
-        /// <param name="existing">The lockfile the project already has, or null when it has none.</param>
-        public static Task<ResolveResult> ResolveAsync(Manifest manifest, Lockfile? existing, IPackageSource source, CancellationToken cancellationToken) =>
+        /// <summary>
+        /// Resolves with no limit on scopes. It is for the tests of the resolver itself and is not
+        /// public: whatever resolves for a person says what the limit is, even when there is none.
+        /// </summary>
+        internal static Task<ResolveResult> ResolveAsync(Manifest manifest, Lockfile? existing, IPackageSource source, CancellationToken cancellationToken) =>
             ResolveAsync(manifest, existing, source, ScopeLimit.None, cancellationToken);
 
         /// <param name="manifest">The project's manifest, as <see cref="ManifestReader"/> gives one.</param>

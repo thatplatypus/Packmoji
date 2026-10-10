@@ -221,7 +221,8 @@ namespace Packmoji.Cli
                 Description = "A repository to look in as well, as github.com/owner/repo. It is needed only when packmoji.lock is not there to say where a package lives. It can be given more than once.",
             };
 
-        // Whether the command that was run has --json and was given it.
+        // Asked of the command that was run, since not every command has the option, and a problem that
+        // is caught here was thrown from inside one that may.
         private static bool AskedForJson(ParseResult parsed) =>
             parsed.CommandResult.Command.Options.OfType<Option<bool>>().FirstOrDefault(option => option.Name == JsonOption) is { } json && parsed.GetValue(json);
 

@@ -12,7 +12,8 @@ namespace Packmoji.Core.Direct
     /// </summary>
     public static class DirectResolver
     {
-        public static Task<ResolveResult> ResolveAsync(Manifest manifest, Lockfile? existing, DirectPackageSource source, CancellationToken cancellationToken) =>
+        /// <summary>Resolves with no limit on scopes. For tests alone, as <see cref="Resolver"/>'s own is.</summary>
+        internal static Task<ResolveResult> ResolveAsync(Manifest manifest, Lockfile? existing, DirectPackageSource source, CancellationToken cancellationToken) =>
             ResolveAsync(manifest, existing, source, ScopeLimit.None, cancellationToken);
 
         /// <param name="allowed">The scopes that may be depended on. A package of another is refused, and is never asked for.</param>
