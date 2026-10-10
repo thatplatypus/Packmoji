@@ -310,6 +310,31 @@ namespace Packmoji.Cli.Tests.Commands
             sandbox.Tools.Calls.ShouldBeEmpty();
         }
 
+        [Theory]
+        [InlineData(false, "tree")]
+        [InlineData(false, "install")]
+        [InlineData(false, "run")]
+        [InlineData(true, "tree")]
+        [InlineData(true, "run")]
+        public async Task A_list_that_cannot_be_read_is_said_before_either_file_of_the_project_is_read(bool withAManifestThatCannotBeRead, string command)
+        {
+            // Whoever runs pmj on a server learns of a mistyped limit from the first command, and not from the first project that happens to read.
+            using var sandbox = new Sandbox();
+            if (withAManifestThatCannotBeRead)
+            {
+                sandbox.Write("packmoji.json", "{ this is not a manifest");
+            }
+
+            sandbox.Variables["PACKMOJI_SCOPES"] = "thatplatypus,,";
+
+            var run = await sandbox.RunAsync(command);
+
+            run.Status.ShouldBe(1);
+            run.Error.ShouldStartWith("error[config.invalid]: PACKMOJI_SCOPES is not a list of scopes." + Environment.NewLine);
+            run.Error.ShouldNotContain("project.not-found");
+            run.Error.ShouldNotContain("json.");
+        }
+
         [Fact]
         public async Task A_command_that_reads_nothing_of_what_a_project_depends_on_takes_no_notice_of_the_list()
         {

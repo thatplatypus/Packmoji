@@ -54,6 +54,13 @@ namespace Packmoji.Cli.Commands
         /// <summary>The project in the host's working directory, or why it cannot be worked on.</summary>
         public static Outcome<ProjectSession> Open(PmjHost host)
         {
+            // Read before either file is: a limit that was mistyped is said at once, whatever the project.
+            var allowed = host.Scopes();
+            if (!allowed.Succeeded)
+            {
+                return Outcome<ProjectSession>.Failed(allowed.Diagnostics);
+            }
+
             var manifest = ProjectFiles.ReadManifest(host.WorkingDirectory);
             if (!manifest.Succeeded)
             {
@@ -67,12 +74,6 @@ namespace Packmoji.Cli.Commands
             }
 
             // Held before anything else is done with either file, and so before anything is asked of anyone.
-            var allowed = host.Scopes();
-            if (!allowed.Succeeded)
-            {
-                return Outcome<ProjectSession>.Failed(allowed.Diagnostics);
-            }
-
             var refused = ScopeCheck.Outside(allowed.Value, manifest.Value, lockfile?.Value, out var omitted);
             return refused.Count > 0
                 ? Outcome<ProjectSession>.Failed(refused, omitted)
