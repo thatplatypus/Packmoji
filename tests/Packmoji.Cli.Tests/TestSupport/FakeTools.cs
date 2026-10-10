@@ -78,8 +78,10 @@ namespace Packmoji.Cli.Tests.TestSupport
             return tool.Name switch
             {
                 "emojicodec" => Compile(tool.Says, arguments, workingDirectory),
-                "c++" or "cc" => arguments.Contains("--version") ? new ToolRun(0, string.Join('\n', tool.Says) + "\n", "")
-                    : arguments.Contains("-c") ? CompileNative(tool.Name, arguments)
+                "c++" or "cc" when arguments.Contains("--version") => tool.Says.Length == 0
+                    ? Refused($"made-up {tool.Name}: unrecognized command-line option '--version'")
+                    : new ToolRun(0, string.Join('\n', tool.Says) + "\n", ""),
+                "c++" or "cc" => arguments.Contains("-c") ? CompileNative(tool.Name, arguments)
                     : Link(arguments),
                 "ar" => Archive(arguments),
                 _ => Program(program, arguments),

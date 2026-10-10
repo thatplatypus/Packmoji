@@ -48,6 +48,7 @@ Every command works in the current directory. A command that reads a project nee
 | `pmj tree` | Shows the packages `packmoji.lock` holds, and what each depends on |
 | `pmj pack` | Writes the file that a release of this package carries |
 | `pmj verify` | Downloads every locked package again, and holds it and the cache's copy to `packmoji.lock` |
+| `pmj build` | Compiles the packages `packmoji.lock` holds, each once for the whole machine, and puts them in `packages/` |
 
 `pmj --help` lists them, `pmj <command> --help` says what one takes, and `pmj --version` prints the version.
 
@@ -176,6 +177,20 @@ Downloads every locked package again, whatever the cache holds, and checks three
 - **Every package is checked,** whatever was wrong with the one before, and every problem is reported.
 - **A release that is not what was locked is `lock.mismatch`.** A copy in the cache that is not is `cache.mismatch`.
 - **It says how much of what is locked the cache holds.** A cache that holds nothing has nothing wrong with it.
+
+### pmj build
+
+```
+pmj build [--release] [--dependencies-only]
+```
+
+Compiles every package `packmoji.lock` holds, and puts each in the project's `packages/` directory, which is where the compiler looks.
+
+- **A build chooses no version.** It reads `packmoji.lock`, and when that is missing or no longer answers `packmoji.json` it says to run `pmj install`. A project that asks for no package needs no lockfile.
+- **What is locked and not yet in the cache is fetched first,** as `pmj install` fetches it. With the cache filled, a build asks nothing of GitHub.
+- **A package is compiled once for the whole machine.** What was built is kept, and the next project that locks the same package, on the same compiler, is given it without a compile.
+- **`--release` has the compiler optimize.** What is built with it and without it is kept apart.
+- **`--dependencies-only` stops before the project itself.** It needs nothing in the directory but the two files.
 
 ## What pmj prints
 

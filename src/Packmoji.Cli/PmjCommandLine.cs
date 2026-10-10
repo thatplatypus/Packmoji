@@ -32,6 +32,7 @@ namespace Packmoji.Cli
                 Tree(host),
                 Pack(host),
                 Verify(host),
+                Building(host),
             };
 
             // Given no command there is nothing to do, and saying nothing would look like success.
@@ -175,6 +176,19 @@ namespace Packmoji.Cli
             var json = Json();
             var command = new Command("verify", "Download every locked package again, and hold it and the cache's copy to packmoji.lock.") { json };
             command.SetAction((parseResult, cancellationToken) => VerifyCommand.RunAsync(host, parseResult.GetValue(json), cancellationToken));
+            return command;
+        }
+
+        private static Command Building(PmjHost host)
+        {
+            var release = new Option<bool>("--release") { Description = "Have the compiler optimize, the packages as well as the project." };
+            var dependenciesOnly = new Option<bool>("--dependencies-only")
+            {
+                Description = "Build the packages the project depends on and put them in packages/, and stop before the project itself. Nothing is needed here but packmoji.json and packmoji.lock.",
+            };
+            var command = new Command("build", "Compile what packmoji.lock holds, each package once for the whole machine, and then the project.") { release, dependenciesOnly };
+            command.SetAction((parseResult, cancellationToken) =>
+                BuildCommand.RunAsync(host, parseResult.GetValue(release), parseResult.GetValue(dependenciesOnly), cancellationToken));
             return command;
         }
 

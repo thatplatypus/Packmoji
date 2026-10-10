@@ -33,7 +33,7 @@ namespace Packmoji.Cli.Tests.Docs
             var guide = Guide("cli.md");
             var root = PmjCommandLine.Build(sandbox.Host());
 
-            root.Subcommands.Select(command => command.Name).ShouldBe(["new", "init", "add", "remove", "install", "update", "tree", "pack", "verify"]);
+            root.Subcommands.Select(command => command.Name).ShouldBe(["new", "init", "add", "remove", "install", "update", "tree", "pack", "verify", "build"]);
             foreach (var command in root.Subcommands)
             {
                 guide.ShouldContain($"| `pmj {command.Name}");

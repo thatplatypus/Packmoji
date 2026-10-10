@@ -135,6 +135,28 @@ namespace Packmoji.Cli.Cache
         }
 
         /// <summary>
+        /// The directory that holds an archive's files, for something that is about to read them: a
+        /// build. A fetch leaves a directory that is there as it finds it, and that is whatever was
+        /// left in it, so the files are held to the archive here. What is not the archive's is never
+        /// built from.
+        /// </summary>
+        /// <param name="files">The files of the archive, which was itself held to its digest when it was read.</param>
+        public string Sources(PackageName name, SemanticVersion version, Sha256Digest digest, IReadOnlyList<ArchiveFile> files)
+        {
+            var directory = DirectoryPath(name, version, digest);
+            try
+            {
+                return Difference(directory, files) is { } difference
+                    ? throw new PackageSourceException(Spoiled($"\"{name}\" {version}", directory, $"the files unpacked in \"{directory}\" cannot be built from: {difference}"))
+                    : directory;
+            }
+            catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
+            {
+                throw new PackageSourceException(Unusable(directory, "read", failure));
+            }
+        }
+
+        /// <summary>
         /// Whether the cache holds anything of a package, and every way in which what it holds is not
         /// what it should be: an archive that is not the bytes its name says, and unpacked files that
         /// are not the files of the archive beside them. Nothing is changed.

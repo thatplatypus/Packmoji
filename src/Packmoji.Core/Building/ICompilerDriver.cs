@@ -1,4 +1,5 @@
 using Packmoji.Core.Diagnostics;
+using Packmoji.Core.Lockfiles;
 
 namespace Packmoji.Core.Building
 {
@@ -14,14 +15,25 @@ namespace Packmoji.Core.Building
         ValueTask<BuildStep<CompilerIdentity>> IdentifyAsync(CancellationToken cancellationToken);
 
         /// <summary>
+        /// What the compiler of a native language says of itself, as a digest. It goes into the key of
+        /// every package that has code in that language, so it is asked whether or not anything is
+        /// to be compiled.
+        /// </summary>
+        ValueTask<BuildStep<Sha256Digest>> IdentifyNativeAsync(NativeLanguage language, CancellationToken cancellationToken);
+
+        /// <summary>
         /// What stands in the way of a build that has these things to do, found out before anything
         /// is compiled, so that a build that could not end does not begin.
         /// </summary>
         /// <param name="archiving">Whether a package is to be built, which ends with its archive.</param>
-        IReadOnlyList<Diagnostic> Lacks(bool archiving);
+        /// <param name="nativeCode">Whether a native file is to be compiled.</param>
+        IReadOnlyList<Diagnostic> Lacks(bool archiving, bool nativeCode);
 
         /// <summary>Compiles a package's Emojicode code. Gives the object, and leaves what others need of the package in its folder.</summary>
         ValueTask<BuildStep<string>> CompilePackageAsync(PackageCompile compile, CancellationToken cancellationToken);
+
+        /// <summary>Compiles one native file. Gives the object.</summary>
+        ValueTask<BuildStep<string>> CompileNativeAsync(NativeCompile compile, CancellationToken cancellationToken);
 
         /// <summary>Makes a package's archive in its folder, from its objects. Gives the archive.</summary>
         ValueTask<BuildStep<string>> ArchiveAsync(ArchiveRequest archive, CancellationToken cancellationToken);
