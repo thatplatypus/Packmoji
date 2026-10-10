@@ -592,6 +592,20 @@ namespace Packmoji.Cli.Tests.Commands
         }
 
         [Fact]
+        public async Task The_compilers_packages_that_EMOJICODE_PACKAGES_PATH_names_from_where_pmj_is_run_are_named_in_full_to_the_linker()
+        {
+            // The linker is run where the program is made, where a path from here leads somewhere else.
+            using var sandbox = Alone();
+            sandbox.Variables["EMOJICODE_PACKAGES_PATH"] = "../stock";
+
+            var run = await sandbox.RunAsync("build");
+
+            run.Error.ShouldBeEmpty();
+            run.Status.ShouldBe(0);
+            sandbox.Plain(sandbox.Tools.Calls.Last()).ShouldContain($" -Wl,--start-group {Stock} -Wl,--end-group ");
+        }
+
+        [Fact]
         public async Task With_EMOJICODE_PACKAGES_PATH_not_set_the_compilers_packages_are_looked_for_where_the_installer_puts_them()
         {
             using var sandbox = Alone();

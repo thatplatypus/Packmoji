@@ -294,6 +294,20 @@ namespace Packmoji.Cli.Tests.Commands
         }
 
         [Fact]
+        public async Task Headers_that_EMOJICODE_INCLUDE_names_from_where_pmj_is_run_are_named_in_full_to_the_compiler()
+        {
+            // The native compiler is run in another directory, where a path from here leads somewhere else.
+            using var sandbox = await WithNetInstalledAsync();
+            sandbox.Variables["EMOJICODE_INCLUDE"] = "../include";
+
+            var run = await sandbox.RunAsync("build", "--dependencies-only");
+
+            run.Error.ShouldBeEmpty();
+            run.Status.ShouldBe(0);
+            sandbox.Tools.Calls.Select(sandbox.Plain).ShouldContain(call => call.Contains(" -I ~/include -I "));
+        }
+
+        [Fact]
         public async Task With_EMOJICODE_INCLUDE_not_set_the_headers_are_looked_for_where_the_installer_puts_them()
         {
             using var sandbox = await WithNetInstalledAsync();

@@ -327,7 +327,7 @@ namespace Packmoji.Cli.Building
         private string Compiler => _compiler ?? throw new InvalidOperationException("The compiler is asked which it is before it is asked to compile.");
 
         // Where the compiler's installer puts its headers and its own packages when it is told nothing: install.sh:8-10.
-        private string Headers => Set(HeadersVariable) ?? Path.Combine(host.InstallRoot, "include", "emojicode");
+        private string Headers => InFull(HeadersVariable) ?? Path.Combine(host.InstallRoot, "include", "emojicode");
 
         // The compiler looks for a package where its variable says and then where it was installed,
         // and the variable may name a directory of someone's own packages. So its own packages are in
@@ -337,7 +337,7 @@ namespace Packmoji.Cli.Building
             get
             {
                 var installed = Path.Combine(host.InstallRoot, "EmojicodePackages");
-                var named = Set(PackagesVariable);
+                var named = InFull(PackagesVariable);
                 return named is null || (!File.Exists(Path.Combine(named, "s", "libs.a")) && File.Exists(Path.Combine(installed, "s", "libs.a"))) ? installed : named;
             }
         }
@@ -405,6 +405,10 @@ namespace Packmoji.Cli.Building
         }
 
         private string? Set(string variable) => host.Variable(variable) is { Length: > 0 } value ? value : null;
+
+        // A directory that a variable names, in full. A variable may name it from where pmj is run,
+        // and every tool is run somewhere else, where the same words would lead to another place.
+        private string? InFull(string variable) => Set(variable) is { } named ? Path.GetFullPath(named, host.WorkingDirectory) : null;
 
         private Diagnostic NotFound(string code, string tool, string variable, string fallback, string install) =>
             new(
