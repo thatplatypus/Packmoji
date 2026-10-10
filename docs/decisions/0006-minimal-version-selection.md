@@ -14,7 +14,7 @@ The brief asks for minimal version selection as Go has it: every requirement is 
 - **Every requirement that can be reached counts,** including those of a version that ends up passed over for a higher one.
 - **A reachable version that was never published is an error even when it is passed over.**
 - **A package that only a passed-over version asks for is selected for and is left out of the build.** What is built is what the project asks for and what the selected versions lead to.
-- **A circle of dependencies is an error that shows the circle,** and so is a dependency on the project itself.
+- **A circle among the versions a build would use is an error that shows the circle,** and so is one of them depending on the project itself.
 - **A graph of more than 10,000 versions is refused.**
 - **Errors are listed before warnings,** each kind in a fixed order.
 
@@ -39,7 +39,7 @@ The brief asks for minimal version selection as Go has it: every requirement is 
 ## Consequences
 
 - **A yank deep in a graph stops fresh resolutions downstream** until someone raises a minimum. The project can always do that itself, in its own manifest, on the same line.
-- **A missing version cannot be fixed from the project's own manifest** unless the project is what asks for it. Asking for more does not help, since the missing version is still reached. The package whose manifest names it has to publish a version that names another, and the project has to move to that.
+- **A missing version cannot be fixed by asking for more,** since the missing version is still reached. The project can change only the requirement at the head of the chain that leads to it: when a later version of that package no longer leads there, asking for it is the fix. Otherwise the package whose manifest names the missing version has to publish one that names another, and each package between it and the project has to move to that in turn.
 - **A conflict of lines is reported even when one side comes from a passed-over version.** The fix is to raise the minimum that brings the older version into the graph.
 - **A package can be asked about and not built.** It still has to be published, and its requirements still count.
 - **Raising a minimum can lower another package's version.** The passed-over version's requirements stop counting once nothing reaches it. Only adding a requirement is sure never to lower anything.

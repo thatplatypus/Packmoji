@@ -25,15 +25,53 @@ namespace Packmoji.Core.Tests.Resolution
         }
 
         [Fact]
-        public async Task The_chain_shows_which_version_asked_for_it_and_the_fix_names_that_package()
+        public async Task The_chain_shows_which_version_asked_for_it()
         {
             var universe = new Universe().Publish("@thatplatypus/grapevine", "0.3.0", "@thatplatypus/crypto@1.0");
 
             var diagnostic = (await universe.Resolve(Project.Asking("@thatplatypus/grapevine@0.3"))).ShouldFailWith(DiagnosticCodes.ResolveVersionMissing);
 
             diagnostic.Reason.ShouldEndWith(": @thatplatypus/app → @thatplatypus/grapevine@0.3.0 → @thatplatypus/crypto@1.0");
-            diagnostic.Fix.ShouldContain("a later version of \"@thatplatypus/grapevine\"");
-            diagnostic.Fix.ShouldContain("@thatplatypus/grapevine 0.3.0");
+            diagnostic.Fix.ShouldStartWith("the chain begins at this project's requirement on \"@thatplatypus/grapevine\"");
+            diagnostic.Fix.ShouldContain("\"@thatplatypus/grapevine\" has to publish a version that asks for a version of \"@thatplatypus/crypto\" that exists");
+        }
+
+        // Grapevine asks for crypto, and crypto 1.0.0 asks for a zlib that was never published.
+        // Crypto 1.0.1 asks for one that was, and grapevine 0.3.1 has moved to crypto 1.0.1.
+        private static Universe MissingDeepInTheChain() => new Universe()
+            .Publish("@thatplatypus/grapevine", "0.3.0", "@thatplatypus/crypto@1.0")
+            .Publish("@thatplatypus/grapevine", "0.3.1", "@thatplatypus/crypto@1.0.1")
+            .Publish("@thatplatypus/crypto", "1.0.0", "@thatplatypus/zlib@9.9")
+            .Publish("@thatplatypus/crypto", "1.0.1", "@thatplatypus/zlib@1.0")
+            .Publish("@thatplatypus/zlib", "1.0.0");
+
+        [Fact]
+        public async Task When_a_package_deep_in_the_chain_asks_for_it_the_fix_is_at_the_head_of_the_chain()
+        {
+            // The project wrote only the first requirement of the chain, so that is all it can change.
+            var diagnostic = (await MissingDeepInTheChain().Resolve(Project.Asking("@thatplatypus/grapevine@0.3")))
+                .ShouldFailWith(DiagnosticCodes.ResolveVersionMissing);
+
+            diagnostic.Reason.ShouldEndWith(": @thatplatypus/app → @thatplatypus/grapevine@0.3.0 → @thatplatypus/crypto@1.0.0 → @thatplatypus/zlib@9.9");
+            diagnostic.Fix.ShouldStartWith("the chain begins at this project's requirement on \"@thatplatypus/grapevine\": ask there, in packmoji.json, for a later version");
+            diagnostic.Fix.ShouldContain("\"@thatplatypus/crypto\" has to publish a version that asks for a version of \"@thatplatypus/zlib\" that exists");
+        }
+
+        [Fact]
+        public async Task Asking_for_a_later_version_at_the_head_of_the_chain_is_the_fix_and_it_works()
+        {
+            (await MissingDeepInTheChain().Resolve(Project.Asking("@thatplatypus/grapevine@0.3.1"))).ShouldSucceed()
+                .Selected().ShouldBe(["@thatplatypus/crypto@1.0.1", "@thatplatypus/grapevine@0.3.1", "@thatplatypus/zlib@1.0.0"]);
+        }
+
+        [Fact]
+        public async Task Asking_for_more_of_a_package_in_the_middle_of_the_chain_does_not_help()
+        {
+            // Grapevine 0.3.0 still leads to crypto 1.0.0, and so to what crypto 1.0.0 asks for.
+            var result = await MissingDeepInTheChain().Resolve(Project.Asking("@thatplatypus/grapevine@0.3", "@thatplatypus/crypto@1.0.1"));
+
+            result.Succeeded.ShouldBeFalse();
+            result.Diagnostics.Select(diagnostic => diagnostic.Code).ShouldContain(DiagnosticCodes.ResolveVersionMissing);
         }
 
         [Fact]

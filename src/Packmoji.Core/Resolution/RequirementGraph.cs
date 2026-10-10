@@ -40,7 +40,8 @@ namespace Packmoji.Core.Resolution
         /// <summary>
         /// The requirements that name the project itself, in the order they were found and at most one
         /// for each version that makes one. The project is what is being built, so no version of it is
-        /// ever asked of the source, and each of these is a circle.
+        /// ever asked of the source. One of these is a circle when the version that makes it is one
+        /// the build would use, which is for the resolver to say.
         /// </summary>
         public IReadOnlyList<Requirement> OnProject => _onProject;
 
@@ -86,6 +87,23 @@ namespace Packmoji.Core.Resolution
                 index == 0 ? Project.ToString()
                 : index == steps - 1 ? $"{requirement.Asked.Name}@{requirement.Asked.Requirement.Text}"
                 : $"{askers[index - 1].Name}@{askers[index - 1].Version}");
+        }
+
+        /// <summary>
+        /// The version at the head of the chain to a requirement: the one the project itself asks for,
+        /// from which everything else in the chain follows. Of all the requirements in a chain it is
+        /// the only one the project wrote, and so the only one it can change. Null when the project
+        /// itself makes the requirement.
+        /// </summary>
+        public Node? HeadOf(Requirement requirement)
+        {
+            var head = requirement.Asker;
+            while (head?.Via.Asker is { } nearer)
+            {
+                head = nearer;
+            }
+
+            return head;
         }
 
         private void Follow(Node? asker, IEnumerable<Dependency> asked, Queue<Node> waiting)

@@ -84,7 +84,10 @@ namespace Packmoji.Core.Resolution
                 }
             }
 
-            foreach (var requirement in graph.OnProject)
+            // A version that needs the project is a circle only if it is built. One that is passed
+            // over for a later version makes none, as it makes none among packages.
+            var built = selection.Used.Select(use => use.Node).ToHashSet();
+            foreach (var requirement in graph.OnProject.Where(requirement => requirement.Asker is null || built.Contains(requirement.Asker)))
             {
                 errors.Add(() => ResolveDiagnostics.CycleThroughProject(graph, requirement));
             }

@@ -94,21 +94,41 @@ namespace Packmoji.Core.Tests.Resolution
 
             diagnostic.Message.ShouldBe("\"@thatplatypus/app\" depends on itself.");
             diagnostic.Reason.ShouldEndWith(": @thatplatypus/app → @thatplatypus/grapevine@0.3.0 → @thatplatypus/app@0.1");
-            diagnostic.Fix.ShouldBe("stop depending on \"@thatplatypus/grapevine\", or use a version of it that does not depend on \"@thatplatypus/app\"");
+            diagnostic.Fix.ShouldBe(
+                "ask in packmoji.json for a later version of \"@thatplatypus/grapevine\", one that does not depend on \"@thatplatypus/app\"; " +
+                "if there is none, stop depending on what brings it in");
             universe.Asked.ShouldBe(["@thatplatypus/grapevine@0.3.0"]);
         }
 
         [Fact]
-        public async Task It_counts_even_when_the_version_that_does_so_is_superseded()
+        public async Task A_version_that_depends_on_the_project_and_is_not_the_one_built_stops_nothing()
         {
+            // As with a circle among packages: what is built is a 1.1.0, which needs nothing.
             var universe = new Universe()
                 .Publish("@thatplatypus/a", "1.0.0", "@thatplatypus/app@0.1")
                 .Publish("@thatplatypus/a", "1.1.0")
                 .Publish("@thatplatypus/b", "1.0.0", "@thatplatypus/a@1.1");
 
-            var diagnostic = (await universe.Resolve(Project.Asking("@thatplatypus/a@1.0", "@thatplatypus/b@1.0"))).ShouldFailWith(DiagnosticCodes.ResolveCycle);
+            var result = await universe.Resolve(Project.Asking("@thatplatypus/a@1.0", "@thatplatypus/b@1.0"));
 
-            diagnostic.Reason.ShouldEndWith(": @thatplatypus/app → @thatplatypus/a@1.0.0 → @thatplatypus/app@0.1");
+            result.ShouldSucceed().Selected().ShouldBe(["@thatplatypus/a@1.1.0", "@thatplatypus/b@1.0.0"]);
+            result.Diagnostics.ShouldBeEmpty();
+        }
+
+        [Fact]
+        public async Task Asking_for_a_later_version_that_does_not_depend_on_the_project_is_the_fix_and_it_works()
+        {
+            var universe = new Universe()
+                .Publish("@thatplatypus/tool", "1.0.0", "@thatplatypus/plugin@1.0")
+                .Publish("@thatplatypus/plugin", "1.0.0", "@thatplatypus/app@0.1")
+                .Publish("@thatplatypus/plugin", "1.1.0");
+
+            var stopped = (await universe.Resolve(Project.Asking("@thatplatypus/tool@1.0"))).ShouldFailWith(DiagnosticCodes.ResolveCycle);
+            var fixedByAskingForMore = await universe.Resolve(Project.Asking("@thatplatypus/tool@1.0", "@thatplatypus/plugin@1.1"));
+
+            stopped.Reason.ShouldEndWith(": @thatplatypus/app → @thatplatypus/tool@1.0.0 → @thatplatypus/plugin@1.0.0 → @thatplatypus/app@0.1");
+            stopped.Fix.ShouldStartWith("ask in packmoji.json for a later version of \"@thatplatypus/plugin\"");
+            fixedByAskingForMore.ShouldSucceed().Selected().ShouldBe(["@thatplatypus/plugin@1.1.0", "@thatplatypus/tool@1.0.0"]);
         }
 
         [Fact]

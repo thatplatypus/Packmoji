@@ -44,12 +44,12 @@ Each of these is an error, and `pmj` reports every one it finds, not only the fi
 | Code | What happened | What to do |
 |---|---|---|
 | `dependency.duplicate` | Your manifest names one package twice | Keep one of the two requirements |
-| `resolve.version-missing` | A requirement names a version that was never published. This counts wherever it is asked for, because publishing that version later could otherwise change your build | Ask for a published version. If the requirement is in a package you depend on, use a later version of that package |
+| `resolve.version-missing` | A requirement names a version that was never published. This counts wherever it is asked for, because publishing that version later could otherwise change your build | If your own manifest asks for it, ask for a published version. If a package you depend on does, the chain begins at one of your own requirements: ask there for a later version that no longer leads to it. If there is none, the fix is not yours to make, and the package that asks has to publish a version that asks for something published |
 | `resolve.yanked` | The version your build would use has been yanked, and your lockfile does not already hold it | Ask for a later version on the same line, in your own manifest |
-| `resolve.quarantined` | The version your build would use is quarantined | Ask for another version, and tell the package's author |
+| `resolve.quarantined` | The version your build would use is quarantined | Ask for a later version, and tell the package's author |
 | `resolve.line-conflict` | One package is asked for on two compatibility lines | Raise the minimums that lead to the older line |
 | `resolve.name-collision` | Two packages share a bare name, or one shares yours. Emojicode imports by bare name, so they cannot be in one build | Depend on only one of them |
-| `resolve.cycle` | Packages depend on one another in a circle, or one depends on your project. Emojicode cannot build that | Use versions that do not need one another |
+| `resolve.cycle` | Packages your build would use depend on one another in a circle, or one of them depends on your project. Emojicode cannot build that | Ask for later versions that do not need one another |
 | `resolve.graph-too-large` | What your project depends on is more than 10,000 versions | Look at what brings so much in, and at where `pmj` gets its package information |
 | `repository.owner-mismatch` | A version is said to live in a repository that its scope does not own | Do not build with it. What told `pmj` where it lives is wrong |
 | `lock.mismatch` | Your lockfile records one digest or repository for a version, and what is published has another | Find out which is right before going on. See below |

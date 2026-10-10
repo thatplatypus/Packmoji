@@ -27,7 +27,7 @@ namespace Packmoji.Core.Tests.Resolution
             diagnostic.Reason.ShouldContain("its bytes changed after it was published");
             diagnostic.Reason.ShouldContain("must not be used");
             diagnostic.Reason.ShouldEndWith(": @thatplatypus/app → @thatplatypus/grapevine@0.3.0 → @thatplatypus/crypto@1.0");
-            diagnostic.Fix.ShouldContain("on the line 1.x");
+            diagnostic.Fix.ShouldStartWith("ask for a later version of \"@thatplatypus/crypto\" on the line 1.x in packmoji.json");
         }
 
         [Fact]

@@ -28,8 +28,8 @@ namespace Packmoji.Core.Resolution
                 DiagnosticCodes.ResolveVersionMissing,
                 $"Version {node.Version} of \"{node.Name}\" was never published.",
                 $"a requirement names the exact version a build uses unless something asks for more, and this one is asked for: {graph.ChainTo(node.Via)}",
-                node.Via.Asker is { } asker
-                    ? $"ask for a later version of \"{asker.Name}\", one that asks for a version of \"{node.Name}\" that was published; {asker.Name} {asker.Version} is published and cannot change, so if there is none, its author has to publish one"
+                node.Via.Asker is { } asker && graph.HeadOf(node.Via) is { } head
+                    ? $"the chain begins at this project's requirement on \"{head.Name}\": ask there, in {Manifest}, for a later version that no longer leads to this one; if there is none, the fix is not this project's to make, and \"{asker.Name}\" has to publish a version that asks for a version of \"{node.Name}\" that exists"
                     : $"ask for a version of \"{node.Name}\" that was published, in {Manifest}");
 
         public static Diagnostic VersionGone(RequirementGraph graph, RequirementGraph.Node node) =>
@@ -108,7 +108,7 @@ namespace Packmoji.Core.Resolution
                 $"\"{graph.Project}\" depends on itself.",
                 $"a package cannot be built from something that needs the package itself: {graph.ChainTo(requirement)}",
                 requirement.Asker is { } asker
-                    ? $"stop depending on \"{asker.Name}\", or use a version of it that does not depend on \"{graph.Project}\""
+                    ? $"ask in {Manifest} for a later version of \"{asker.Name}\", one that does not depend on \"{graph.Project}\"; if there is none, stop depending on what brings it in"
                     : $"remove \"{graph.Project}\" from its own {Manifest}");
 
         /// <param name="circle">The selected versions of a circle, each depending on the next and the last on the first.</param>
@@ -175,7 +175,7 @@ namespace Packmoji.Core.Resolution
                 DiagnosticCodes.ResolveQuarantined,
                 $"Version {version} of \"{name}\" is quarantined.",
                 $"its bytes changed after it was published, which is what a tampered release looks like, so it must not be used, and {where}",
-                $"ask for another version of \"{name}\" on the line {CompatibilityLine.Of(version)} in {Manifest}, and tell its author");
+                $"ask for a later version of \"{name}\" on the line {CompatibilityLine.Of(version)} in {Manifest}, and tell its author");
 
         private static string Listed(IEnumerable<string> items)
         {

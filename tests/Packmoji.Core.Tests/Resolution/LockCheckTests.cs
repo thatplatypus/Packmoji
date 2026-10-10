@@ -65,6 +65,7 @@ namespace Packmoji.Core.Tests.Resolution
             diagnostic.Message.ShouldBe("Version 1.0.0 of \"@thatplatypus/crypto\" is quarantined.");
             diagnostic.Reason.ShouldContain("must not be used");
             diagnostic.Reason.ShouldEndWith("packmoji.lock holds it");
+            diagnostic.Fix.ShouldStartWith("ask for a later version of \"@thatplatypus/crypto\" on the line 1.x in packmoji.json");
         }
 
         [Fact]
