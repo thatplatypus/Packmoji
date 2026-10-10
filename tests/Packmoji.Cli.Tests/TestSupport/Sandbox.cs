@@ -352,9 +352,9 @@ namespace Packmoji.Cli.Tests.TestSupport
         /// </summary>
         public string Plain(string text) =>
             System.Text.RegularExpressions.Regex.Replace(
-                System.Text.RegularExpressions.Regex.Replace(text.Replace(Root, "~"), "[0-9a-f]{64}", match => match.Value[..8]),
+                System.Text.RegularExpressions.Regex.Replace(PlainText.Slashed(text).Replace(PlainText.Slashed(Root), "~"), "[0-9a-f]{64}", match => match.Value[..8]),
                 "\\.tmp-[0-9a-f]{32}",
-                ".tmp").Replace(Path.DirectorySeparatorChar, '/');
+                ".tmp");
 
         /// <summary>What a made-up tool was given, as one line: the tool, then its arguments, made plain by <see cref="Plain"/>.</summary>
         public string Plain(ToolCall call) => Plain(string.Join(' ', [call.Tool, .. call.Arguments]));
@@ -380,7 +380,11 @@ namespace Packmoji.Cli.Tests.TestSupport
         /// <summary>Throws away every built package pmj keeps, as someone who deletes <c>built</c> does.</summary>
         public void ForgetBuilt() => Forget(Path.Combine(Home, "built"));
 
-        private static void Forget(string directory)
+        /// <summary>
+        /// Deletes a directory that pmj wrote, as someone who deletes it does. What pmj keeps it marks
+        /// as not to be written, and on Windows that stops a file being deleted until the mark is taken away.
+        /// </summary>
+        public static void Forget(string directory)
         {
             if (Directory.Exists(directory))
             {

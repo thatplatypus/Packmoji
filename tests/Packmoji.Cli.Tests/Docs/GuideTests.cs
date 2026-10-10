@@ -127,7 +127,7 @@ namespace Packmoji.Cli.Tests.Docs
 
             // The guide's project is in someone's home, and its compiler where the installer puts it.
             run.Error.ShouldBeEmpty();
-            var answer = run.Output.Replace(sandbox.PathOf("site"), "/home/you/site").Replace(sandbox.ToolsDirectory, "/usr/local/bin").Replace(Path.DirectorySeparatorChar, '/');
+            var answer = PlainText.Slashed(run.Output).Replace(PlainText.Slashed(sandbox.PathOf("site")), "/home/you/site").Replace(PlainText.Slashed(sandbox.ToolsDirectory), "/usr/local/bin");
             Shape(Guide("cli.md")).ShouldContain(Shape(answer).TrimEnd('\n'));
         }
 
