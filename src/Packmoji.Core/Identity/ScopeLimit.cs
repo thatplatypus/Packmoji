@@ -95,7 +95,20 @@ namespace Packmoji.Core.Identity
                 DiagnosticCodes.ScopeNotAllowed,
                 $"\"{name}\" is outside the scopes pmj is limited to here.",
                 $"{met}, and {Variable} allows only {this}",
-                $"depend only on packages of {(Scopes.Count == 1 ? "that scope" : "those scopes")}; the list is set by whoever runs pmj here");
+                Fix);
+        }
+
+        private string Fix => $"depend only on packages of {(Scopes.Count == 1 ? "that scope" : "those scopes")}; the list is set by whoever runs pmj here";
+
+        /// <summary>The problem for a repository whose owner the limit does not allow, said where GitHub would have been asked.</summary>
+        public Diagnostic RefusesOwner(RepositoryRef repository)
+        {
+            ArgumentNullException.ThrowIfNull(repository);
+            return new Diagnostic(
+                DiagnosticCodes.ScopeNotAllowed,
+                $"{repository} belongs to an owner outside the scopes pmj is limited to here.",
+                $"{Variable} allows only {this}, and nothing is asked of any other owner",
+                Fix);
         }
 
         /// <summary>The scopes as a person would say them: <c>a</c>, <c>a and b</c>, <c>a, b and c</c>.</summary>
