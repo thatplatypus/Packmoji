@@ -386,7 +386,7 @@ The codes that begin with `resolve.`, and `lock.mismatch`, are raised when `pmj`
 | `pack.unportable` | A file to be packed has a name that another platform could not hold, or is a symbolic link |
 | `lock.out-of-date` | The lockfile is missing or no longer answers the manifest, where a command needs one that does |
 | `attestation.unverifiable` | A project requires attestation, and `pmj` cannot verify one |
-| `github.unreachable` | GitHub could not be reached, or answered with something `pmj` did not expect |
+| `github.unreachable` | GitHub could not be reached, refused a request for a reason other than its limit, or answered with something `pmj` did not expect |
 | `github.rate-limited` | GitHub's API refused a request because of its limit on requests |
 | `cache.unusable` | The cache could not be read or written |
 | `cache.mismatch` | `pmj verify` found that what the cache holds of a package is not what `packmoji.lock` holds |
