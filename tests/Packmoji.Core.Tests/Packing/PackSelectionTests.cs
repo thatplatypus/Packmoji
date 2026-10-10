@@ -125,6 +125,23 @@ namespace Packmoji.Core.Tests.Packing
         }
 
         [Fact]
+        public void An_entry_file_that_the_manifest_names_and_that_is_not_there_is_said_to_be_missing_and_not_to_be_unselected()
+        {
+            var manifest = ManifestReader.Read("""
+                {
+                  "package": { "name": "@thatplatypus/crypto", "version": "1.0.0", "kind": "library", "emojicode": ">=1.0.0-beta.2" },
+                  "build": { "entry": "crypto.🍇", "sources": ["*.🍇"] }
+                }
+                """).ShouldSucceed();
+
+            var diagnostic = Refused(manifest, Tree("packmoji.json", "helper.🍇"), DiagnosticCodes.EntryNotFound);
+
+            diagnostic.Message.ShouldBe("The entry file \"crypto.🍇\" was not found.");
+            diagnostic.Reason.ShouldContain("the manifest names it");
+            diagnostic.Fix.ShouldStartWith("create it");
+        }
+
+        [Fact]
         public void A_package_with_no_entry_file_is_told_so_as_the_manifest_rules_tell_it()
         {
             Refused(Conventional, Tree("packmoji.json", "src/helper.🍇"), DiagnosticCodes.EntryNotFound);

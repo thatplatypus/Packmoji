@@ -351,7 +351,7 @@ The codes that begin with `resolve.`, and `lock.mismatch`, are raised when `pmj`
 | `list.empty` | `build.sources` is present and empty |
 | `list.duplicate` | An array holds the same entry twice |
 | `entry.suffix` | `build.entry` does not end in `.emojic` or `.🍇` |
-| `entry.not-found` | No entry is named and neither conventional file exists |
+| `entry.not-found` | No entry is named and neither conventional file exists, or `pmj pack` did not find the entry that is named |
 | `entry.ambiguous` | No entry is named and both conventional files exist |
 | `lock.unsupported-version` | A lockfile's `version` is not `1` |
 | `lock.duplicate-package` | A lockfile has two entries for one package |

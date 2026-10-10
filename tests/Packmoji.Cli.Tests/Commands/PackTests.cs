@@ -142,7 +142,7 @@ namespace Packmoji.Cli.Tests.Commands
         }
 
         [Fact]
-        public async Task A_package_whose_entry_file_is_not_among_what_is_packed_is_refused()
+        public async Task A_package_whose_entry_file_is_not_there_is_told_that_and_not_that_a_pattern_is_missing()
         {
             using var sandbox = new Sandbox();
             WriteLibrary(sandbox, "");
@@ -151,8 +151,39 @@ namespace Packmoji.Cli.Tests.Commands
             var run = await sandbox.RunAsync("pack");
 
             run.Status.ShouldBe(1);
-            run.Error.ShouldContain("error[pack.nothing]: The entry file \"crypto.🍇\" is not among the files that are packed.");
+            run.Error.ShouldContain("error[entry.not-found]: The entry file \"crypto.🍇\" was not found.");
+            run.Error.ShouldNotContain("pattern");
             Directory.Exists(sandbox.PathOf("target")).ShouldBeFalse();
+        }
+
+        [Fact]
+        public async Task An_entry_file_that_is_there_and_that_no_pattern_selects_is_refused_with_the_pattern_as_the_fix()
+        {
+            using var sandbox = new Sandbox();
+            WriteLibrary(sandbox, "");
+            sandbox.Write("packmoji.json", Library.Replace("\"*.🍇\", ", ""));
+
+            var run = await sandbox.RunAsync("pack");
+
+            run.Status.ShouldBe(1);
+            run.Error.ShouldContain("error[pack.nothing]: The entry file \"crypto.🍇\" is not among the files that are packed.");
+            run.Error.ShouldContain("fix: add a pattern that selects it");
+            Directory.Exists(sandbox.PathOf("target")).ShouldBeFalse();
+        }
+
+        [Fact]
+        public async Task An_entry_file_under_what_is_never_packed_is_not_found_whatever_pattern_names_it()
+        {
+            using var sandbox = new Sandbox();
+            sandbox.Write("packmoji.json", Library.Replace("\"entry\": \"crypto.🍇\"", "\"entry\": \"target/made.🍇\"").Replace("\"*.🍇\", ", "\"**/*.🍇\", "));
+            sandbox.Write("target/made.🍇", "💭 made\n");
+            sandbox.Write("crypto.🍇", "💭 crypto\n");
+
+            var run = await sandbox.RunAsync("pack");
+
+            run.Status.ShouldBe(1);
+            run.Error.ShouldContain("error[entry.not-found]: The entry file \"target/made.🍇\" was not found.");
+            sandbox.Files("target").ShouldBe(["made.🍇"]);
         }
 
         [Fact]

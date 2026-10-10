@@ -68,6 +68,16 @@ namespace Packmoji.Core.Packing
             {
                 diagnostics.Add(noEntry);
             }
+            else if (!names.Contains(entryFile.Value))
+            {
+                // A file that is not there is another matter than one that no pattern selects, and
+                // a pattern would not help it.
+                diagnostics.Add(new Diagnostic(
+                    DiagnosticCodes.EntryNotFound,
+                    $"The entry file \"{entryFile}\" was not found.",
+                    "the manifest names it under \"build\", and there is no such file among those that can be packed",
+                    "create it, or set \"entry\" under \"build\" to the package's main file"));
+            }
             else if (!selected.Any(entry => entry.Path == entryFile.Value))
             {
                 diagnostics.Add(new Diagnostic(
