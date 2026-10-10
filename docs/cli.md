@@ -376,7 +376,7 @@ A problem in `diagnostics`:
 }
 ```
 
-- **`written`** says whether the command wrote the project's files. It is false for `update --dry-run`, and for a command that found nothing to change, such as `install` with a lockfile that already answers the manifest.
+- **`written`** says whether the command wrote the project's files. It is false for `update --dry-run`, and for a command that had nothing to resolve, such as `install` with a lockfile that already answers the manifest. A command that resolved has written, even when what it wrote is what was there: `changes` is then empty.
 - **`changes`** is in order of name, and empty when the lockfile holds the same versions as before. For `update --dry-run` it is what would change.
 - **`change`** is `added`, `removed` or `moved`. `from` is the version before and `to` the version now: a package that was added has no `from`, and one that was removed no `to`. A package can move down as well as up.
 - **`packages`** is every package the lockfile now holds, or would hold, each as `pmj tree --json` gives one.
@@ -482,7 +482,7 @@ Each file `pmj` writes is written whole beside its place and then put there in o
 - **The two addresses are for a GitHub of your own, and for tests.** Each begins with `http://` or `https://`, and they are set together or not at all: with one alone, `pmj` would download from one GitHub and list versions from another. A token goes to whatever address you give for the API.
 - **Each of the four programs is one program, with no arguments:** a path, or a name that is looked for in the directories of `PATH`. A variable that is set to nothing says nothing.
 - **A build reads the six of them only when it needs them.** A package of Emojicode alone needs no C++ compiler, and a command that does not build needs none of this.
-- **What `pmj` is told here and cannot use stops it,** with `config.invalid`, before anything is asked of anyone: an address that is not one, one address without the other, or a token that could not be sent. It is never passed over for what `pmj` does when nothing is said. A command that needs nothing of GitHub is not stopped, such as `pmj new`, or `pmj install` when the cache holds what is locked.
+- **What `pmj` is told here and cannot use stops it,** with `config.invalid`, before anything is asked of anyone: an address that is not one, one address without the other, or a token that could not be sent. It is never passed over for what `pmj` does when nothing is said. An address or a token that cannot be used stops only a command that asks something of GitHub: `pmj new` is not stopped by one, and neither is `pmj install` when the cache holds what is locked. A list of scopes that cannot be read stops every command that reads what a project depends on, whatever the cache holds.
 
 ## How a package is found
 
