@@ -222,7 +222,7 @@ namespace Packmoji.Cli.Tests.Commands
             run.Error.ShouldBe(
                 """
                 error[scope.not-allowed]: "@someone/thing" is outside the scopes pmj is limited to here.
-                  why: it was asked for, and PACKMOJI_SCOPES allows only thatplatypus
+                  why: pmj add was given it, and PACKMOJI_SCOPES allows only thatplatypus
                   fix: depend only on packages of that scope; the list is set by whoever runs pmj here
 
                 """.ReplaceLineEndings(Environment.NewLine));

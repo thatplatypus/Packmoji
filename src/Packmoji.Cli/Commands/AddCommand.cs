@@ -37,7 +37,7 @@ namespace Packmoji.Cli.Commands
             // Said before its versions are asked for: nothing is asked of GitHub about a package that may not be depended on.
             if (!project.Allowed.Allows(name))
             {
-                return reply.Stop(project.Allowed.Refuses(name, "it was asked for"));
+                return reply.Stop(project.Allowed.Refuses(name, "pmj add was given it"));
             }
 
             // With no requirement there is still something to do for a package that is asked for
