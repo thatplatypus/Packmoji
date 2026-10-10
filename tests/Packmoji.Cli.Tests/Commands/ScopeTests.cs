@@ -336,6 +336,28 @@ namespace Packmoji.Cli.Tests.Commands
         }
 
         [Fact]
+        public async Task A_list_that_is_set_to_nothing_is_a_list_that_cannot_be_read_and_not_no_limit()
+        {
+            // On a server the variable is filled in from a setting, and a setting that is missing fills it with nothing.
+            using var sandbox = WithTwoOwners();
+            sandbox.Project("@you/site", "@someone/thing@1.0");
+            sandbox.Variables["PACKMOJI_SCOPES"] = "";
+
+            var run = await sandbox.RunAsync("install");
+
+            run.Status.ShouldBe(1);
+            run.Error.ShouldBe(
+                """
+                error[config.invalid]: PACKMOJI_SCOPES is not a list of scopes.
+                  why: it names no scope
+                  fix: write the scopes that are allowed with commas between them, as in PACKMOJI_SCOPES=thatplatypus,emojicode; to allow every scope, do not set it
+
+                """.ReplaceLineEndings(Environment.NewLine));
+            sandbox.GitHub.Requests.ShouldBeEmpty();
+            sandbox.Has("packmoji.lock").ShouldBeFalse();
+        }
+
+        [Fact]
         public async Task A_command_that_reads_nothing_of_what_a_project_depends_on_takes_no_notice_of_the_list()
         {
             using var sandbox = new Sandbox();

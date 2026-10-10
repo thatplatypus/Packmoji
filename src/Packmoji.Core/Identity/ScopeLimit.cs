@@ -40,14 +40,19 @@ namespace Packmoji.Core.Identity
 
         /// <summary>
         /// Reads the list: scopes with commas between them, each as a package's name has it, without
-        /// the <c>@</c>. Nothing at all is no limit. Anything that is not a list is refused, with
-        /// why: a limit that was mistyped must never be taken for no limit.
+        /// the <c>@</c>. A variable that is not set is no limit. Anything that is not a list is
+        /// refused, with why: a limit that was mistyped must never be taken for no limit.
         /// </summary>
+        /// <remarks>
+        /// A variable that is set to nothing is refused too, though every other variable of pmj's
+        /// that is set to nothing says nothing. On a server this one is filled in from a setting,
+        /// and a setting that is missing fills it with nothing: that must stop pmj, and not free it.
+        /// </remarks>
         /// <param name="text">The variable's value, or null when it is not set.</param>
         public static bool TryParse(string? text, [NotNullWhen(true)] out ScopeLimit? limit, [NotNullWhen(false)] out string? reason)
         {
             (limit, reason) = (null, null);
-            if (string.IsNullOrEmpty(text))
+            if (text is null)
             {
                 limit = None;
                 return true;

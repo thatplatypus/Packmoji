@@ -17,12 +17,10 @@ namespace Packmoji.Core.Tests.Identity
             return limit!;
         }
 
-        [Theory]
-        [InlineData(null)]
-        [InlineData("")]
-        public void With_nothing_said_there_is_no_limit(string? text)
+        [Fact]
+        public void With_the_variable_not_set_there_is_no_limit()
         {
-            var limit = Read(text);
+            var limit = Read(null);
 
             limit.IsSet.ShouldBeFalse();
             limit.Allows(Sample.Name("@anyone/anything")).ShouldBeTrue();
@@ -65,6 +63,7 @@ namespace Packmoji.Core.Tests.Identity
         [InlineData("thatplatypus,,emojicode", "it has a comma with no scope beside it")]
         [InlineData("thatplatypus,", "it has a comma with no scope beside it")]
         [InlineData(",", "it has a comma with no scope beside it")]
+        [InlineData("", "it names no scope")]
         [InlineData("   ", "it names no scope")]
         [InlineData("@thatplatypus", "\"@thatplatypus\" is not a scope: a scope is written without the @")]
         [InlineData("thatplatypus,Emojicode", "\"Emojicode\" is not a scope: a scope is a GitHub owner's name in lowercase, of letters, digits and single hyphens")]

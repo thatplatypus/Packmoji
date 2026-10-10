@@ -469,7 +469,7 @@ Each file `pmj` writes is written whole beside its place and then put there in o
 | `PACKMOJI_GITHUB` | Another address for `https://github.com`, where releases are downloaded from |
 | `PACKMOJI_GITHUB_API` | Another address for `https://api.github.com`, where versions are listed |
 | `PACKMOJI_DIRECT` | Accepted, as `--direct` is. Finding packages on GitHub directly is the only way there is yet |
-| `PACKMOJI_SCOPES` | The scopes `pmj` may depend on, with commas between them, as in `thatplatypus,emojicode`. Without it, any scope |
+| `PACKMOJI_SCOPES` | The scopes `pmj` may depend on, with commas between them, as in `thatplatypus,emojicode`. Not set, any scope |
 | `EMOJICODEC` | The Emojicode compiler that a build uses. Without it, the first `emojicodec` on `PATH` |
 | `EMOJICODE_PACKAGES_PATH` | Where the compiler's own packages are, which a program is linked with. The compiler reads it too. Without it, `/usr/local/EmojicodePackages` |
 | `EMOJICODE_INCLUDE` | Where the compiler's headers are, which native code is compiled against. Without it, `/usr/local/include/emojicode` |
@@ -478,7 +478,7 @@ Each file `pmj` writes is written whole beside its place and then put there in o
 - **A token is sent to the API's address and to nothing else.** It is never sent with a download, and it is in nothing `pmj` prints or writes. Space and line ends around it are no part of it.
 - **`PACKMOJI_SCOPES` is for a machine that runs other people's projects,** such as a website that lets a visitor write a manifest. A package of a scope that is not in the list is refused, with `scope.not-allowed`, wherever it is met: when `packmoji.json` asks for it, when `packmoji.lock` holds it, when `pmj add` is given it, and when a package that is allowed depends on it. Nothing is asked of GitHub about it, since a scope is the owner its packages are released by.
 - **Every command that reads what a project depends on holds to the list:** `add`, `remove`, `install`, `update`, `tree`, `verify`, `build` and `run`. A project that already asks for a package outside it is refused by `remove` too, and its manifest is mended by hand. Once the manifest no longer asks for it, `pmj install` locks the project again without it: a lockfile that no longer answers the manifest is not held to the list, since nothing of it is used.
-- **A scope is written as a package's name has it, without the `@`.** A list that cannot be read stops those commands, with `config.invalid`: a limit that was mistyped is never taken for no limit.
+- **A scope is written as a package's name has it, without the `@`.** A list that cannot be read stops those commands, with `config.invalid`, before either file of the project is read: a limit that was mistyped is never taken for no limit. That holds for a variable that is set to nothing, which is what a missing setting leaves on a server. To have no limit, do not set the variable.
 - **The two addresses are for a GitHub of your own, and for tests.** Each begins with `http://` or `https://`, and they are set together or not at all: with one alone, `pmj` would download from one GitHub and list versions from another. A token goes to whatever address you give for the API.
 - **Each of the four programs is one program, with no arguments:** a path, or a name that is looked for in the directories of `PATH`. A variable that is set to nothing says nothing.
 - **A build reads the six of them only when it needs them.** A package of Emojicode alone needs no C++ compiler, and a command that does not build needs none of this.
