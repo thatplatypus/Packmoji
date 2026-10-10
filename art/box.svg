@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <title>Packmoji</title>
+  <!-- The tape is the yellow at the heart of the Blazemoji flame, and the eyes are built the
+       way that flame's are, so that the two are plainly kin. The box's own are set wider
+       apart, to suit a square face, and it has a mouth, which the flame does not. -->
+  <defs>
+    <linearGradient id="lid" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F3C98F"/>
+      <stop offset="1" stop-color="#E6B074"/>
+    </linearGradient>
+    <linearGradient id="front" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#DDA15E"/>
+      <stop offset="1" stop-color="#BC7A3C"/>
+    </linearGradient>
+    <linearGradient id="tape" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFBE2E"/>
+      <stop offset="1" stop-color="#FFE57A"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#lid)" d="M136 76H376C394 76 402 84 410 99L460 200H52L102 99C110 84 118 76 136 76Z"/>
+  <path fill="url(#front)" d="M52 200H460V448C460 472 448 484 424 484H88C64 484 52 472 52 448Z"/>
+  <path fill="#8A5524" opacity="0.28" d="M52 200H460V214H52Z"/>
+  <path fill="url(#tape)" d="M230 76H282L302 200V262L287 250L271 262L256 250L241 262L225 250L210 262V200Z"/>
+  <g id="eyes">
+    <ellipse cx="170" cy="352" rx="54" ry="60" fill="#fff" stroke="#8A5524" stroke-width="6"/>
+    <ellipse cx="178" cy="360" rx="30" ry="36" fill="#2A1A12"/>
+    <circle cx="168" cy="346" r="10" fill="#fff"/>
+    <ellipse cx="342" cy="352" rx="54" ry="60" fill="#fff" stroke="#8A5524" stroke-width="6"/>
+    <ellipse cx="350" cy="360" rx="30" ry="36" fill="#2A1A12"/>
+    <circle cx="340" cy="346" r="10" fill="#fff"/>
+  </g>
+  <path id="mouth" fill="none" stroke="#8A5524" stroke-width="8" stroke-linecap="round" d="M238 398Q256 414 274 398"/>
+</svg>

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="art/box.svg" width="180" alt="Packmoji: a cardboard box with eyes">
+</p>
+
 # Packmoji
 
 The package manager and package registry for [Emojicode](https://www.emojicode.org). The command is `pmj`.
@@ -54,6 +58,7 @@ CI runs exactly these scripts.
 | `docs/manifest.md` | The reference for `packmoji.json` and `packmoji.lock`, and every diagnostic code |
 | `docs/resolution.md` | How `pmj` chooses versions, what stops it, and what to do then |
 | `docs/decisions/` | Why things are the way they are, one short record for each decision |
+| `art/` | The box with eyes at the top of this page, drawn once as an SVG |
 | `scripts/` | What CI runs, to be run by hand as well |
 
 ## License
