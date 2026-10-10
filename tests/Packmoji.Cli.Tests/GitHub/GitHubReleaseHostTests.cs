@@ -106,7 +106,8 @@ namespace Packmoji.Cli.Tests.GitHub
             diagnostic.Reason.ShouldContain("crypto-v1.0.0");
         }
 
-        [Fact]
+        // With a limit of its own, for what this holds is that pmj does not wait for ever, and a test that waited for ever would hold nothing.
+        [Fact(Timeout = 10_000)]
         public async Task A_download_that_goes_quiet_part_way_is_given_up_and_said_to_be_the_network()
         {
             var github = WithCrypto();
@@ -120,7 +121,7 @@ namespace Packmoji.Cli.Tests.GitHub
             diagnostic.Reason.ShouldContain("the answer stopped coming");
         }
 
-        [Fact]
+        [Fact(Timeout = 10_000)]
         public async Task A_download_that_is_stopped_by_whoever_asked_for_it_is_stopped_and_is_not_blamed_on_the_network()
         {
             var github = WithCrypto();

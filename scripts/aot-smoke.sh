@@ -8,6 +8,10 @@
 # and makes an application that adds the library, installs it on a machine with an empty cache, and
 # verifies it. GitHub is stood in for by the packed file served from this machine, so nothing here
 # reaches the network. It needs python3, for that server alone.
+#
+# The server answers a download as GitHub does, by sending pmj on to another address, and it keeps
+# which requests came with a token. So this is also where pmj is held, over real HTTP, to following
+# a download where it is sent and to giving its token to the API alone.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -68,7 +72,55 @@ mkdir -p "$release" "$work/site/repos/smoke/greeter"
 cp target/greeter-0.1.0.pmj.tar.gz "$release/"
 echo '[{"tag_name":"greeter-v0.1.0","draft":false,"prerelease":false,"assets":[{"name":"greeter-0.1.0.pmj.tar.gz"}]}]' > "$work/site/repos/smoke/greeter/releases"
 
-python3 -u -m http.server 0 --bind 127.0.0.1 --directory "$work/site" > "$work/server.log" 2>&1 &
+cat > "$work/github.py" <<'PYTHON'
+import http.server
+import sys
+import threading
+
+site, asked = sys.argv[1], sys.argv[2]
+
+
+class Files(http.server.SimpleHTTPRequestHandler):
+    kind = "file"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=site, **kwargs)
+
+    # Whether a token came is kept, and never the token.
+    def note(self, kind):
+        token = "yes" if self.headers.get("Authorization") else "no"
+        with open(asked, "a") as log:
+            log.write(f"{kind} {self.path.split('?')[0]} token={token}\n")
+
+    def do_GET(self):
+        self.note(self.kind)
+        super().do_GET()
+
+    def log_message(self, *args):
+        pass
+
+
+class GitHub(Files):
+    kind = "api"
+
+    def do_GET(self):
+        if "/releases/download/" not in self.path:
+            super().do_GET()
+            return
+        self.note("download")
+        self.send_response(302)
+        self.send_header("Location", f"http://127.0.0.1:{files.server_port}{self.path}")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+
+files = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Files)
+github = http.server.ThreadingHTTPServer(("127.0.0.1", 0), GitHub)
+threading.Thread(target=files.serve_forever, daemon=True).start()
+print(f"Serving on port {github.server_port} .", flush=True)
+github.serve_forever()
+PYTHON
+python3 -u "$work/github.py" "$work/site" "$work/asked.log" > "$work/server.log" 2>&1 &
 server=$!
 port=""
 for _ in $(seq 1 50); do
@@ -81,13 +133,22 @@ done
 export PACKMOJI_HOME="$work/home"
 export PACKMOJI_GITHUB="http://127.0.0.1:$port"
 export PACKMOJI_GITHUB_API="http://127.0.0.1:$port"
+export GITHUB_TOKEN="smoke-token-that-is-no-ones"
 
 # An application that depends on it.
 cd "$work"
 "$pmj" new @smoke/app > /dev/null
 cd app
-"$pmj" add @smoke/greeter
+"$pmj" add @smoke/greeter 2>&1 | tee "$work/said.log"
 grep -q "\"sha256\": \"$digest\"" packmoji.lock || fail "the lockfile does not hold the digest that pmj pack printed"
+
+# The token went to the API. It went with no download, and not on to where a download was sent.
+download="/smoke/greeter/releases/download/greeter-v0.1.0/greeter-0.1.0.pmj.tar.gz"
+grep -qx "api /repos/smoke/greeter/releases token=yes" "$work/asked.log" || fail "the list of releases was not asked for with the token"
+grep -qx "download $download token=no" "$work/asked.log" || fail "the release was not downloaded, or was asked for with the token"
+grep -qx "file $download token=no" "$work/asked.log" || fail "the download was not followed to where it was sent on, or the token went with it"
+if grep -Eq "^(download|file) .* token=yes$" "$work/asked.log"; then fail "the token went with a download"; fi
+if grep -q "smoke-token" "$work/said.log" packmoji.lock packmoji.json; then fail "the token is in what pmj printed or wrote"; fi
 
 # On a machine that has fetched nothing, the lockfile alone is enough, and may not change.
 chmod -R u+w "$PACKMOJI_HOME" && rm -rf "$PACKMOJI_HOME"

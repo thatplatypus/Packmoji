@@ -133,6 +133,31 @@ namespace Packmoji.Cli.Tests.Commands
         }
 
         [Fact]
+        public async Task An_unpacked_file_that_was_replaced_by_a_link_is_reported_though_it_reads_the_same_and_is_as_long()
+        {
+            // What a link leads to can be changed without the cache being touched, so the same bytes
+            // today are no reason to trust it. This one is made as a careful one would be: a link is
+            // as long as the path it holds, and the path here is as long as the file was.
+            Assert.SkipWhen(OperatingSystem.IsWindows(), "Making a symbolic link there needs a right that a test does not have.");
+            using var sandbox = await InstalledAsync();
+            var source = Path.Combine(CacheOf(sandbox, Crypto(sandbox), ""), "src", "lib.🍇");
+            var content = File.ReadAllBytes(source);
+            var twin = "../../" + new string('x', content.Length - "../../".Length);
+            File.Copy(source, Path.GetFullPath(Path.Combine(Path.GetDirectoryName(source)!, twin)));
+            File.SetAttributes(source, FileAttributes.Normal);
+            File.Delete(source);
+            File.CreateSymbolicLink(source, twin);
+            File.ReadAllBytes(source).ShouldBe(content);
+            new FileInfo(source).Length.ShouldBe(content.Length);
+
+            var run = await sandbox.RunAsync("verify");
+
+            run.Status.ShouldBe(1);
+            run.Error.ShouldContain("error[cache.mismatch]: The cache's copy of \"@thatplatypus/crypto\" 1.0.0 is not what it should be.");
+            run.Error.ShouldContain("\"src/lib.🍇\" is not the file the archive holds");
+        }
+
+        [Fact]
         public async Task When_GitHub_cannot_be_reached_verify_says_so_and_still_holds_the_cache_to_the_lockfile()
         {
             using var sandbox = await InstalledAsync();

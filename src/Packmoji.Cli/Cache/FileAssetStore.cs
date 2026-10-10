@@ -53,7 +53,10 @@ namespace Packmoji.Cli.Cache
                 }
 
                 Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                await File.WriteAllBytesAsync(beside, archive, cancellationToken);
+
+                // Not stopped part way. An archive that has arrived is written whole, which takes a
+                // moment, and a pmj that is being stopped stops at whatever it would have done next.
+                await File.WriteAllBytesAsync(beside, archive, CancellationToken.None);
                 File.SetAttributes(beside, FileAttributes.ReadOnly);
 
                 // What is in the way was spoiled, and on some machines a file marked as not to be written cannot be replaced.
@@ -62,8 +65,12 @@ namespace Packmoji.Cli.Cache
             }
             catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
             {
-                Discard(beside);
                 throw new PackageSourceException(Unusable(path, "written", failure));
+            }
+            finally
+            {
+                // It is gone already when it was put in its place. Whatever else happened, nothing is left beside that place.
+                Discard(beside);
             }
         }
 

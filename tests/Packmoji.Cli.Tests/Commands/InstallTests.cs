@@ -237,6 +237,42 @@ namespace Packmoji.Cli.Tests.Commands
         }
 
         [Fact]
+        public async Task A_run_that_is_stopped_part_way_keeps_whole_what_had_arrived_and_leaves_nothing_half_done()
+        {
+            using var sandbox = Sandbox.WithGrapevine();
+            sandbox.Project("@someone/app");
+            var manifest = sandbox.Read("packmoji.json");
+            using var stop = new CancellationTokenSource();
+            sandbox.Stop = stop.Token;
+
+            // Stopped at the worst moment there is: as the last byte of the second archive arrives, and before it is kept.
+            sandbox.GitHub.Delivered = path =>
+            {
+                if (path.EndsWith("/crypto-1.0.0.pmj.tar.gz", StringComparison.Ordinal))
+                {
+                    stop.Cancel();
+                }
+            };
+
+            var run = await sandbox.RunAsync("add", "@thatplatypus/grapevine");
+
+            run.Status.ShouldBe(130);
+            run.Output.ShouldBeEmpty();
+            run.Error.ShouldBeEmpty();
+            sandbox.Files().ShouldBe(["packmoji.json"]);
+            sandbox.Read("packmoji.json").ShouldBe(manifest);
+            sandbox.GitHub.Downloads.Count().ShouldBe(3);
+
+            var kept = Directory.EnumerateFiles(Path.Combine(sandbox.Home, "cache"), "*", SearchOption.AllDirectories).ToList();
+            kept.Select(Path.GetFileName).ShouldAllBe(file => file!.EndsWith(".pmj.tar.gz", StringComparison.Ordinal));
+            kept.Select(file => Path.GetFileName(Path.GetDirectoryName(Path.GetDirectoryName(file)))).Order(StringComparer.Ordinal).ShouldBe(["crypto", "grapevine"]);
+            foreach (var archive in kept)
+            {
+                Path.GetFileName(archive).ShouldBe(Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(archive))) + ".pmj.tar.gz");
+            }
+        }
+
+        [Fact]
         public async Task What_cannot_be_resolved_is_reported_whole_and_nothing_is_written()
         {
             using var sandbox = Sandbox.WithGrapevine();

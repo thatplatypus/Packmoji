@@ -45,6 +45,9 @@ namespace Packmoji.Cli.Tests.TestSupport
         /// <summary>When set, a download sends the first half of a file and then nothing more, as a connection that has gone quiet does.</summary>
         public bool Stalls { get; set; }
 
+        /// <summary>When set, it is called with the path of a download's address once whoever asked has read the whole of the file.</summary>
+        public Action<string>? Delivered { get; set; }
+
         /// <summary>A repository that is there and has released nothing.</summary>
         public FakeGitHub Create(string repository)
         {
@@ -88,11 +91,11 @@ namespace Packmoji.Cli.Tests.TestSupport
             }
 
             var parts = uri.AbsolutePath.Trim('/').Split('/').Select(Uri.UnescapeDataString).ToArray();
-            return Task.FromResult(uri.Host.StartsWith("api.", StringComparison.Ordinal) ? List(uri, parts) : Download(parts));
+            return Task.FromResult(uri.Host.StartsWith("api.", StringComparison.Ordinal) ? List(uri, parts) : Download(uri, parts));
         }
 
         // github.com/<owner>/<repo>/releases/download/<tag>/<asset>, with the owner and the repository in any case.
-        private HttpResponseMessage Download(string[] parts)
+        private HttpResponseMessage Download(Uri uri, string[] parts)
         {
             if (parts.Length != 6 || parts[2] != "releases" || parts[3] != "download")
             {
@@ -106,7 +109,10 @@ namespace Packmoji.Cli.Tests.TestSupport
                 return new HttpResponseMessage(HttpStatusCode.NotFound);
             }
 
-            HttpContent content = Stalls ? new StreamContent(new StalledStream(bytes)) : SaysLength ? new ByteArrayContent(bytes) : new StreamContent(new UnseekableStream(bytes));
+            HttpContent content = Stalls ? new StreamContent(new StalledStream(bytes))
+                : Delivered is { } delivered ? new StreamContent(new ToldStream(bytes, () => delivered(uri.AbsolutePath)))
+                : SaysLength ? new ByteArrayContent(bytes)
+                : new StreamContent(new UnseekableStream(bytes));
             content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
             return new HttpResponseMessage(HttpStatusCode.OK) { Content = content };
         }
@@ -195,6 +201,24 @@ namespace Packmoji.Cli.Tests.TestSupport
                 }
 
                 return read;
+            }
+        }
+
+        // A body that says when the whole of it has been read.
+        private sealed class ToldStream(byte[] bytes, Action read) : MemoryStream(bytes)
+        {
+            private bool _told;
+
+            public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+            {
+                var count = await base.ReadAsync(buffer, cancellationToken);
+                if (count == 0 && !_told)
+                {
+                    _told = true;
+                    read();
+                }
+
+                return count;
             }
         }
 
