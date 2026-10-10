@@ -486,6 +486,77 @@ namespace Packmoji.Cli.Tests.Commands
         }
 
         [Fact]
+        public async Task With_no_c_compiler_an_application_with_c_of_its_own_is_not_compiled()
+        {
+            using var sandbox = new Sandbox();
+            sandbox.Write("packmoji.json", Manifest("app", ", \"native\": { \"sources\": [\"native/*.c\"] }"));
+            sandbox.Write("src/main.🍇", "🏁 🍇\n🍉\n");
+            sandbox.Write("native/clock.c", "// clock\n");
+            File.Delete(Path.Combine(sandbox.ToolsDirectory, "cc"));
+
+            var run = await sandbox.RunAsync("build");
+
+            // What is missing is said before anything is compiled, the project's own files as a package's.
+            run.Status.ShouldBe(1);
+            run.Output.ShouldBeEmpty();
+            run.Error.ShouldBe(
+                """
+                error[tool.not-found]: The C compiler was not found.
+                  why: no program called cc is in any directory of PATH
+                  fix: install a C toolchain, or set CC to where it is
+
+                """.ReplaceLineEndings(Environment.NewLine));
+            sandbox.Tools.Compiles.ShouldBeEmpty();
+            sandbox.Files("target").ShouldBe([".pmj-lock"]);
+        }
+
+        [Fact]
+        public async Task With_no_cpp_compiler_a_library_with_cpp_of_its_own_is_not_compiled()
+        {
+            using var sandbox = new Sandbox();
+            sandbox.Write("packmoji.json", Manifest("library", ", \"native\": { \"sources\": [\"native/*.cpp\"] }"));
+            sandbox.Write("src/lib.🍇", "💭 a shelf\n");
+            sandbox.Write("native/shim.cpp", "// shim\n");
+            File.Delete(Path.Combine(sandbox.ToolsDirectory, "c++"));
+
+            var run = await sandbox.RunAsync("build");
+
+            run.Status.ShouldBe(1);
+            run.Output.ShouldBeEmpty();
+            run.Error.ShouldBe(
+                """
+                error[tool.not-found]: The C++ compiler was not found.
+                  why: no program called c++ is in any directory of PATH
+                  fix: install a C++ toolchain, or set CXX to where it is
+
+                """.ReplaceLineEndings(Environment.NewLine));
+            sandbox.Tools.Compiles.ShouldBeEmpty();
+            sandbox.Files("target").ShouldBe([".pmj-lock"]);
+        }
+
+        [Fact]
+        public async Task An_application_with_cpp_of_its_own_and_no_cpp_compiler_is_told_so_once_though_it_is_needed_twice()
+        {
+            using var sandbox = new Sandbox();
+            sandbox.Write("packmoji.json", Manifest("app", ", \"native\": { \"sources\": [\"native/*.cpp\"] }"));
+            sandbox.Write("src/main.🍇", "🏁 🍇\n🍉\n");
+            sandbox.Write("native/shim.cpp", "// shim\n");
+            File.Delete(Path.Combine(sandbox.ToolsDirectory, "c++"));
+
+            var run = await sandbox.RunAsync("build");
+
+            // It compiles the project's C++ and it links the program, and it is one thing to install.
+            run.Status.ShouldBe(1);
+            run.Error.ShouldBe(
+                """
+                error[tool.not-found]: The C++ compiler was not found.
+                  why: no program called c++ is in any directory of PATH
+                  fix: install a C++ toolchain, or set CXX to where it is
+
+                """.ReplaceLineEndings(Environment.NewLine));
+        }
+
+        [Fact]
         public async Task When_the_compilers_packages_are_where_EMOJICODE_PACKAGES_PATH_says_those_are_linked_and_not_the_installed_ones()
         {
             using var sandbox = Alone();

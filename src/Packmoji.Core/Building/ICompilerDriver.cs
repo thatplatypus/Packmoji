@@ -26,9 +26,9 @@ namespace Packmoji.Core.Building
         /// is compiled, so that a build that could not end does not begin.
         /// </summary>
         /// <param name="archiving">Whether a package or a library is to be built, which ends with its archive.</param>
-        /// <param name="nativeCode">Whether a native file is to be compiled.</param>
+        /// <param name="native">The language of each native file that is to be compiled, a package's or the project's own. Empty when there is none.</param>
         /// <param name="linking">Whether an application is to be linked.</param>
-        IReadOnlyList<Diagnostic> Lacks(bool archiving, bool nativeCode, bool linking);
+        IReadOnlyList<Diagnostic> Lacks(bool archiving, IReadOnlyCollection<NativeLanguage> native, bool linking);
 
         /// <summary>Compiles a package's Emojicode code. Gives the object, and leaves what others need of the package in its folder.</summary>
         ValueTask<BuildStep<string>> CompilePackageAsync(PackageCompile compile, CancellationToken cancellationToken);

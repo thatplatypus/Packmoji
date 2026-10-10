@@ -198,9 +198,10 @@ namespace Packmoji.Cli.Building
             }
 
             var toBuild = order.Where(package => !_store.Holds(package.Name, package.Version, keys[package.Name])).ToList();
+            // The project's own native files are compiled by the same tools as a package's, and a tool that is missing for them is as well said now.
             var lacks = _driver.Lacks(
                 archiving: toBuild.Count > 0 || own is { Manifest.Package.Kind: PackageKind.Library },
-                nativeCode: toBuild.Any(package => sources[package.Name].NativeFiles.Count > 0) || own is { NativeFiles.Count: > 0 },
+                native: [.. toBuild.SelectMany(package => sources[package.Name].NativeFiles).Concat(own?.NativeFiles ?? []).Select(file => file.Language!.Value)],
                 linking: own is { Manifest.Package.Kind: PackageKind.App });
             if (lacks.Count > 0)
             {

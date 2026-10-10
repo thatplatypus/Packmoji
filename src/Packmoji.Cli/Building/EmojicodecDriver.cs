@@ -99,13 +99,19 @@ namespace Packmoji.Cli.Building
                     $"check that it is a compiler that answers --version, or set {native.Variable} to one that does"));
         }
 
-        public IReadOnlyList<Diagnostic> Lacks(bool archiving, bool nativeCode, bool linking)
+        public IReadOnlyList<Diagnostic> Lacks(bool archiving, IReadOnlyCollection<NativeLanguage> native, bool linking)
         {
+            ArgumentNullException.ThrowIfNull(native);
             var lacks = new List<Diagnostic>();
-            var linker = Native(NativeLanguage.Cpp);
-            if (linking && Find(linker.Variable, linker.Fallback) is null)
+
+            // The C++ compiler also links. Whichever it is needed for, it is one thing to find and is said once.
+            foreach (var language in native.Concat(linking ? [NativeLanguage.Cpp] : []).Distinct())
             {
-                lacks.Add(NotFound(DiagnosticCodes.ToolNotFound, linker.Tool, linker.Variable, linker.Fallback, linker.Install));
+                var compiler = Native(language);
+                if (Find(compiler.Variable, compiler.Fallback) is null)
+                {
+                    lacks.Add(NotFound(DiagnosticCodes.ToolNotFound, compiler.Tool, compiler.Variable, compiler.Fallback, compiler.Install));
+                }
             }
 
             if (linking && AlwaysLinked.Select(Stock).FirstOrDefault(archive => !File.Exists(archive)) is { } missing)
@@ -122,7 +128,7 @@ namespace Packmoji.Cli.Building
                 lacks.Add(NotFound(DiagnosticCodes.ToolNotFound, "The archiver", ArchiverVariable, "ar", "install a C toolchain, which has one"));
             }
 
-            if (nativeCode && !File.Exists(Path.Combine(Headers, RuntimeHeader)))
+            if (native.Count > 0 && !File.Exists(Path.Combine(Headers, RuntimeHeader)))
             {
                 lacks.Add(new Diagnostic(
                     DiagnosticCodes.CompilerIncomplete,
