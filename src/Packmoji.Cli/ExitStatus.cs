@@ -17,5 +17,8 @@ namespace Packmoji.Cli
 
         /// <summary>pmj itself failed. This is a fault in pmj and is worth reporting.</summary>
         public const int InternalError = 70;
+
+        /// <summary>pmj was stopped before it had finished, as by Ctrl+C. It is the status a shell gives a program that an interrupt ended.</summary>
+        public const int Interrupted = 130;
     }
 }

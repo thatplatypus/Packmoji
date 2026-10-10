@@ -21,6 +21,9 @@ namespace Packmoji.Cli.Tests.TestSupport
         /// <summary>The downloads asked for, each as the path of its address.</summary>
         public IEnumerable<string> Downloads => Requests.Where(request => request.Uri.Host == "github.com").Select(request => request.Uri.AbsolutePath);
 
+        /// <summary>The lists of releases asked for, each as the path of its address.</summary>
+        public IEnumerable<string> Listings => Requests.Where(request => request.Uri.Host != "github.com").Select(request => request.Uri.AbsolutePath);
+
         /// <summary>When set, the API refuses as it does when its limit on requests is reached.</summary>
         public bool RateLimited { get; set; }
 

@@ -27,22 +27,29 @@ namespace Packmoji.Cli
             typeof(PmjHost).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "0.0.0";
 
         /// <summary>The host that the real machine is, as its environment describes it.</summary>
-        public static PmjHost FromEnvironment(TextWriter output, TextWriter error)
+        public static PmjHost FromEnvironment(TextWriter output, TextWriter error) =>
+            From(Environment.GetEnvironmentVariable, Directory.GetCurrentDirectory(), new HttpClient(), output, error);
+
+        /// <summary>The host that an environment describes: where the cache is kept, which GitHub is spoken to, and a token for its API.</summary>
+        /// <param name="variable">Gives the value of an environment variable, or null when it is not set.</param>
+        public static PmjHost From(Func<string, string?> variable, string workingDirectory, HttpClient http, TextWriter output, TextWriter error)
         {
-            var home = Environment.GetEnvironmentVariable("PACKMOJI_HOME");
-            var token = Environment.GetEnvironmentVariable("GITHUB_TOKEN") ?? Environment.GetEnvironmentVariable("GH_TOKEN");
+            ArgumentNullException.ThrowIfNull(variable);
+            var home = variable("PACKMOJI_HOME");
             return new PmjHost
             {
-                WorkingDirectory = Directory.GetCurrentDirectory(),
+                WorkingDirectory = workingDirectory,
                 HomeDirectory = string.IsNullOrEmpty(home) ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".packmoji") : home,
-                Releases = new GitHubReleaseHost(new HttpClient(), Address("PACKMOJI_GITHUB"), Address("PACKMOJI_GITHUB_API"), token, $"pmj/{Version}"),
+                Releases = new GitHubReleaseHost(http, Address(variable("PACKMOJI_GITHUB")), Address(variable("PACKMOJI_GITHUB_API")), Set(variable("GITHUB_TOKEN")) ?? Set(variable("GH_TOKEN")), $"pmj/{Version}"),
                 Out = output,
                 Error = error,
             };
         }
 
+        // A variable that is set to nothing says nothing, and does not hide the one after it.
+        private static string? Set(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+
         // Another address for GitHub or for its API: for a test of the native binary, or a GitHub of one's own.
-        private static Uri? Address(string variable) =>
-            Uri.TryCreate(Environment.GetEnvironmentVariable(variable), UriKind.Absolute, out var address) ? address : null;
+        private static Uri? Address(string? text) => Uri.TryCreate(text, UriKind.Absolute, out var address) ? address : null;
     }
 }

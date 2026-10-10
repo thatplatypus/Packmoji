@@ -2,6 +2,8 @@ using System.CommandLine;
 using System.CommandLine.Help;
 using System.CommandLine.Parsing;
 using Packmoji.Cli.Commands;
+using Packmoji.Cli.Output;
+using Packmoji.Core.Direct;
 
 namespace Packmoji.Cli
 {
@@ -23,6 +25,9 @@ namespace Packmoji.Cli
                 },
                 Scaffolding(host, "new", "Make a project in a new directory named after it.", inPlace: false),
                 Scaffolding(host, "init", "Make a project in this directory.", inPlace: true),
+                Add(host),
+                Remove(host),
+                Install(host),
                 Pack(host),
             };
 
@@ -59,7 +64,17 @@ namespace Packmoji.Cli
                 var configuration = new InvocationConfiguration { Output = host.Out, Error = host.Error, EnableDefaultExceptionHandler = false };
                 return await parsed.InvokeAsync(configuration, cancellationToken);
             }
-            catch (Exception failure) when (failure is not OperationCanceledException)
+            catch (OperationCanceledException)
+            {
+                // Stopped from outside, as by Ctrl+C. Each file pmj writes is put in its place in one step, so nothing is half done.
+                return ExitStatus.Interrupted;
+            }
+            catch (PackageSourceException failure)
+            {
+                // Not being able to find something out is a problem to report, and no fault of pmj's.
+                return DiagnosticPrinter.Report(host, failure.Diagnostic);
+            }
+            catch (Exception failure)
             {
                 host.Error.WriteLine($"error: pmj failed in a way it should not have: {failure.GetType().Name}: {failure.Message}");
                 host.Error.WriteLine("This is a fault in pmj and nothing you did. Please report it at https://github.com/thatplatypus/Packmoji/issues, with the command you ran.");
@@ -85,6 +100,43 @@ namespace Packmoji.Cli
                 }
             });
             command.SetAction(parseResult => Scaffold.Run(host, parseResult.GetValue(package)!, parseResult.GetValue(library), inPlace));
+            return command;
+        }
+
+        private static Command Add(PmjHost host)
+        {
+            var package = new Argument<string>("package")
+            {
+                Description = "The package to depend on, as @scope/name. To ask for a version, write @scope/name@1.2: without one, the latest is asked for.",
+            };
+            var dev = new Option<bool>("--dev") { Description = "The package is needed only to develop this project, and not by what depends on it." };
+            var repository = new Option<string?>("--repository")
+            {
+                Description = "Where the package lives, as github.com/owner/repo. It is needed once, and only for a package that shares its repository with others and cannot be found beside something already depended on.",
+            };
+
+            var command = new Command("add", "Depend on a package: write it into packmoji.json, lock it and fetch it.") { package, dev, repository };
+            command.SetAction((parseResult, cancellationToken) =>
+                AddCommand.RunAsync(host, parseResult.GetValue(package)!, parseResult.GetValue(dev), parseResult.GetValue(repository), cancellationToken));
+            return command;
+        }
+
+        private static Command Remove(PmjHost host)
+        {
+            var package = new Argument<string>("package") { Description = "The package to stop depending on, as @scope/name." };
+            var command = new Command("remove", "Stop depending on a package: take it out of packmoji.json and lock what is left.") { package };
+            command.SetAction((parseResult, cancellationToken) => RemoveCommand.RunAsync(host, parseResult.GetValue(package)!, cancellationToken));
+            return command;
+        }
+
+        private static Command Install(PmjHost host)
+        {
+            var locked = new Option<bool>("--locked")
+            {
+                Description = "Fail if packmoji.lock would have to be written or changed. This is for CI, where nobody is there to see it change.",
+            };
+            var command = new Command("install", "Fetch exactly what packmoji.lock holds. Versions are chosen only if packmoji.json asks for something else.") { locked };
+            command.SetAction((parseResult, cancellationToken) => InstallCommand.RunAsync(host, parseResult.GetValue(locked), cancellationToken));
             return command;
         }
 
