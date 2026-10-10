@@ -6,7 +6,7 @@ namespace Packmoji.Core.Archives
     /// emoji before the characters from U+E000 up. An archive's order must not be an accident of the
     /// language pmj happens to be written in.
     /// </summary>
-    internal sealed class PathOrder : IComparer<string>
+    public sealed class PathOrder : IComparer<string>
     {
         public static PathOrder Instance { get; } = new();
 

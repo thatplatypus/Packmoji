@@ -5,8 +5,9 @@ artifacts/
 TestResults/
 *.user
 
-# What pmj builds into, in any sample or test project
+# What pmj builds into, in any sample or test project, and where it puts the packages it built
 target/
+samples/**/packages/
 
 # Working papers: the brief, and the specs and plans this was built from. They stay on disk.
 docs/superpowers/

@@ -49,7 +49,7 @@ namespace Packmoji.Cli.Commands
                 var written = new List<string>();
                 Put(directory, ManifestReader.FileName, ManifestWriter.Write(manifest), written);
                 Put(directory, entry, library ? LibrarySource : AppSource(package), written);
-                Put(directory, ".gitignore", $"{ProjectFiles.Target}/\npackages/\n", written);
+                Put(directory, ".gitignore", $"{ProjectFiles.Target}/\n{ProjectFiles.Packages}/\n", written);
                 Put(directory, "README.md", $"# {package.Name}\n", written);
 
                 host.Out.WriteLine($"Made {(library ? "the library" : "the application")} {package} in {(inPlace ? "this directory" : package.Name + "/")}:");

@@ -10,6 +10,7 @@ using Packmoji.Core.Lockfiles;
 using Packmoji.Core.Manifests;
 using Packmoji.Core.Reports;
 using Packmoji.Core.Resolution;
+using Packmoji.Core.Versioning;
 
 namespace Packmoji.Cli.Commands
 {
@@ -94,18 +95,33 @@ namespace Packmoji.Cli.Commands
         /// </summary>
         public async Task<int> InstallLockedAsync(IReadOnlyList<RepositoryRef> alsoLookIn, CancellationToken cancellationToken)
         {
-            var check = await LockCheck.CheckAsync(Lockfile!, Source(alsoLookIn), cancellationToken);
+            var check = await FetchLockedAsync(alsoLookIn, cancellationToken);
             DiagnosticPrinter.Print(Host.Error, check.Diagnostics, check.OmittedDiagnostics);
             if (!check.Succeeded)
             {
                 return ExitStatus.Problem;
             }
 
-            await FetchAsync(check.Graph, cancellationToken);
             Host.Out.WriteLine(check.Graph.Packages.Count == 0
                 ? "Nothing to install: the project depends on no package."
                 : $"Installed what {LockfileReader.FileName} holds: {Count(check.Graph.Packages.Count)}.");
             return ExitStatus.Success;
+        }
+
+        /// <summary>
+        /// Holds each locked package to what is published and fetches what the cache does not hold,
+        /// and says nothing itself: what it found is for the command to say. A build begins with this,
+        /// as an install is nothing else.
+        /// </summary>
+        public async Task<ResolveResult> FetchLockedAsync(IReadOnlyList<RepositoryRef> alsoLookIn, CancellationToken cancellationToken)
+        {
+            var check = await LockCheck.CheckAsync(Lockfile!, Source(alsoLookIn), cancellationToken);
+            if (check.Succeeded)
+            {
+                await FetchAsync(check.Graph, cancellationToken);
+            }
+
+            return check;
         }
 
         /// <summary>
@@ -199,23 +215,28 @@ namespace Packmoji.Cli.Commands
                     continue;
                 }
 
-                if (await Store.FindAsync(published.Name, published.Version, published.Sha256, cancellationToken) is not { } archive)
-                {
-                    throw new PackageSourceException(new Diagnostic(
-                        DiagnosticCodes.CacheUnusable,
-                        $"The archive of \"{published.Name}\" {published.Version} is gone from the cache.",
-                        "it was there a moment ago, so something else is changing the cache while pmj uses it",
-                        "run the command again"));
-                }
-
-                var files = PackageArchive.Read(archive);
-                if (!files.Succeeded)
-                {
-                    throw new PackageSourceException(files.Diagnostics[0]);
-                }
-
-                Store.Unpack(published.Name, published.Version, published.Sha256, files.Value);
+                Store.Unpack(published.Name, published.Version, published.Sha256, await FilesOfAsync(published.Name, published.Version, published.Sha256, cancellationToken));
             }
+        }
+
+        /// <summary>
+        /// The files of a package whose archive has been fetched, read from the archive itself, which
+        /// is held to its digest as it is read. A build takes a package's manifest from here, and
+        /// holds the unpacked files to these before it compiles them.
+        /// </summary>
+        public async Task<IReadOnlyList<ArchiveFile>> FilesOfAsync(PackageName name, SemanticVersion version, Sha256Digest digest, CancellationToken cancellationToken)
+        {
+            if (await Store.FindAsync(name, version, digest, cancellationToken) is not { } archive)
+            {
+                throw new PackageSourceException(new Diagnostic(
+                    DiagnosticCodes.CacheUnusable,
+                    $"The archive of \"{name}\" {version} is gone from the cache.",
+                    "it was there a moment ago, so something else is changing the cache while pmj uses it",
+                    "run the command again"));
+            }
+
+            var files = PackageArchive.Read(archive);
+            return files.Succeeded ? files.Value : throw new PackageSourceException(files.Diagnostics[0]);
         }
     }
 }

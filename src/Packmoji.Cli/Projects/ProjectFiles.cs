@@ -16,6 +16,16 @@ namespace Packmoji.Cli.Projects
         /// <summary>The directory of a project that pmj writes into, and so never reads a package from.</summary>
         public const string Target = "target";
 
+        /// <summary>The directory of a project that holds the packages it is built with: the one place the compiler looks without being told to.</summary>
+        public const string Packages = "packages";
+
+        /// <summary>
+        /// What is kept at the top of a project's directory and is no part of the project: what pmj
+        /// writes, where built packages go, and git's own files. No pattern of a manifest is given
+        /// the chance to select them.
+        /// </summary>
+        public static readonly string[] NotTheProject = [".git", Target, Packages];
+
         /// <summary>The manifest of the project in a directory, or why there is none to work with.</summary>
         public static Outcome<Manifest> ReadManifest(string directory)
         {
@@ -80,6 +90,26 @@ namespace Packmoji.Cli.Projects
 
                 return Unreadable(writing, "written", failure);
             }
+        }
+
+        /// <summary>
+        /// The problem when one of the places in a project that pmj is about to write into is a
+        /// symbolic link, or null when none is. A project's directory may have come from someone
+        /// else, links and all, and what is cleared and written through a link is cleared and
+        /// written wherever the link leads.
+        /// </summary>
+        /// <param name="places">Paths in the project, each with <c>/</c> between its parts.</param>
+        public static Diagnostic? Linked(string directory, IEnumerable<string> places)
+        {
+            // Asked of the entry itself and not of what it leads to, so a link that leads nowhere is found too.
+            var linked = places.FirstOrDefault(place => new FileInfo(Path.Combine(directory, place.Replace('/', Path.DirectorySeparatorChar))).LinkTarget is not null);
+            return linked is null
+                ? null
+                : new Diagnostic(
+                    DiagnosticCodes.ProjectUnreadable,
+                    $"\"{linked}\" is a symbolic link, and pmj does not build through one.",
+                    "a build clears what is at the places it writes to and then writes there, and a link can lead anywhere on this machine",
+                    "delete the link, and pmj makes a directory in its place");
         }
 
         public static Diagnostic Unreadable(string path, string done, Exception failure) =>

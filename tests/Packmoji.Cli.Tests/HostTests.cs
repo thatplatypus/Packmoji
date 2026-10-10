@@ -37,6 +37,27 @@ namespace Packmoji.Cli.Tests
         }
 
         [Theory]
+        [InlineData("GITHUB_TOKEN")]
+        [InlineData("GH_TOKEN")]
+        public async Task The_tools_of_a_build_are_started_without_the_token_which_is_for_GitHub_alone(string variable)
+        {
+            Assert.SkipWhen(OperatingSystem.IsWindows(), "No Emojicode compiler runs on Windows, and this test stands a shell in for one.");
+            using var sandbox = new Sandbox();
+            var was = Environment.GetEnvironmentVariable(variable);
+            Environment.SetEnvironmentVariable(variable, "ghp_a_token_that_is_no_ones");
+            try
+            {
+                var tool = await sandbox.Host().Tools.RunAsync("/bin/sh", ["-c", $"echo \"${{{variable}:-not given}}\""], sandbox.Work, TestContext.Current.CancellationToken);
+
+                tool!.Output.ShouldBe("not given\n");
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable(variable, was);
+            }
+        }
+
+        [Theory]
         [InlineData("ghp_token\n")]
         [InlineData("  ghp_token\r\n")]
         [InlineData("\tghp_token ")]

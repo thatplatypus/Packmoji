@@ -84,9 +84,9 @@ Only `package` and its first four keys are required. This is a whole manifest:
 | `build.entry` | string | no | The package's main file, ending in `.emojic` or `.🍇`: see [The entry file](#the-entry-file) |
 | `build.sources` | array of strings | no | Patterns for the package's source files. At least one, none repeated. Default `src/**/*.emojic` and `src/**/*.🍇` |
 | `native` | object | no | |
-| `native.sources` | array of strings | no | Patterns for the C and C++ files compiled into the package |
+| `native.sources` | array of strings | no | Patterns for the C and C++ files compiled into the package: see [Native code](#native-code) |
 | `native.includeDirs` | array of strings | no | Directories of the package's own headers |
-| `native.link` | array of strings | no | Libraries to link, each named as the linker's `-l` would name it |
+| `native.link` | array of strings | no | Libraries that a program which uses the package is linked with, each named as the linker's `-l` would name it |
 | `policy` | object | no | |
 | `policy.requireAttestation` | boolean | no | Whether every dependency must have a verified build attestation. Default `false`. `pmj` cannot verify one yet, so a project that sets it to `true` cannot install: see `attestation.unverifiable` |
 
@@ -112,6 +112,17 @@ When `build.entry` is absent, the entry is found by convention:
 | `library` | `src/lib.emojic` | `src/lib.🍇` |
 
 Exactly one of the two must exist. Neither is an error, and so is both. `pmj new` always writes `build.entry`, so a manifest it made never relies on the convention.
+
+### Native code
+
+A package may have C and C++ beside its Emojicode, for what Emojicode's own packages do not reach. `pmj build` compiles those files with the machine's own compilers and puts them in the package's archive.
+
+- **`native.sources` selects the files to compile.** One that ends `.c` is C, and one that ends `.cpp`, `.cc` or `.cxx` is C++. A file that ends any other way stops a build, so a pattern must not also select the headers.
+- **`native.includeDirs` names the directories of the package's own headers.** The Emojicode compiler's headers are found without being named.
+- **`native.link` names the libraries a program needs because it uses the package.** They are linked into every program that depends on it.
+- **There is no key for a compiler's flags.** C++ is compiled as C++17 and C as C11, both optimized, and a package cannot change that.
+
+[How pmj builds](building.md#native-code) has the commands.
 
 ### Paths and patterns
 
@@ -206,6 +217,8 @@ A requirement never selects across a compatibility line.
 `package.emojicode` is `>=` followed by a full version, with no spaces: `">=1.0.0-beta.2"`. It has no upper bound.
 
 The one released compiler calls itself "1.0 beta 2", which is the version `1.0.0-beta.2`. That is earlier than `1.0.0`, so a package that should build today asks for `>=1.0.0-beta.2`.
+
+`pmj build` holds every package, and the project, to this before it compiles anything. A compiler that is older than one of them asks for is `compiler.too-old`.
 
 ## packmoji.lock
 
@@ -323,6 +336,8 @@ Nearly every code is an error, which stops what `pmj` was doing. One is a warnin
 
 The codes that begin with `resolve.`, and `lock.mismatch`, are raised when `pmj` chooses versions or checks a lockfile against what is published. [resolution.md](resolution.md) says what to do about each.
 
+The codes that begin with `compiler.`, `build.`, `built.`, `packages.` and `run.`, and `tool.not-found` and `native.unsupported`, are raised by `pmj build` and `pmj run`. [building.md](building.md#when-a-build-stops) says what to do about each. The one exception is `compiler.invalid`, which is a manifest's own.
+
 | Code | Raised when |
 |---|---|
 | `file.too-large` | A manifest is over 1 MiB, or a lockfile is over 4 MiB |
@@ -375,7 +390,7 @@ The codes that begin with `resolve.`, and `lock.mismatch`, are raised when `pmj`
 | `resolve.graph-too-large` | A graph of dependencies has more than 10,000 versions in it, or would make a lockfile over its limit of 4 MiB |
 | `project.not-found` | A command that works on a project was run where there is no `packmoji.json` |
 | `project.exists` | `pmj new` or `pmj init` would write over a project that is there |
-| `project.unreadable` | A project's file could not be read or written |
+| `project.unreadable` | A project's file could not be read or written, or a directory that a build writes into is a symbolic link |
 | `dependency.exists` | `pmj add` was given a package the manifest already has, and no requirement to change it to |
 | `dependency.not-found` | `pmj remove` or `pmj update` named a package the manifest does not have |
 | `package.not-found` | No release of a package is in any repository `pmj` looked in |
@@ -391,3 +406,17 @@ The codes that begin with `resolve.`, and `lock.mismatch`, are raised when `pmj`
 | `cache.unusable` | The cache could not be read or written |
 | `cache.mismatch` | `pmj verify` found that what the cache holds of a package is not what `packmoji.lock` holds |
 | `config.invalid` | Something `pmj` was told through its environment is not something it can use |
+| `compiler.not-found` | A build needs the Emojicode compiler, and there is none: `EMOJICODEC` names nothing that can be run, or no `emojicodec` is on `PATH` |
+| `compiler.unknown` | The compiler did not say which version it is: its `--help` has no banner that `pmj` can read |
+| `compiler.too-old` | A package, or the project, asks for a newer compiler than the one that was found |
+| `compiler.incomplete` | The compiler's own packages or headers are not where `pmj` looked, and the build needs them |
+| `tool.not-found` | The C++ compiler, the C compiler or the archiver is needed and cannot be run |
+| `native.unsupported` | A file that `native.sources` selects is neither C nor C++ by its name |
+| `build.compile-failed` | The compiler refused a package's code, or the project's |
+| `build.native-failed` | The C or C++ compiler refused a native file |
+| `build.archive-failed` | The archiver could not make a package's archive |
+| `build.link-failed` | The linker could not make the program |
+| `built.unusable` | What `pmj` keeps of built packages could not be read or written |
+| `packages.foreign` | A folder in the project's `packages/` has a locked package's name and was not put there by `pmj` |
+| `run.not-an-app` | `pmj run` was run in a library, which has no program to run |
+| `run.failed` | The program was built and could not be started |

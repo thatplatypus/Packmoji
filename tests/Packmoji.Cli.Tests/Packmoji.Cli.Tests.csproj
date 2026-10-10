@@ -26,6 +26,13 @@
          A test that finds no guide fails, and says which. -->
     <None Include="..\..\docs\cli.md" Link="docs\cli.md" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\docs\cli.md')" />
     <None Include="..\..\docs\publishing.md" Link="docs\publishing.md" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\docs\publishing.md')" />
+    <None Include="..\..\docs\building.md" Link="docs\building.md" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\docs\building.md')" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The sample projects travel with the tests, which pack, install, build and run them. What a
+         build of one left in it on this machine is no part of the sample. -->
+    <None Include="..\..\samples\**\*" Exclude="..\..\samples\**\target\**;..\..\samples\**\packages\**" Link="samples\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>
