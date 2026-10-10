@@ -73,21 +73,20 @@ cp target/greeter-0.1.0.pmj.tar.gz "$release/"
 echo '[{"tag_name":"greeter-v0.1.0","draft":false,"prerelease":false,"assets":[{"name":"greeter-0.1.0.pmj.tar.gz"}]}]' > "$work/site/repos/smoke/greeter/releases"
 
 cat > "$work/github.py" <<'PYTHON'
-import time
-
-began = time.monotonic()
-
 import http.server
-import socket
+import socketserver
 import sys
 import threading
 
 site, asked = sys.argv[1], sys.argv[2]
 
 
-# Here until it is known why this server was not ready in time on CI's macOS, and no longer.
-def took(what, since):
-    print(f"{what} took {time.monotonic() - since:.2f} seconds", flush=True)
+class Server(http.server.ThreadingHTTPServer):
+    # http.server looks up the name of the address it binds, and nothing here uses the name. On
+    # CI's macOS that lookup of 127.0.0.1 took 35 seconds (seen on 2026-10-10), so it is not made.
+    def server_bind(self):
+        socketserver.TCPServer.server_bind(self)
+        self.server_name, self.server_port = self.server_address[:2]
 
 
 class Files(http.server.SimpleHTTPRequestHandler):
@@ -124,16 +123,8 @@ class GitHub(Files):
         self.end_headers()
 
 
-took("the imports", began)
-since = time.monotonic()
-socket.getfqdn("127.0.0.1")
-took("finding the name of 127.0.0.1", since)
-since = time.monotonic()
-files = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Files)
-took("making the first server", since)
-since = time.monotonic()
-github = http.server.ThreadingHTTPServer(("127.0.0.1", 0), GitHub)
-took("making the second server", since)
+files = Server(("127.0.0.1", 0), Files)
+github = Server(("127.0.0.1", 0), GitHub)
 threading.Thread(target=files.serve_forever, daemon=True).start()
 print(f"Serving on port {github.server_port} .", flush=True)
 github.serve_forever()
@@ -150,9 +141,11 @@ while [ -z "$port" ] && kill -0 "$server" 2> /dev/null && [ $((SECONDS - waited)
   sleep 0.1
   port="$(sed -n 's/.* port \([0-9][0-9]*\) .*/\1/p' "$work/server.log" | head -1)"
 done
-echo "The server that stands in for GitHub, run by $(command -v python3), said this in $((SECONDS - waited)) seconds:"
-cat "$work/server.log"
-[ -n "$port" ] || fail "the server that stands in for GitHub did not start"
+if [ -z "$port" ]; then
+  echo "The server that stands in for GitHub, run by $(command -v python3), said this in $((SECONDS - waited)) seconds:" >&2
+  cat "$work/server.log" >&2
+  fail "the server that stands in for GitHub did not start"
+fi
 
 export PACKMOJI_HOME="$work/home"
 export PACKMOJI_GITHUB="http://127.0.0.1:$port"
