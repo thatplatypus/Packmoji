@@ -73,11 +73,21 @@ cp target/greeter-0.1.0.pmj.tar.gz "$release/"
 echo '[{"tag_name":"greeter-v0.1.0","draft":false,"prerelease":false,"assets":[{"name":"greeter-0.1.0.pmj.tar.gz"}]}]' > "$work/site/repos/smoke/greeter/releases"
 
 cat > "$work/github.py" <<'PYTHON'
+import time
+
+began = time.monotonic()
+
 import http.server
+import socket
 import sys
 import threading
 
 site, asked = sys.argv[1], sys.argv[2]
+
+
+# Here until it is known why this server was not ready in time on CI's macOS, and no longer.
+def took(what, since):
+    print(f"{what} took {time.monotonic() - since:.2f} seconds", flush=True)
 
 
 class Files(http.server.SimpleHTTPRequestHandler):
@@ -114,20 +124,34 @@ class GitHub(Files):
         self.end_headers()
 
 
+took("the imports", began)
+since = time.monotonic()
+socket.getfqdn("127.0.0.1")
+took("finding the name of 127.0.0.1", since)
+since = time.monotonic()
 files = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Files)
+took("making the first server", since)
+since = time.monotonic()
 github = http.server.ThreadingHTTPServer(("127.0.0.1", 0), GitHub)
+took("making the second server", since)
 threading.Thread(target=files.serve_forever, daemon=True).start()
 print(f"Serving on port {github.server_port} .", flush=True)
 github.serve_forever()
 PYTHON
 python3 -u "$work/github.py" "$work/site" "$work/asked.log" > "$work/server.log" 2>&1 &
 server=$!
+
+# Waited for by what it does and not by the clock, for how long a process takes to start on a
+# machine that is shared is not known: it has started when it names its port, and it has failed
+# when it is gone.
 port=""
-for _ in $(seq 1 50); do
-  port="$(sed -n 's/.* port \([0-9][0-9]*\) .*/\1/p' "$work/server.log" | head -1)"
-  [ -n "$port" ] && break
+waited=$SECONDS
+while [ -z "$port" ] && kill -0 "$server" 2> /dev/null && [ $((SECONDS - waited)) -lt 60 ]; do
   sleep 0.1
+  port="$(sed -n 's/.* port \([0-9][0-9]*\) .*/\1/p' "$work/server.log" | head -1)"
 done
+echo "The server that stands in for GitHub, run by $(command -v python3), said this in $((SECONDS - waited)) seconds:"
+cat "$work/server.log"
 [ -n "$port" ] || fail "the server that stands in for GitHub did not start"
 
 export PACKMOJI_HOME="$work/home"
