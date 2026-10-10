@@ -57,10 +57,12 @@ Someone may keep packages of their own in that directory, so `pmj` changes only 
 |---|---|
 | Nothing | Puts the package there |
 | The build of the package that is wanted | Nothing |
-| Another build of it, or one that has lost a file | Replaces it |
+| Another build of it, or one with a file that is missing or is not the file `pmj` keeps | Replaces it |
 | Something `pmj` did not put there, with the name of a locked package | Stops, with `packages.foreign` |
 | Something `pmj` put there for a package that is no longer locked | Takes it away |
 | Anything else | Leaves it alone |
+
+- **A copy is held to the one `pmj` keeps at every build, byte for byte.** Its stamp alone is not believed: a project's directory may have come from someone else, with a folder in it that nobody built from what is locked.
 
 **`target/`, in the project.**
 

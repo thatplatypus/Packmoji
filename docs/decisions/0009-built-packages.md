@@ -19,7 +19,8 @@ Built into each project alone, every one of those directories would compile Grap
 - **A package is built once for the whole machine,** into `built/<scope>/<name>/<version>/<key>/<name>/` under `PACKMOJI_HOME`, beside the cache of what was downloaded.
 - **A project is given a copy,** in its own `packages/<name>/`. The rules of record 0001 for that directory stand: `pmj` changes only what it put there, and takes away what the lockfile no longer names.
 - **The key is the SHA-256 of everything a build is made from:** the digest of the compiler's own file, whether it optimizes, the digest of the package's archive, the key of each package it depends on, and for a package with native code what the C or C++ compiler prints for `--version`. A number in front of them goes up whenever `pmj` itself builds in another way.
-- **A stamp, `pmj-build.json`, lies beside what was built** and says what it was built from. In a project it is also the mark that `pmj` put a folder there, and its key says which build the folder holds.
+- **A stamp, `pmj-build.json`, lies beside what was built** and says what it was built from. In a project it is also the mark that `pmj` put a folder there.
+- **A project's copy is held to the one `pmj` keeps, byte for byte, at every build,** and is replaced when it differs. Its stamp is not taken as proof. A project's directory may have come from someone else, and a folder in it can have the right stamp beside an archive that nobody built from what is locked.
 - **An entry is there whole or not at all.** It is made in a directory beside its place and renamed into it, as a file of the cache is, so nothing here needs a lock. Of two builds of one package at once, the second finds it done and throws its own away.
 - **What a package is compiled from is its unpacked files in the cache, held to its archive first.** Files that are not the archive's are `cache.mismatch`, and are never compiled.
 
@@ -44,6 +45,7 @@ Built into each project alone, every one of those directories would compile Grap
 
 - **`built/` grows.** Every compiler, every version, and every set of dependency versions a package was built against has an entry, and nothing removes one. `pmj cache clean` is where that belongs, and it is not built yet. Deleting the directory does the same.
 - **The compiler's own packages and headers are not in the key.** They are taken to come with the compiler. Someone who changes them and keeps the compiler has to delete `built/`.
+- **Every build reads each file of a project's `packages/` and the file it was copied from.** Grapevine's three built packages are 1.5 MB.
 - **A project's `packages/` holds whichever build was made last.** A `--release` build after a plain one replaces the copies, with no compile if both were built before.
 - **A machine with no C++ compiler cannot tell whether a package with native code has been built,** since the compiler is in its key. It is told that the compiler is missing.
 - **Taking the compiler's digest reads the whole file,** 56 MB for the release. That took 0.8 seconds under emulation, and is done once in a build.

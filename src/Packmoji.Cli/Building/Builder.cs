@@ -215,7 +215,7 @@ namespace Packmoji.Cli.Building
                 }
             }
 
-            var placed = order.Select(package => new PlacedPackage(package.Name.Name, keys[package.Name], _store.PackageDirectory(package.Name, package.Version, keys[package.Name]))).ToList();
+            var placed = order.Select(package => new PlacedPackage(package.Name.Name, _store.PackageDirectory(package.Name, package.Version, keys[package.Name]))).ToList();
             if (PlacedPackages.Place(_host.WorkingDirectory, placed) is { } unplaced)
             {
                 return Stopped(unplaced);

@@ -118,6 +118,69 @@ namespace Packmoji.Cli.Tests.Commands
             sandbox.Read("packages/crypto/🏛").ShouldBe(File.ReadAllText(sandbox.BuiltFile("crypto", "🏛")));
         }
 
+        [Theory]
+        [InlineData("libcrypto.a")]
+        [InlineData("🏛")]
+        [InlineData("documentation.json")]
+        public async Task A_package_in_the_project_with_a_file_that_is_no_longer_what_pmj_keeps_is_put_there_again(string file)
+        {
+            // A project's directory may have come from someone else, with a folder in it that has
+            // pmj's stamp and the right key, and an archive that was never built from what is locked.
+            using var sandbox = await WithGrapevineBuiltAsync();
+            var kept = File.ReadAllBytes(sandbox.BuiltFile("crypto", file));
+            var changed = kept.ToArray();
+
+            // As long as the one pmj keeps, so that only its bytes tell them apart.
+            changed[^2] ^= 1;
+            File.WriteAllBytes(sandbox.PathOf($"packages/crypto/{file}"), changed);
+
+            (await sandbox.RunAsync("build", "--dependencies-only")).Status.ShouldBe(0);
+
+            File.ReadAllBytes(sandbox.PathOf($"packages/crypto/{file}")).ShouldBe(kept);
+        }
+
+        [Fact]
+        public async Task A_folder_that_came_with_the_project_and_has_the_right_stamp_is_not_taken_for_what_pmj_built()
+        {
+            // As when a project is cloned with its packages folder in it: the stamp gives the key
+            // that is wanted, the archive is someone's own, and this machine has built nothing yet.
+            using var sandbox = await WithGrapevineBuiltAsync();
+            File.WriteAllText(sandbox.PathOf("packages/crypto/libcrypto.a"), "an archive that nobody built from what is locked\n");
+            sandbox.ForgetBuilt();
+
+            var run = await sandbox.RunAsync("build", "--dependencies-only");
+
+            run.Status.ShouldBe(0);
+            run.Output.ShouldEndWith($"Built 3 packages into packages/.{Environment.NewLine}");
+            sandbox.Read("packages/crypto/libcrypto.a").ShouldBe(File.ReadAllText(sandbox.BuiltFile("crypto", "libcrypto.a")));
+        }
+
+        [Fact]
+        public async Task A_file_of_a_package_in_the_project_that_is_a_link_is_put_there_again_as_a_file_though_it_leads_to_the_same_bytes()
+        {
+            Assert.SkipWhen(OperatingSystem.IsWindows(), "Making a symbolic link there needs a right that a test does not have.");
+            using var sandbox = await WithGrapevineBuiltAsync();
+            var archive = sandbox.PathOf("packages/crypto/libcrypto.a");
+            var kept = File.ReadAllBytes(sandbox.BuiltFile("crypto", "libcrypto.a"));
+            File.Move(archive, sandbox.PathOf("twin.a"));
+
+            // A link is as long as the path it holds. This one is made exactly as long as the
+            // archive, with steps that go nowhere, so that nothing tells it from the archive but
+            // its being a link: it is there, it has the length, and reading it gives the bytes.
+            var spare = kept.Length - "../../twin.a".Length;
+            spare.ShouldBeGreaterThanOrEqualTo(0);
+            var leads = "../" + (spare % 2 == 1 ? "/" : "") + "../" + string.Concat(Enumerable.Repeat("./", spare / 2)) + "twin.a";
+            File.CreateSymbolicLink(archive, leads);
+            new FileInfo(archive).Length.ShouldBe(kept.Length);
+            File.ReadAllBytes(archive).ShouldBe(kept);
+
+            (await sandbox.RunAsync("build", "--dependencies-only")).Status.ShouldBe(0);
+
+            // What a link leads to can be changed without anything in the folder changing.
+            new FileInfo(archive).LinkTarget.ShouldBeNull();
+            File.ReadAllBytes(archive).ShouldBe(kept);
+        }
+
         [Fact]
         public async Task A_stamp_that_is_too_large_to_be_one_is_not_read_and_the_package_is_put_there_again()
         {

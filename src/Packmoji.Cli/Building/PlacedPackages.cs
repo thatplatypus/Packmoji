@@ -11,7 +11,8 @@ namespace Packmoji.Cli.Building
     /// </summary>
     /// <remarks>
     /// Someone may keep packages of their own in that directory, so pmj touches only what it put
-    /// there. A folder is pmj's when it holds a stamp, and the stamp's key says which build it is.
+    /// there. A folder is pmj's when it holds a stamp. Whether it is the build that is wanted is
+    /// said by its files, which are held to the ones pmj keeps.
     /// </remarks>
     internal static class PlacedPackages
     {
@@ -76,10 +77,19 @@ namespace Packmoji.Cli.Building
             }
         }
 
-        // Whether a folder already holds this build of a package, whole.
+        // Whether a folder already holds this build of a package: every file pmj keeps of it, byte
+        // for byte. A stamp is not proof of that. A project's directory may have come from someone
+        // else, and a folder in it can have the right stamp beside an archive that nobody built
+        // from what is locked.
         private static bool IsThere(string folder, PlacedPackage package) =>
-            StampFile.KeyIn(folder) == package.Key
-            && Directory.EnumerateFiles(package.From).All(file => File.Exists(Path.Combine(folder, Path.GetFileName(file))));
+            Directory.EnumerateFiles(package.From).All(kept => IsSame(kept, new FileInfo(Path.Combine(folder, Path.GetFileName(kept)))));
+
+        // A link is not the file, whatever it leads to now. What is not the size of the file pmj keeps is not read.
+        private static bool IsSame(string kept, FileInfo placed) =>
+            placed.Exists
+            && placed.LinkTarget is null
+            && placed.Length == new FileInfo(kept).Length
+            && File.ReadAllBytes(placed.FullName).AsSpan().SequenceEqual(File.ReadAllBytes(kept));
 
         private static void Remove(string folder)
         {
