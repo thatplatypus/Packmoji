@@ -63,6 +63,7 @@ Someone may keep packages of their own in that directory, so `pmj` changes only 
 | Anything else | Leaves it alone |
 
 - **A copy is held to the one `pmj` keeps at every build, byte for byte.** Its stamp alone is not believed: a project's directory may have come from someone else, with a folder in it that nobody built from what is locked.
+- **A package that someone keeps there by hand is left alone, and `pmj build` does not build with it.** The linker is given the packages the lockfile holds and no other, and the compiler is told to look in `packages/` only when something is locked. A project that imports a package of someone's own is built with the compiler run by hand.
 
 **`target/`, in the project.**
 
