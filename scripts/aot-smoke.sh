@@ -14,6 +14,10 @@
 # On the way it is run once on a machine that limits the scopes it may depend on, where the
 # library is refused and GitHub is asked nothing, and once as a tool runs it, for one JSON object.
 #
+# Every run of pmj here is as on a machine whose own characters are not UTF-8. What it says
+# through a pipe has to be UTF-8 all the same, and each of its two streams is held to that where
+# it names a source file.
+#
 # The server answers a download as GitHub does, by sending pmj on to another address, and it keeps
 # which requests came with a token. So this is also where pmj is held, over real HTTP, to following
 # a download where it is sent and to giving its token to the API alone.
@@ -37,7 +41,15 @@ case "$rid" in
   win-*) windows="yes"; program="pmj.exe" ;;
   *) windows=""; program="pmj" ;;
 esac
-pmj="$PWD/src/Packmoji.Cli/bin/Release/net10.0/$rid/publish/$program"
+native="$PWD/src/Packmoji.Cli/bin/Release/net10.0/$rid/publish/$program"
+
+# pmj is run here as on a machine whose own characters are not UTF-8. What it says is read through
+# a pipe, as a tool reads it, and has to be UTF-8 there all the same: the name of a source file is
+# not ASCII. Elsewhere than on Windows a machine says which characters are its own in its
+# environment, and that is set here. On Windows it is the code page of the console, set further down.
+pmj() {
+  LC_ALL=en_US.ISO8859-1 "$native" "$@"
+}
 expected="$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Directory.Build.props)"
 
 fail() {
@@ -51,7 +63,7 @@ plain() {
   tr -d '\r'
 }
 
-version="$("$pmj" --version)"
+version="$(pmj --version)"
 echo "pmj --version: $version"
 case "$version" in
   "$expected"*) ;;
@@ -60,14 +72,14 @@ esac
 
 # Captured first and searched afterwards: a pipe into grep -q would end pmj early, and with
 # pipefail that is a failure.
-help="$("$pmj" --help)"
+help="$(pmj --help)"
 case "$help" in
   *"Packmoji, the package manager for Emojicode."*) ;;
   *) fail "--help did not print pmj's description" ;;
 esac
 
 status=0
-"$pmj" frobnicate > /dev/null 2>&1 || status=$?
+pmj frobnicate > /dev/null 2>&1 || status=$?
 [ "$status" -eq 2 ] || fail "an unknown command ended with status $status, and not with 2"
 
 work="$(mktemp -d)"
@@ -79,25 +91,45 @@ cleanup() {
     kill "$server" 2> /dev/null || true
     wait "$server" 2> /dev/null || true
   fi
+  [ -z "$codepage" ] || chcp.com "$codepage" > /dev/null 2>&1 || true
   chmod -R u+w "$work" 2> /dev/null || true
   rm -rf "$work"
 }
 trap cleanup EXIT
 
-# A library, made and packed by the native pmj. What pmj says of it is read as a tool reads it,
-# through a pipe, and it names a file whose name is not ASCII: that has to arrive as UTF-8 on every
-# machine, whatever the machine writes to a console of its own.
+# The code page of the console is set to one that is not UTF-8, and put back when this ends. Where
+# there is no console there is none to set, and pmj then writes UTF-8 with nothing done.
+codepage=""
+if [ -n "$windows" ]; then
+  codepage="$(chcp.com 2> /dev/null | tr -dc '0-9')" || codepage=""
+  [ -z "$codepage" ] || chcp.com 437 > /dev/null
+fi
+
+# A library, made and packed by the native pmj. What pmj says of it names its source file, and
+# that name has to arrive as UTF-8.
 cd "$work"
-made="$("$pmj" new @smoke/greeter --lib | plain)"
+made="$(pmj new @smoke/greeter --lib | plain)"
 case "$made" in
   *"  src/lib.🍇"*) ;;
   *) echo "$made" >&2; fail "pmj new did not name the library's source file, src/lib.🍇, in UTF-8" ;;
 esac
 cd greeter
-packed="$("$pmj" pack | plain)"
+packed="$(pmj pack | plain)"
 echo "$packed"
 digest="$(echo "$packed" | sed -n 's/^  sha256 //p')"
 [ "${#digest}" -eq 64 ] || fail "pmj pack did not print a digest"
+
+# A problem goes to standard error, which is a pipe of its own to a tool. A library whose source
+# file is gone is told the file's name, and that has to arrive as UTF-8 too.
+cd "$work"
+pmj new @smoke/gone --lib > /dev/null
+rm "gone/src/lib.🍇"
+status=0
+(cd gone && pmj pack) > /dev/null 2> "$work/gone.said" || status=$?
+plain < "$work/gone.said" > "$work/gone.err"
+[ "$status" -eq 1 ] || { cat "$work/gone.err" >&2; fail "pmj pack ended with status $status for a library whose source file is gone"; }
+grep -qx 'error\[entry.not-found\]: The entry file "src/lib.🍇" was not found.' "$work/gone.err" || { cat "$work/gone.err" >&2; fail "pmj pack did not name the missing source file, src/lib.🍇, in UTF-8 on standard error"; }
+cd "$work/greeter"
 
 # The release that would carry it, laid out as GitHub's addresses are, and served from here.
 release="$work/site/smoke/greeter/releases/download/greeter-v0.1.0"
@@ -199,9 +231,9 @@ export GITHUB_TOKEN="smoke-token-that-is-no-ones"
 
 # An application that depends on it.
 cd "$work"
-"$pmj" new @smoke/app > /dev/null
+pmj new @smoke/app > /dev/null
 cd app
-"$pmj" add @smoke/greeter 2>&1 | tee "$work/said.log"
+pmj add @smoke/greeter 2>&1 | tee "$work/said.log"
 grep -q "\"sha256\": \"$digest\"" packmoji.lock || fail "the lockfile does not hold the digest that pmj pack printed"
 
 # The token went to the API. It went with no download, and not on to where a download was sent.
@@ -219,22 +251,22 @@ chmod -R u+w "$PACKMOJI_HOME" && rm -rf "$PACKMOJI_HOME"
 # refused, and though nothing is in the cache, nothing is asked of GitHub about it.
 asked="$(wc -l < "$work/asked.log")"
 status=0
-PACKMOJI_SCOPES=elsewhere "$pmj" install --locked > /dev/null 2> "$work/scope.said" || status=$?
+PACKMOJI_SCOPES=elsewhere pmj install --locked > /dev/null 2> "$work/scope.said" || status=$?
 plain < "$work/scope.said" > "$work/scope.err"
 [ "$status" -eq 1 ] || { cat "$work/scope.err" >&2; fail "pmj install ended with status $status under a limit that does not allow the package"; }
 grep -qx 'error\[scope.not-allowed\]: "@smoke/greeter" is outside the scopes pmj is limited to here.' "$work/scope.err" || fail "the package was not refused for its scope"
 [ "$(wc -l < "$work/asked.log")" = "$asked" ] || fail "GitHub was asked something about a package that is not allowed"
 [ ! -e "$PACKMOJI_HOME/cache" ] || fail "a package that is not allowed was fetched"
 
-"$pmj" install --locked
+pmj install --locked
 unpacked="$PACKMOJI_HOME/cache/smoke/greeter/0.1.0/$digest/src/lib.🍇"
 [ -f "$unpacked" ] || fail "the library's source was not unpacked into the cache at $unpacked"
 
-"$pmj" tree
-"$pmj" verify
+pmj tree
+pmj verify
 
 # A tool that restores a project is answered with one object, which says what is locked.
-answer="$("$pmj" install --locked --json 2> "$work/json.err")"
+answer="$(pmj install --locked --json 2> "$work/json.err")"
 case "$answer" in
   '{'*'"ok": true'*'"written": false'*'"changes": []'*'"name": "@smoke/greeter"'*"\"sha256\": \"$digest\""*) ;;
   *) echo "$answer" >&2; fail "pmj install --json did not answer with what is locked" ;;
@@ -243,11 +275,11 @@ esac
 
 if [ -n "$windows" ]; then
   status=0
-  "$pmj" build > /dev/null 2> "$work/build.said" || status=$?
+  pmj build > /dev/null 2> "$work/build.said" || status=$?
   plain < "$work/build.said" > "$work/build.err"
   [ "$status" -eq 1 ] || { cat "$work/build.err" >&2; fail "pmj build ended with status $status on a machine with no compiler"; }
   grep -qx 'error\[compiler.not-found\]: The Emojicode compiler was not found.' "$work/build.err" || { cat "$work/build.err" >&2; fail "pmj build did not say that there is no compiler"; }
-  echo "pmj runs as a native binary for $rid ($(wc -c < "$pmj" | tr -d ' ') bytes), and builds nothing there"
+  echo "pmj runs as a native binary for $rid ($(wc -c < "$native" | tr -d ' ') bytes), and builds nothing there"
   exit 0
 fi
 
@@ -295,7 +327,7 @@ export EMOJICODEC="$tools/emojicodec" CXX="$tools/c++" AR="$tools/ar" EMOJICODE_
 
 # The native pmj starts each of them, reads what it printed, and puts what was built where it belongs.
 status=0
-"$pmj" build > "$work/built.log" 2> "$work/built.err" || status=$?
+pmj build > "$work/built.log" 2> "$work/built.err" || status=$?
 [ "$status" -eq 0 ] || { cat "$work/built.err" >&2; fail "pmj build ended with status $status"; }
 cat "$work/built.log"
 grep -qx "Building @smoke/greeter 0.1.0" "$work/built.log" || fail "the library was not built"
@@ -306,7 +338,7 @@ for made in "packages/greeter/🏛" packages/greeter/libgreeter.a packages/greet
 done
 
 # A tool is answered with one object, and what was built is not built again.
-answer="$("$pmj" build --dependencies-only --json 2> /dev/null)"
+answer="$(pmj build --dependencies-only --json 2> /dev/null)"
 case "$answer" in
   '{'*'"ok": true'*'"bareName": "greeter"'*'"built": false'*) ;;
   *) echo "$answer" >&2; fail "pmj build --json did not answer with the package, built before" ;;
@@ -314,9 +346,9 @@ esac
 
 # The program is run with pmj's own streams, is given what follows the two dashes, and pmj ends as it ended.
 status=0
-said="$("$pmj" run -- one "two words" 2> "$work/run.err")" || status=$?
+said="$(pmj run -- one "two words" 2> "$work/run.err")" || status=$?
 [ "$said" = "the program was given: one two words" ] || fail "pmj run printed \"$said\", and not what the program says"
 [ "$status" -eq 3 ] || fail "pmj run ended with status $status, and not with the program's 3"
 grep -qx "Built the application target/debug/app." "$work/run.err" || fail "what pmj run says of the build is not on standard error"
 
-echo "pmj runs as a native binary for $rid ($(wc -c < "$pmj" | tr -d ' ') bytes)"
+echo "pmj runs as a native binary for $rid ($(wc -c < "$native" | tr -d ' ') bytes)"
