@@ -9,6 +9,9 @@
 # verifies it. GitHub is stood in for by the packed file served from this machine, so nothing here
 # reaches the network. It needs python3, for that server alone.
 #
+# On the way it is run once on a machine that limits the scopes it may depend on, where the
+# library is refused and GitHub is asked nothing, and once as a tool runs it, for one JSON object.
+#
 # The server answers a download as GitHub does, by sending pmj on to another address, and it keeps
 # which requests came with a token. So this is also where pmj is held, over real HTTP, to following
 # a download where it is sent and to giving its token to the API alone.
@@ -175,12 +178,31 @@ if grep -q "smoke-token" "$work/said.log" packmoji.lock packmoji.json; then fail
 
 # On a machine that has fetched nothing, the lockfile alone is enough, and may not change.
 chmod -R u+w "$PACKMOJI_HOME" && rm -rf "$PACKMOJI_HOME"
+
+# First on a machine that limits the scopes pmj may depend on, to one the package is not of: it is
+# refused, and though nothing is in the cache, nothing is asked of GitHub about it.
+asked="$(wc -l < "$work/asked.log")"
+status=0
+PACKMOJI_SCOPES=elsewhere "$pmj" install --locked > /dev/null 2> "$work/scope.err" || status=$?
+[ "$status" -eq 1 ] || { cat "$work/scope.err" >&2; fail "pmj install ended with status $status under a limit that does not allow the package"; }
+grep -qx 'error\[scope.not-allowed\]: "@smoke/greeter" is outside the scopes pmj is limited to here.' "$work/scope.err" || fail "the package was not refused for its scope"
+[ "$(wc -l < "$work/asked.log")" = "$asked" ] || fail "GitHub was asked something about a package that is not allowed"
+[ ! -e "$PACKMOJI_HOME/cache" ] || fail "a package that is not allowed was fetched"
+
 "$pmj" install --locked
 unpacked="$PACKMOJI_HOME/cache/smoke/greeter/0.1.0/$digest/src/lib.🍇"
 [ -f "$unpacked" ] || fail "the library's source was not unpacked into the cache at $unpacked"
 
 "$pmj" tree
 "$pmj" verify
+
+# A tool that restores a project is answered with one object, which says what is locked.
+answer="$("$pmj" install --locked --json 2> "$work/json.err")"
+case "$answer" in
+  '{'*'"ok": true'*'"written": false'*'"changes": []'*'"name": "@smoke/greeter"'*"\"sha256\": \"$digest\""*) ;;
+  *) echo "$answer" >&2; fail "pmj install --json did not answer with what is locked" ;;
+esac
+[ ! -s "$work/json.err" ] || { cat "$work/json.err" >&2; fail "pmj install --json wrote to standard error"; }
 
 # The tools of a build, stood in for. Each writes what it is asked to write, and the program the
 # linker makes says what it was given and ends with a status of its own.
