@@ -18,6 +18,13 @@ namespace Packmoji.Core.Resolution
         /// hundred are listed and the rest are counted, since both files may be a stranger's and a
         /// lockfile has room for thousands of packages.
         /// </summary>
+        /// <remarks>
+        /// A lockfile is held only while it answers the manifest. One that no longer does is used for
+        /// nothing: a command that needs a lockfile says it is out of date, and a command that
+        /// resolves writes another from the manifest, which is held here, through a resolver that
+        /// holds the limit too. Were it held, a project whose manifest had been mended could be got
+        /// out of its old lockfile by no command at all.
+        /// </remarks>
         /// <param name="lockfile">The project's lockfile, or null when it has none.</param>
         /// <param name="omitted">How many more there are than the hundred that are listed.</param>
         public static IReadOnlyList<Diagnostic> Outside(ScopeLimit allowed, Manifest manifest, Lockfile? lockfile, out int omitted)
@@ -25,7 +32,8 @@ namespace Packmoji.Core.Resolution
             ArgumentNullException.ThrowIfNull(allowed);
             ArgumentNullException.ThrowIfNull(manifest);
             var met = new SortedDictionary<PackageName, string>();
-            foreach (var locked in lockfile?.Packages ?? [])
+            var inForce = lockfile is not null && lockfile.Root.Matches(RootRequirements.From(manifest)) ? lockfile : null;
+            foreach (var locked in inForce?.Packages ?? [])
             {
                 met[locked.Name] = $"{LockfileReader.FileName} holds it";
             }

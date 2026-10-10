@@ -57,6 +57,28 @@ namespace Packmoji.Core.Tests.Resolution
         }
 
         [Fact]
+        public void A_lockfile_that_no_longer_answers_the_manifest_is_not_held_since_nothing_of_it_is_used()
+        {
+            // The manifest was mended and the lockfile is from before: it still holds what is no longer asked for.
+            var before = Project.Asking("@thatplatypus/grapevine@0.3", "@someone/thing@1.0");
+            var stale = Answering(before, "@thatplatypus/grapevine 0.3.0", "@someone/thing 1.0.0");
+            var mended = Project.Asking("@thatplatypus/grapevine@0.3");
+
+            ScopeCheck.Outside(Only("thatplatypus"), mended, stale, out _).ShouldBeEmpty();
+        }
+
+        [Fact]
+        public void A_manifest_is_held_whatever_becomes_of_its_lockfile()
+        {
+            var asking = Project.Asking("@thatplatypus/grapevine@0.3", "@someone/thing@1.0");
+            var stale = Answering(Project.Asking("@thatplatypus/grapevine@0.3"), "@thatplatypus/grapevine 0.3.0", "@old/gone 1.0.0");
+
+            var refused = ScopeCheck.Outside(Only("thatplatypus"), asking, stale, out _);
+
+            refused.ShouldHaveSingleItem().Message.ShouldStartWith("\"@someone/thing\"");
+        }
+
+        [Fact]
         public void With_no_limit_and_with_everything_inside_one_nothing_is_refused()
         {
             var manifest = Project.Asking("@thatplatypus/grapevine@0.3", "@someone/thing@1.0");

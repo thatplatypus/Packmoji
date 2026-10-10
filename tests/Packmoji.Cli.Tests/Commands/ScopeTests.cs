@@ -90,14 +90,64 @@ namespace Packmoji.Cli.Tests.Commands
         [Fact]
         public async Task A_package_that_only_the_lockfile_holds_is_said_to_be_held_there()
         {
-            using var sandbox = await WithBothLockedAsync();
-            sandbox.Project("@you/site", "@thatplatypus/grapevine@0.3");
+            // Locked while there was no limit: an allowed package brought it with it, and the manifest never named it.
+            using var sandbox = WithTwoOwners();
+            sandbox.Release("github.com/thatplatypus/wrapper", "@thatplatypus/wrapper", "1.0.0", "@someone/thing@1.0");
+            await sandbox.InstallAsync("@you/site", "@thatplatypus/wrapper@1.0");
+            sandbox.GitHub.Requests.Clear();
             sandbox.Variables["PACKMOJI_SCOPES"] = "thatplatypus";
 
             var run = await sandbox.RunAsync("tree");
 
             run.Status.ShouldBe(1);
+            run.Error.ShouldStartWith("error[scope.not-allowed]: \"@someone/thing\" is outside the scopes pmj is limited to here." + Environment.NewLine);
             run.Error.ShouldContain("  why: packmoji.lock holds it, and PACKMOJI_SCOPES allows only thatplatypus");
+            sandbox.GitHub.Requests.ShouldBeEmpty();
+        }
+
+        // A project that locked packages of both owners, and whose manifest has since been mended to ask for the allowed one alone.
+        private static async Task<Sandbox> WithAMendedManifestAsync()
+        {
+            var sandbox = await WithBothLockedAsync();
+            sandbox.Project("@you/site", "@thatplatypus/grapevine@0.3");
+            sandbox.Variables["PACKMOJI_SCOPES"] = "thatplatypus";
+            return sandbox;
+        }
+
+        [Theory]
+        [InlineData("install", "--locked")]
+        [InlineData("tree")]
+        [InlineData("verify")]
+        [InlineData("build", "--dependencies-only")]
+        public async Task Once_the_manifest_no_longer_asks_for_it_a_command_that_needs_the_lockfile_says_only_that_the_lockfile_is_out_of_date(params string[] command)
+        {
+            using var sandbox = await WithAMendedManifestAsync();
+
+            var run = await sandbox.RunAsync(command);
+
+            // Which is what tells whoever ran it to resolve, and resolving is what mends the lockfile.
+            run.Status.ShouldBe(1);
+            run.Error.ShouldStartWith("error[lock.out-of-date]: ");
+            run.Error.ShouldNotContain("scope.not-allowed");
+            sandbox.GitHub.Requests.ShouldBeEmpty();
+        }
+
+        [Theory]
+        [InlineData("install")]
+        [InlineData("update")]
+        [InlineData("remove", "@thatplatypus/grapevine")]
+        [InlineData("add", "@thatplatypus/crypto@1.0", "--repository", "github.com/thatplatypus/grapevine")]
+        public async Task Once_the_manifest_no_longer_asks_for_it_a_command_that_resolves_locks_the_project_again_without_it(params string[] command)
+        {
+            using var sandbox = await WithAMendedManifestAsync();
+            sandbox.ForgetCache();
+
+            var run = await sandbox.RunAsync(command);
+
+            run.Error.ShouldBeEmpty();
+            run.Status.ShouldBe(0);
+            sandbox.Lockfile().Packages.ShouldAllBe(package => package.Name.Scope == "thatplatypus");
+            ShouldHaveAskedOnlyOf(sandbox, "thatplatypus");
         }
 
         [Fact]
