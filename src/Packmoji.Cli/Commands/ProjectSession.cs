@@ -73,28 +73,10 @@ namespace Packmoji.Cli.Commands
                 return Outcome<ProjectSession>.Failed(allowed.Diagnostics);
             }
 
-            var refused = Outside(allowed.Value, manifest.Value, lockfile?.Value);
+            var refused = ScopeCheck.Outside(allowed.Value, manifest.Value, lockfile?.Value, out var omitted);
             return refused.Count > 0
-                ? Outcome<ProjectSession>.Failed(refused)
+                ? Outcome<ProjectSession>.Failed(refused, omitted)
                 : Outcome<ProjectSession>.Of(new ProjectSession(host, manifest.Value, lockfile?.Value, allowed.Value));
-        }
-
-        // Every package of a scope that is not allowed, each once and in order of name: those the
-        // manifest asks for, and those that only the lockfile holds.
-        private static List<Diagnostic> Outside(ScopeLimit allowed, Manifest manifest, Lockfile? lockfile)
-        {
-            var met = new SortedDictionary<PackageName, string>();
-            foreach (var locked in lockfile?.Packages ?? [])
-            {
-                met[locked.Name] = $"{LockfileReader.FileName} holds it";
-            }
-
-            foreach (var asked in (manifest.Dependencies ?? []).Concat(manifest.DevDependencies ?? []))
-            {
-                met[asked.Name] = $"{ManifestReader.FileName} asks for it";
-            }
-
-            return met.Where(package => !allowed.Allows(package.Key)).Select(package => allowed.Refuses(package.Key, package.Value)).ToList();
         }
 
         /// <summary>

@@ -135,6 +135,30 @@ namespace Packmoji.Cli.Tests.Commands
         }
 
         [Fact]
+        public async Task A_lockfile_that_names_more_packages_outside_the_list_than_anyone_reads_is_answered_with_a_hundred_and_a_count()
+        {
+            // A stranger's file decides how many there are, so the answer must not grow with it.
+            using var sandbox = Sandbox.WithGrapevine();
+            var names = Enumerable.Range(0, 105).Select(index => $"@crowd/pkg{index:000}").ToList();
+            foreach (var name in names)
+            {
+                sandbox.Release($"github.com/crowd/{name[7..]}", name, "1.0.0");
+            }
+
+            await sandbox.InstallAsync("@you/site", [.. names.Select(name => name + "@1.0")]);
+            sandbox.Variables["PACKMOJI_SCOPES"] = "thatplatypus";
+
+            var tool = await sandbox.RunAsync("tree", "--json");
+            var person = await sandbox.RunAsync("tree");
+
+            using var answer = System.Text.Json.JsonDocument.Parse(tool.Output);
+            answer.RootElement.GetProperty("diagnostics").GetArrayLength().ShouldBe(100);
+            answer.RootElement.GetProperty("omittedDiagnostics").GetInt32().ShouldBe(5);
+            person.Error.Split(Environment.NewLine).Count(line => line.StartsWith("error[scope.not-allowed]", StringComparison.Ordinal)).ShouldBe(100);
+            person.Error.ShouldContain("5 more");
+        }
+
+        [Fact]
         public async Task Add_refuses_a_package_outside_the_list_before_it_asks_for_its_versions_and_changes_nothing()
         {
             using var sandbox = WithTwoOwners();
