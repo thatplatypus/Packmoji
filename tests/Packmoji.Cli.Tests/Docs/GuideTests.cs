@@ -53,20 +53,36 @@ namespace Packmoji.Cli.Tests.Docs
             }
         }
 
+        private static string OnWindows()
+        {
+            var guide = Guide("cli.md");
+            var start = guide.IndexOf("\n## pmj on Windows\n", StringComparison.Ordinal);
+            start.ShouldBeGreaterThan(0, "the guide has no section on Windows");
+            return guide[start..guide.IndexOf("\n## ", start + 1, StringComparison.Ordinal)];
+        }
+
         // A command that is added has to be said to work there or not: nothing of it is tried on Windows until it is.
         [Fact]
         public void The_guide_says_of_every_command_what_it_does_on_Windows()
         {
             using var sandbox = new Sandbox();
-            var guide = Guide("cli.md");
-            var start = guide.IndexOf("\n## pmj on Windows\n", StringComparison.Ordinal);
-            start.ShouldBeGreaterThan(0, "the guide has no section on Windows");
-            var section = guide[start..guide.IndexOf("\n## ", start + 1, StringComparison.Ordinal)];
+            var section = OnWindows();
 
             foreach (var command in PmjCommandLine.Build(sandbox.Host()).Subcommands)
             {
                 section.ShouldContain($"`{command.Name}`");
             }
+        }
+
+        // What goes to a console is left to the console, which on Windows shows a question mark for
+        // what its code page does not hold. Whoever meets that looks under Windows, and finds what to do.
+        [Fact]
+        public void The_guide_says_under_Windows_what_a_console_shows_of_a_character_its_code_page_does_not_hold()
+        {
+            var section = OnWindows();
+
+            section.ShouldContain("question mark");
+            section.ShouldContain("`chcp 65001`");
         }
 
         [Fact]

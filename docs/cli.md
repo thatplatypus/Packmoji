@@ -604,6 +604,7 @@ On Windows `pmj` manages packages, and builds nothing.
 - **`build` and `run` end with `compiler.not-found`.** No Emojicode compiler runs on Windows, and `pmj` brings none.
 - **The two files of a project are the same bytes there as anywhere.** `packmoji.json` and `packmoji.lock` are written with `/` in every path and a line feed at the end of every line.
 - **What `pmj` prints for a person ends its lines as Windows does. A JSON answer does not:** its lines end with a line feed on every machine.
+- **At a console whose code page is not UTF-8, a character that code page does not hold is shown as a question mark:** `src/main.??` for `src/main.🍇`. That is every console nobody has changed. `chcp 65001` sets a console to UTF-8. Through a pipe or into a file `pmj` writes UTF-8 whatever the console's code page is, so a tool that runs `pmj` is not touched by this.
 - **`pmj pack` packs the files as they are on the disk.** Git on Windows can check a file out with other line ends than the repository holds, and a package packed from such a checkout is not the bytes that another machine would pack. A `.gitattributes` with `* text=auto eol=lf` keeps the files the same everywhere.
 
 ## What pmj does not do yet
