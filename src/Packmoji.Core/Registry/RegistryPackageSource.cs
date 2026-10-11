@@ -64,7 +64,16 @@ namespace Packmoji.Core.Registry
         /// </summary>
         Diagnostic? IExplainsMissing.MissingThoughLocked(PackageName name, SemanticVersion version, string? chain) => Absent(name, version, chain, locked: true);
 
-        /// <summary>Says that a registry does not have a package: where the registry is, and how to look on GitHub itself.</summary>
+        /// <summary>
+        /// Says that a registry does not have a package: which file was asked for and is not there,
+        /// and how to look on GitHub itself.
+        /// </summary>
+        /// <remarks>
+        /// An address with no registry behind it answers of every file as a registry does of a
+        /// package it does not have. Which of the two it is cannot be told from here. So the file is
+        /// named in full, where a mistake in the address can be seen, and the first thing said to do
+        /// is to check the address.
+        /// </remarks>
         public static Diagnostic NotFound(PackageName name, string address)
         {
             ArgumentNullException.ThrowIfNull(name);
@@ -77,8 +86,8 @@ namespace Packmoji.Core.Registry
             new(
                 DiagnosticCodes.PackageNotFound,
                 $"\"{name}\" is not in the registry.",
-                $"the registry at {address} has no file of it{asked}",
-                $"if its repository is on the registry's list, a release is in the registry within the hour; {AskGitHubItself}");
+                $"{address}/{RegistryPaths.Package(name)} is not there{asked}",
+                $"check that {address} is the address a registry's v1 is under, for one that is not answers the same way; if it is, and the package's repository is on the registry's list, a release is in the registry within the hour; {AskGitHubItself}");
 
         // A package that was never read is one this source was never asked about, and it has nothing to say of it.
         private Diagnostic? Absent(PackageName name, SemanticVersion version, string? chain, bool locked)

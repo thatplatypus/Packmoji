@@ -590,6 +590,7 @@ With nothing said, `pmj` finds packages on GitHub itself, as above. With a regis
 | `tree`, `pack`, `new` and `init` | Nothing changes. They ask nobody |
 
 - **A package the registry does not have is `package.not-found`.** `pmj` does not go and look on GitHub by itself: whoever named a registry is held to it. `--direct` asks GitHub itself, for one command.
+- **An address with no registry behind it answers the same way,** of every package: there is no file at it, as there is none of a package a registry does not have. `pmj` cannot tell the two apart, so it names the file it asked for, and says first to check the address.
 - **A registry that cannot be read stops the command,** with `registry.unreachable`. A file of it that does not read is `registry.invalid`. Neither is passed over.
 - **What GitHub serves is held to what the registry recorded.** Other bytes, a manifest that says otherwise, or a release that is gone is `registry.mismatch`, and nothing of it is kept.
 - **Nothing is sent to a registry but the request for a file.** No token goes there.
@@ -604,8 +605,8 @@ A package that is not in the registry:
 ```
 $ pmj add @thatplatypus/sockets_more
 error[package.not-found]: "@thatplatypus/sockets_more" is not in the registry.
-  why: the registry at https://raw.githubusercontent.com/thatplatypus/Packmoji/registry has no file of it
-  fix: if its repository is on the registry's list, a release is in the registry within the hour; to ask GitHub itself, run the command again with --direct
+  why: https://raw.githubusercontent.com/thatplatypus/Packmoji/registry/v1/packages/thatplatypus/sockets_more.json is not there
+  fix: check that https://raw.githubusercontent.com/thatplatypus/Packmoji/registry is the address a registry's v1 is under, for one that is not answers the same way; if it is, and the package's repository is on the registry's list, a release is in the registry within the hour; to ask GitHub itself, run the command again with --direct
 ```
 
 ## The cache

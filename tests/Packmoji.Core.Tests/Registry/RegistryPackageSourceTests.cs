@@ -211,7 +211,8 @@ namespace Packmoji.Core.Tests.Registry
 
             var notFound = result.ShouldFailWith(DiagnosticCodes.PackageNotFound);
             notFound.Message.ShouldBe("\"@thatplatypus/sockets_more\" is not in the registry.");
-            notFound.Reason.ShouldBe("the registry at https://registry.example has no file of it; it is asked for: @someone/app → @thatplatypus/sockets_more@1.0");
+            notFound.Reason.ShouldBe("https://registry.example/v1/packages/thatplatypus/sockets_more.json is not there; it is asked for: @someone/app → @thatplatypus/sockets_more@1.0");
+            notFound.Fix.ShouldBe("check that https://registry.example is the address a registry's v1 is under, for one that is not answers the same way; if it is, and the package's repository is on the registry's list, a release is in the registry within the hour; to ask GitHub itself, run the command again with --direct");
             notFound.Fix.ShouldContain("--direct");
         }
 
@@ -280,13 +281,13 @@ namespace Packmoji.Core.Tests.Registry
 
             var notFound = result.ShouldFailWith(DiagnosticCodes.PackageNotFound).ShouldBeComplete();
             notFound.Message.ShouldBe("\"@thatplatypus/sockets_more\" is not in the registry.");
-            notFound.Reason.ShouldBe("the registry at https://registry.example has no file of it; packmoji.lock holds 1.0.0 of it, and it is asked for: @someone/app → @thatplatypus/sockets_more@1.0.0");
+            notFound.Reason.ShouldBe("https://registry.example/v1/packages/thatplatypus/sockets_more.json is not there; packmoji.lock holds 1.0.0 of it, and it is asked for: @someone/app → @thatplatypus/sockets_more@1.0.0");
             notFound.Fix.ShouldContain("--direct");
         }
 
         [Theory]
         [InlineData("@thatplatypus/crypto", "1.1.0", DiagnosticCodes.ResolveVersionMissing, "https://registry.example/v1/packages/thatplatypus/crypto.json holds 3 versions of it, and this is not one of them; packmoji.lock holds it")]
-        [InlineData("@thatplatypus/sockets_more", "1.0.0", DiagnosticCodes.PackageNotFound, "the registry at https://registry.example has no file of it; packmoji.lock holds 1.0.0 of it")]
+        [InlineData("@thatplatypus/sockets_more", "1.0.0", DiagnosticCodes.PackageNotFound, "https://registry.example/v1/packages/thatplatypus/sockets_more.json is not there; packmoji.lock holds 1.0.0 of it")]
         public async Task A_lockfile_that_is_held_to_a_registry_which_lacks_what_it_holds_is_told_so_whether_or_not_the_cache_is_asked_first(string name, string version, string code, string reason)
         {
             var (_, lockfile) = await LockedOnGitHubItselfAsync(name, version);
@@ -376,7 +377,7 @@ namespace Packmoji.Core.Tests.Registry
             var notFound = RegistryPackageSource.NotFound(Sample.Name("@thatplatypus/sockets_more"), "https://registry.example").ShouldBeComplete();
 
             notFound.Code.ShouldBe(DiagnosticCodes.PackageNotFound);
-            notFound.Reason.ShouldBe("the registry at https://registry.example has no file of it");
+            notFound.Reason.ShouldBe("https://registry.example/v1/packages/thatplatypus/sockets_more.json is not there");
         }
     }
 }

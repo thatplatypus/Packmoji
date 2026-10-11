@@ -184,12 +184,31 @@ namespace Packmoji.Cli.Tests.Commands
             run.Error.ShouldBe(
                 """
                 error[package.not-found]: "@thatplatypus/sockets_more" is not in the registry.
-                  why: the registry at https://registry.example/files has no file of it
-                  fix: if its repository is on the registry's list, a release is in the registry within the hour; to ask GitHub itself, run the command again with --direct
+                  why: https://registry.example/files/v1/packages/thatplatypus/sockets_more.json is not there
+                  fix: check that https://registry.example/files is the address a registry's v1 is under, for one that is not answers the same way; if it is, and the package's repository is on the registry's list, a release is in the registry within the hour; to ask GitHub itself, run the command again with --direct
 
                 """.ReplaceLineEndings(Environment.NewLine));
             sandbox.GitHub.Requests.Select(request => request.Uri.Host).Distinct().ToArray().ShouldBe(["registry.example"], customMessage: "someone who names a registry is held to it, and pmj does not look past it on its own");
             sandbox.Has("packmoji.lock").ShouldBeFalse();
+        }
+
+        // An address with no registry behind it answers as a registry does of a package it does not
+        // have. So what is said names the file that was asked for, where a mistake in the address
+        // can be seen, and says first to check the address.
+        [Fact]
+        public async Task An_address_with_no_registry_behind_it_is_told_which_file_was_not_there_and_to_check_the_address()
+        {
+            using var sandbox = Sandbox.WithGrapevine();
+            sandbox.Project("@someone/app");
+            sandbox.NamesRegistry = true;
+
+            var run = await sandbox.RunAsync("add", "@thatplatypus/grapevine");
+
+            run.Status.ShouldBe(1);
+            run.Error.ShouldContain("  why: https://registry.example/files/v1/packages/thatplatypus/grapevine.json is not there" + Environment.NewLine);
+            run.Error.ShouldContain("  fix: check that https://registry.example/files is the address a registry's v1 is under, for one that is not answers the same way; ");
+            sandbox.GitHub.Downloads.ShouldBeEmpty();
+            sandbox.GitHub.Listings.ShouldBeEmpty();
         }
 
         [Fact]
@@ -830,8 +849,8 @@ namespace Packmoji.Cli.Tests.Commands
             run.Error.ShouldBe(
                 """
                 error[package.not-found]: "@thatplatypus/sockets_more" is not in the registry.
-                  why: the registry at https://registry.example/files has no file of it; packmoji.lock holds 1.0.0 of it
-                  fix: if its repository is on the registry's list, a release is in the registry within the hour; to ask GitHub itself, run the command again with --direct
+                  why: https://registry.example/files/v1/packages/thatplatypus/sockets_more.json is not there; packmoji.lock holds 1.0.0 of it
+                  fix: check that https://registry.example/files is the address a registry's v1 is under, for one that is not answers the same way; if it is, and the package's repository is on the registry's list, a release is in the registry within the hour; to ask GitHub itself, run the command again with --direct
 
                 """.ReplaceLineEndings(Environment.NewLine));
         }
