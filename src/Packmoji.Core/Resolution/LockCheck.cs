@@ -33,7 +33,7 @@ namespace Packmoji.Core.Resolution
             {
                 if (await source.AskAsync(locked.Name, locked.Version, cancellationToken) is not { } published)
                 {
-                    errors.Add(() => ResolveDiagnostics.LockedVersionMissing(locked));
+                    errors.Add(() => (source as IExplainsMissing)?.MissingThoughLocked(locked.Name, locked.Version, null) ?? ResolveDiagnostics.LockedVersionMissing(locked));
                     continue;
                 }
 

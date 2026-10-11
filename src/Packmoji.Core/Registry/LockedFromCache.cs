@@ -1,3 +1,4 @@
+using Packmoji.Core.Diagnostics;
 using Packmoji.Core.Direct;
 using Packmoji.Core.Identity;
 using Packmoji.Core.Lockfiles;
@@ -17,7 +18,7 @@ namespace Packmoji.Core.Registry
     /// So a version that has since been withdrawn or quarantined is learned of when the registry is
     /// asked: by a resolution, by a fetch of what the cache does not hold, and by <c>pmj verify</c>.
     /// </remarks>
-    public sealed class LockedFromCache : IPackageSource
+    public sealed class LockedFromCache : IPackageSource, IExplainsMissing
     {
         private readonly Dictionary<(PackageName Name, SemanticVersion Version), LockedPackage> _locked;
         private readonly IAssetStore _store;
@@ -47,5 +48,13 @@ namespace Packmoji.Core.Registry
 
             return await _otherwise.FindAsync(name, version, cancellationToken);
         }
+
+        // What is not answered from the cache was asked of the other source, so what that source
+        // has to say of a version it did not give is what there is to say.
+        Diagnostic? IExplainsMissing.Missing(PackageName name, SemanticVersion version, string chain) =>
+            (_otherwise as IExplainsMissing)?.Missing(name, version, chain);
+
+        Diagnostic? IExplainsMissing.MissingThoughLocked(PackageName name, SemanticVersion version, string? chain) =>
+            (_otherwise as IExplainsMissing)?.MissingThoughLocked(name, version, chain);
     }
 }

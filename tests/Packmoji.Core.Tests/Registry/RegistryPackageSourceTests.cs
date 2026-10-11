@@ -1,6 +1,7 @@
 using Packmoji.Core.Diagnostics;
 using Packmoji.Core.Direct;
 using Packmoji.Core.Lockfiles;
+using Packmoji.Core.Manifests;
 using Packmoji.Core.Registry;
 using Packmoji.Core.Resolution;
 using Packmoji.Core.Tests.TestSupport;
@@ -199,14 +200,112 @@ namespace Packmoji.Core.Tests.Registry
         }
 
         [Fact]
-        public async Task Of_a_version_that_is_not_in_the_registry_though_its_package_is_a_resolution_says_it_was_never_published()
+        public async Task Of_a_version_that_is_not_in_the_registry_though_its_package_is_a_resolution_says_that_and_not_that_it_was_never_published()
         {
+            // A release may be an hour old, or may have been refused: that the registry does not
+            // hold a version is all a registry can say of it.
             var files = await IndexedAsync(Released());
             var manifest = Project.Named("@someone/app", ["@thatplatypus/crypto@1.1"], []);
 
             var result = await Resolver.ResolveAsync(manifest, null, new RegistryPackageSource(files), Packmoji.Core.Identity.ScopeLimit.None, TestContext.Current.CancellationToken);
 
-            result.ShouldFailWith(DiagnosticCodes.ResolveVersionMissing);
+            var missing = result.ShouldFailWith(DiagnosticCodes.ResolveVersionMissing).ShouldBeComplete();
+            missing.Message.ShouldBe("Version 1.1.0 of \"@thatplatypus/crypto\" is not in the registry.");
+            missing.Reason.ShouldBe("https://registry.example/v1/packages/thatplatypus/crypto.json holds 3 versions of it, and this is not one of them; it is asked for: @someone/app → @thatplatypus/crypto@1.1");
+            missing.Fix.ShouldBe("ask for a version the registry holds; a release is in the registry within the hour of being made, unless the registry refused it, which https://registry.example/v1/refused/thatplatypus/grapevine.json says; to ask GitHub itself, run the command again with --direct");
+        }
+
+        [Fact]
+        public async Task Of_a_package_with_one_version_the_count_is_said_as_one()
+        {
+            var files = await IndexedAsync(Released());
+            var manifest = Project.Named("@someone/app", ["@thatplatypus/deflate@0.2"], []);
+
+            var result = await Resolver.ResolveAsync(manifest, null, new RegistryPackageSource(files), Packmoji.Core.Identity.ScopeLimit.None, TestContext.Current.CancellationToken);
+
+            result.ShouldFailWith(DiagnosticCodes.ResolveVersionMissing).Reason.ShouldStartWith("https://registry.example/v1/packages/thatplatypus/deflate.json holds 1 version of it, and this is not one of them; ");
+        }
+
+        // A source with no registry behind it, told of the one repository all of these packages share.
+        private static DirectPackageSource OnGitHubItself(ListedReleases host, Manifest manifest, Lockfile? lockfile) =>
+            new(host, new MemoryAssetStore(), manifest, lockfile, alsoLookIn: [Sample.Repository(G)]);
+
+        // A lockfile written with no registry behind it, for a project that asks for one package at one version.
+        private static async Task<(Manifest Manifest, Lockfile Lockfile)> LockedOnGitHubItselfAsync(string name, string version)
+        {
+            var host = Released().Package(G, name, version);
+            var manifest = Project.Named("@someone/app", [$"{name}@{version}"], []);
+            var graph = (await DirectResolver.ResolveAsync(manifest, null, OnGitHubItself(host, manifest, null), Packmoji.Core.Identity.ScopeLimit.None, TestContext.Current.CancellationToken)).ShouldSucceed();
+            return (manifest, graph.ToLockfile(manifest));
+        }
+
+        [Fact]
+        public async Task Of_a_version_that_a_lockfile_holds_and_the_registry_does_not_a_resolution_says_that_and_not_that_the_version_is_gone()
+        {
+            // The registry never held it, so nothing has gone: the lockfile was written without this registry.
+            var (manifest, lockfile) = await LockedOnGitHubItselfAsync("@thatplatypus/crypto", "1.1.0");
+            var files = await IndexedAsync(Released());
+
+            var result = await Resolver.ResolveAsync(manifest, lockfile, new RegistryPackageSource(files), Packmoji.Core.Identity.ScopeLimit.None, TestContext.Current.CancellationToken);
+
+            var missing = result.ShouldFailWith(DiagnosticCodes.ResolveVersionMissing).ShouldBeComplete();
+            missing.Message.ShouldBe("Version 1.1.0 of \"@thatplatypus/crypto\" is not in the registry.");
+            missing.Reason.ShouldBe("https://registry.example/v1/packages/thatplatypus/crypto.json holds 3 versions of it, and this is not one of them; packmoji.lock holds it, and it is asked for: @someone/app → @thatplatypus/crypto@1.1.0");
+            missing.Fix.ShouldBe("keep packmoji.lock: to use what it holds, ask GitHub itself, by running the command again with --direct; to use what the registry holds, ask for one of its versions in packmoji.json");
+        }
+
+        [Fact]
+        public async Task Of_a_package_that_a_lockfile_holds_and_the_registry_does_not_have_a_resolution_says_which_version_the_lockfile_holds()
+        {
+            var (manifest, lockfile) = await LockedOnGitHubItselfAsync("@thatplatypus/sockets_more", "1.0.0");
+            var files = await IndexedAsync(Released());
+
+            var result = await Resolver.ResolveAsync(manifest, lockfile, new RegistryPackageSource(files), Packmoji.Core.Identity.ScopeLimit.None, TestContext.Current.CancellationToken);
+
+            var notFound = result.ShouldFailWith(DiagnosticCodes.PackageNotFound).ShouldBeComplete();
+            notFound.Message.ShouldBe("\"@thatplatypus/sockets_more\" is not in the registry.");
+            notFound.Reason.ShouldBe("the registry at https://registry.example has no file of it; packmoji.lock holds 1.0.0 of it, and it is asked for: @someone/app → @thatplatypus/sockets_more@1.0.0");
+            notFound.Fix.ShouldContain("--direct");
+        }
+
+        [Theory]
+        [InlineData("@thatplatypus/crypto", "1.1.0", DiagnosticCodes.ResolveVersionMissing, "https://registry.example/v1/packages/thatplatypus/crypto.json holds 3 versions of it, and this is not one of them; packmoji.lock holds it")]
+        [InlineData("@thatplatypus/sockets_more", "1.0.0", DiagnosticCodes.PackageNotFound, "the registry at https://registry.example has no file of it; packmoji.lock holds 1.0.0 of it")]
+        public async Task A_lockfile_that_is_held_to_a_registry_which_lacks_what_it_holds_is_told_so_whether_or_not_the_cache_is_asked_first(string name, string version, string code, string reason)
+        {
+            var (_, lockfile) = await LockedOnGitHubItselfAsync(name, version);
+            var files = await IndexedAsync(Released());
+
+            var asked = await LockCheck.CheckAsync(lockfile, new RegistryPackageSource(files), TestContext.Current.CancellationToken);
+            var throughTheCache = await LockCheck.CheckAsync(lockfile, new LockedFromCache(lockfile, new MemoryAssetStore(), new RegistryPackageSource(files)), TestContext.Current.CancellationToken);
+
+            asked.ShouldFailWith(code).ShouldBeComplete().Reason.ShouldBe(reason);
+            throughTheCache.ShouldFailWith(code).Reason.ShouldBe(reason);
+        }
+
+        [Fact]
+        public async Task What_a_registry_says_of_a_version_it_lacks_is_said_through_a_source_that_asks_the_cache_first()
+        {
+            var files = await IndexedAsync(Released());
+            var manifest = Project.Named("@someone/app", ["@thatplatypus/crypto@1.1"], []);
+            var nothingLocked = new Lockfile(RootRequirements.From(manifest), []);
+
+            var result = await Resolver.ResolveAsync(manifest, null, new LockedFromCache(nothingLocked, new MemoryAssetStore(), new RegistryPackageSource(files)), Packmoji.Core.Identity.ScopeLimit.None, TestContext.Current.CancellationToken);
+
+            result.ShouldFailWith(DiagnosticCodes.ResolveVersionMissing).Message.ShouldBe("Version 1.1.0 of \"@thatplatypus/crypto\" is not in the registry.");
+        }
+
+        [Fact]
+        public async Task With_no_registry_a_version_that_the_lockfile_holds_and_is_gone_is_still_said_to_be_no_longer_published()
+        {
+            var (manifest, lockfile) = await LockedOnGitHubItselfAsync("@thatplatypus/crypto", "1.1.0");
+            var without = Released();
+
+            var resolved = await DirectResolver.ResolveAsync(manifest, lockfile, OnGitHubItself(without, manifest, lockfile), Packmoji.Core.Identity.ScopeLimit.None, TestContext.Current.CancellationToken);
+            var checkedAgain = await LockCheck.CheckAsync(lockfile, OnGitHubItself(without, manifest, lockfile), TestContext.Current.CancellationToken);
+
+            resolved.ShouldFailWith(DiagnosticCodes.ResolveVersionMissing).Message.ShouldBe("Version 1.1.0 of \"@thatplatypus/crypto\" is no longer published.");
+            checkedAgain.ShouldFailWith(DiagnosticCodes.ResolveVersionMissing).Message.ShouldBe("Version 1.1.0 of \"@thatplatypus/crypto\" is no longer published.");
         }
 
         [Fact]
@@ -218,6 +317,19 @@ namespace Packmoji.Core.Tests.Registry
 
             (await Resolver.ResolveAsync(manifest, null, new RegistryPackageSource(yanked), Packmoji.Core.Identity.ScopeLimit.None, TestContext.Current.CancellationToken)).ShouldFailWith(DiagnosticCodes.ResolveYanked);
             (await Resolver.ResolveAsync(manifest, null, new RegistryPackageSource(quarantined), Packmoji.Core.Identity.ScopeLimit.None, TestContext.Current.CancellationToken)).ShouldFailWith(DiagnosticCodes.ResolveQuarantined);
+        }
+
+        [Fact]
+        public async Task Of_a_package_whose_file_holds_no_version_nothing_is_said_of_where_a_refusal_would_be()
+        {
+            var files = new MemoryRegistryFiles().Hold(State(Package("@thatplatypus/crypto")));
+            var manifest = Project.Named("@someone/app", ["@thatplatypus/crypto@1.0"], []);
+
+            var result = await Resolver.ResolveAsync(manifest, null, new RegistryPackageSource(files), Packmoji.Core.Identity.ScopeLimit.None, TestContext.Current.CancellationToken);
+
+            var missing = result.ShouldFailWith(DiagnosticCodes.ResolveVersionMissing).ShouldBeComplete();
+            missing.Reason.ShouldBe("https://registry.example/v1/packages/thatplatypus/crypto.json holds no version of it; it is asked for: @someone/app → @thatplatypus/crypto@1.0");
+            missing.Fix.ShouldBe("ask for a version the registry holds; a release is in the registry within the hour of being made; to ask GitHub itself, run the command again with --direct");
         }
 
         [Fact]

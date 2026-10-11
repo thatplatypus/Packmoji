@@ -1,6 +1,8 @@
 using Packmoji.Core.Diagnostics;
 using Packmoji.Core.Direct;
 using Packmoji.Core.Identity;
+using Packmoji.Core.Lockfiles;
+using Packmoji.Core.Manifests;
 using Packmoji.Core.Resolution;
 using Packmoji.Core.Versioning;
 
@@ -18,6 +20,8 @@ namespace Packmoji.Core.Registry
     /// </remarks>
     public sealed class RegistryPackageSource(IRegistryFiles files) : IPackageSource, IExplainsMissing
     {
+        private const string AskGitHubItself = "to ask GitHub itself, run the command again with --direct";
+
         // What was read of each package. Null is a package the registry does not have.
         private readonly Dictionary<PackageName, RegistryPackage?> _read = [];
 
@@ -44,25 +48,75 @@ namespace Packmoji.Core.Registry
         }
 
         /// <summary>
-        /// Of a version this source did not give: when the registry does not have the package at all,
-        /// that is what there is to say. A registry knows every version of a package it does have, so
-        /// of a version that is missing among them the resolver's own word stands: it was never published.
+        /// Of a version this source did not give. That a registry does not hold it is all a registry
+        /// can say: a release may be an hour old, or may have been refused, so the resolver's word,
+        /// that the version was never published, would be more than is known.
         /// </summary>
-        Diagnostic? IExplainsMissing.Missing(PackageName name, SemanticVersion version, string chain) =>
-            _read.TryGetValue(name, out var package) && package is null ? NotFound(name, files.Address, chain) : null;
+        Diagnostic? IExplainsMissing.Missing(PackageName name, SemanticVersion version, string chain) => Absent(name, version, chain, locked: false);
+
+        /// <summary>
+        /// Of a version a lockfile holds and this source did not give. A registry removes no
+        /// version, so nothing has gone: the lockfile was written without this registry, or edited.
+        /// </summary>
+        Diagnostic? IExplainsMissing.MissingThoughLocked(PackageName name, SemanticVersion version, string? chain) => Absent(name, version, chain, locked: true);
 
         /// <summary>Says that a registry does not have a package: where the registry is, and how to look on GitHub itself.</summary>
-        /// <param name="askedFor">How a resolution came to ask for the package, when one did.</param>
-        public static Diagnostic NotFound(PackageName name, string address, string? askedFor = null)
+        public static Diagnostic NotFound(PackageName name, string address)
         {
             ArgumentNullException.ThrowIfNull(name);
             ArgumentNullException.ThrowIfNull(address);
-            return new Diagnostic(
+            return NotFound(name, address, "");
+        }
+
+        /// <param name="asked">How the package came to be asked about, to follow the reason, or nothing.</param>
+        private static Diagnostic NotFound(PackageName name, string address, string asked) =>
+            new(
                 DiagnosticCodes.PackageNotFound,
                 $"\"{name}\" is not in the registry.",
-                $"the registry at {address} has no file of it{(askedFor is null ? "" : $"; it is asked for: {askedFor}")}",
-                "if its repository is on the registry's list, a release is in the registry within the hour; to ask GitHub itself, run the command again with --direct");
+                $"the registry at {address} has no file of it{asked}",
+                $"if its repository is on the registry's list, a release is in the registry within the hour; {AskGitHubItself}");
+
+        // A package that was never read is one this source was never asked about, and it has nothing to say of it.
+        private Diagnostic? Absent(PackageName name, SemanticVersion version, string? chain, bool locked)
+        {
+            if (!_read.TryGetValue(name, out var package))
+            {
+                return null;
+            }
+
+            if (package is null)
+            {
+                return NotFound(name, files.Address, Asked(locked ? $"{LockfileReader.FileName} holds {version} of it" : null, chain));
+            }
+
+            var holds = package.Versions.Count switch
+            {
+                0 => "no version of it",
+                1 => "1 version of it, and this is not one of them",
+                var count => $"{count} versions of it, and this is not one of them",
+            };
+
+            // Which of a repository's releases were refused is in a file of its own, and a package's
+            // versions say which repository that is.
+            var refused = package.Versions.Count == 0 ? "" : $", unless the registry refused it, which {files.Address}/{RegistryPaths.Refused(package.Versions[^1].Source)} says";
+            return new Diagnostic(
+                DiagnosticCodes.ResolveVersionMissing,
+                $"Version {version} of \"{name}\" is not in the registry.",
+                $"{files.Address}/{RegistryPaths.Package(name)} holds {holds}{Asked(locked ? $"{LockfileReader.FileName} holds it" : null, chain)}",
+                locked
+                    ? $"keep {LockfileReader.FileName}: to use what it holds, ask GitHub itself, by running the command again with --direct; to use what the registry holds, ask for one of its versions in {ManifestReader.FileName}"
+                    : $"ask for a version the registry holds; a release is in the registry within the hour of being made{refused}; {AskGitHubItself}");
         }
+
+        // How a version came to be asked about, to follow a reason: what holds it, and what leads to it.
+        private static string Asked(string? held, string? chain) =>
+            (held, chain) switch
+            {
+                (null, null) => "",
+                (null, _) => $"; it is asked for: {chain}",
+                (_, null) => $"; {held}",
+                _ => $"; {held}, and it is asked for: {chain}",
+            };
 
         private async Task<RegistryPackage?> PackageAsync(PackageName name, CancellationToken cancellationToken)
         {

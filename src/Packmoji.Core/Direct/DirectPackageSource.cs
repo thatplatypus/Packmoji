@@ -172,6 +172,10 @@ namespace Packmoji.Core.Direct
                 ? NotFound(name, version, LookedIn(name, version), chain)
                 : null;
 
+        // A version the lockfile holds was found once, where the lockfile says it lives. That it is
+        // no longer published is then what there is to say, and the resolver says it.
+        Diagnostic? IExplainsMissing.MissingThoughLocked(PackageName name, SemanticVersion version, string? chain) => null;
+
         /// <summary>Says that a package could not be placed: where pmj looked for it, and how to say where it is.</summary>
         /// <param name="askedFor">How a resolution came to ask for the version, when one did.</param>
         public static Diagnostic NotFound(PackageName name, SemanticVersion? version, IReadOnlyList<RepositoryRef> lookedIn, string? askedFor = null)
