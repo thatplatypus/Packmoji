@@ -185,7 +185,7 @@ namespace Packmoji.Cli.Tests.Commands
                 """
                 error[package.not-found]: "@thatplatypus/sockets_more" is not in the registry.
                   why: https://registry.example/files/v1/packages/thatplatypus/sockets_more.json is not there
-                  fix: check that https://registry.example/files is the address a registry's v1 is under, for one that is not answers the same way; if it is, and the package's repository is on the registry's list, a release is in the registry within the hour; to ask GitHub itself, run the command again with --direct
+                  fix: check that https://registry.example/files is the address a registry's v1 is under, for one that is not answers the same way; if it is, and the package's repository is on the registry's list, a release is in the registry within a day; to ask GitHub itself, run the command again with --direct
 
                 """.ReplaceLineEndings(Environment.NewLine));
             sandbox.GitHub.Requests.Select(request => request.Uri.Host).Distinct().ToArray().ShouldBe(["registry.example"], customMessage: "someone who names a registry is held to it, and pmj does not look past it on its own");
@@ -851,7 +851,7 @@ namespace Packmoji.Cli.Tests.Commands
                 """
                 error[package.not-found]: "@thatplatypus/sockets_more" is not in the registry.
                   why: https://registry.example/files/v1/packages/thatplatypus/sockets_more.json is not there; packmoji.lock holds 1.0.0 of it
-                  fix: check that https://registry.example/files is the address a registry's v1 is under, for one that is not answers the same way; if it is, and the package's repository is on the registry's list, a release is in the registry within the hour; to ask GitHub itself, run the command again with --direct
+                  fix: check that https://registry.example/files is the address a registry's v1 is under, for one that is not answers the same way; if it is, and the package's repository is on the registry's list, a release is in the registry within a day; to ask GitHub itself, run the command again with --direct
 
                 """.ReplaceLineEndings(Environment.NewLine));
         }

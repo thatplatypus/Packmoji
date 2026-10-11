@@ -606,7 +606,7 @@ A package that is not in the registry:
 $ pmj add @thatplatypus/sockets_more
 error[package.not-found]: "@thatplatypus/sockets_more" is not in the registry.
   why: https://raw.githubusercontent.com/thatplatypus/Packmoji/registry/v1/packages/thatplatypus/sockets_more.json is not there
-  fix: check that https://raw.githubusercontent.com/thatplatypus/Packmoji/registry is the address a registry's v1 is under, for one that is not answers the same way; if it is, and the package's repository is on the registry's list, a release is in the registry within the hour; to ask GitHub itself, run the command again with --direct
+  fix: check that https://raw.githubusercontent.com/thatplatypus/Packmoji/registry is the address a registry's v1 is under, for one that is not answers the same way; if it is, and the package's repository is on the registry's list, a release is in the registry within a day; to ask GitHub itself, run the command again with --direct
 ```
 
 ## The cache

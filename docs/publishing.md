@@ -116,7 +116,7 @@ Look in `packmoji.lock` for the digest `pmj pack` printed. It is the same.
 [The registry](registry.md) records each version of the packages in the repositories on its list: where the version lives, which bytes it is, and what it needs.
 
 - **A repository is listed by a pull request** that adds a line to `registry-repositories.txt`. [How a repository comes to be listed](registry.md#how-a-repository-comes-to-be-listed) says what the line is.
-- **A release of a listed repository is in the registry within the hour.** There is nothing to tell the registry.
+- **A release of a listed repository is in the registry within a day.** There is nothing to tell the registry. Until it is there, a command run with `--direct` asks GitHub itself.
 - **A release that is refused is written down, with why,** in the registry's file for the repository, under `v1/refused`. [Why a release is refused](registry.md#why-a-release-is-refused) has each reason and what to do about it.
 - **`pmj` reads the registry only when it is told where it is,** so the check above is still how to see that a release can be used by everyone. With `PACKMOJI_REGISTRY` set, `pmj add` of the package says whether the registry has it.
 

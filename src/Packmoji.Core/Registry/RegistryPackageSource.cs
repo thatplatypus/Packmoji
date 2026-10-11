@@ -53,8 +53,8 @@ namespace Packmoji.Core.Registry
 
         /// <summary>
         /// Of a version this source did not give. That a registry does not hold it is all a registry
-        /// can say: a release may be an hour old, or may have been refused, so the resolver's word,
-        /// that the version was never published, would be more than is known.
+        /// can say: a release may be newer than the last run, or may have been refused, so the
+        /// resolver's word, that the version was never published, would be more than is known.
         /// </summary>
         Diagnostic? IExplainsMissing.Missing(PackageName name, SemanticVersion version, string chain) => Absent(name, version, chain, locked: false);
 
@@ -87,7 +87,7 @@ namespace Packmoji.Core.Registry
                 DiagnosticCodes.PackageNotFound,
                 $"\"{name}\" is not in the registry.",
                 $"{address}/{RegistryPaths.Package(name)} is not there{asked}",
-                $"check that {address} is the address a registry's v1 is under, for one that is not answers the same way; if it is, and the package's repository is on the registry's list, a release is in the registry within the hour; {AskGitHubItself}");
+                $"check that {address} is the address a registry's v1 is under, for one that is not answers the same way; if it is, and the package's repository is on the registry's list, a release is in the registry within a day; {AskGitHubItself}");
 
         // A package that was never read is one this source was never asked about, and it has nothing to say of it.
         private Diagnostic? Absent(PackageName name, SemanticVersion version, string? chain, bool locked)
@@ -118,7 +118,7 @@ namespace Packmoji.Core.Registry
                 $"{files.Address}/{RegistryPaths.Package(name)} holds {holds}{Asked(locked ? $"{LockfileReader.FileName} holds it" : null, chain)}",
                 locked
                     ? $"keep {LockfileReader.FileName}: to use what it holds, ask GitHub itself, by running the command again with --direct; to use what the registry holds, ask for one of its versions in {ManifestReader.FileName}"
-                    : $"ask for a version the registry holds; a release is in the registry within the hour of being made{refused}; {AskGitHubItself}");
+                    : $"ask for a version the registry holds; a release is in the registry within a day of being made{refused}; {AskGitHubItself}");
         }
 
         // How a version came to be asked about, to follow a reason: what holds it, and what leads to it. There is always one of the two.
