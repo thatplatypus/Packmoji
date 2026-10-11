@@ -616,9 +616,9 @@ On Windows `pmj` manages packages, and builds nothing.
 | A signed program, and an installer | Later |
 | `test` | Later. Emojicode has no way of its own to say what a package's tests are, and one has to be chosen first |
 | Building several packages at once, and compiling a project only when it has changed | Later |
-| A registry, and `search` and `info` | The registry |
+| Reading [the registry](registry.md), and `search` and `info` | Later. The registry is kept already, and `pmj` does not read it yet |
 | `publish`, attestations, and a release workflow | Publishing |
 | Installing for a project that requires attestation | Publishing. Until then such a project is refused, with `attestation.unverifiable`: a requirement that cannot be checked is not met |
-| A configuration file | The registry |
+| A configuration file | Later |
 | Downloading several packages at once | Later |
 | `pmj cache clean` | Later. Deleting the cache's directory does the same |
