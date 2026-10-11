@@ -48,17 +48,20 @@ scripts/aot-smoke.sh osx-arm64 # publish pmj as a native binary and run it (or l
 scripts/real-compiler.sh       # build the sample projects with the released compiler, in a container (needs Docker)
 ```
 
-CI runs exactly these scripts, on Linux, and the first and the third on Windows too, with the bash that comes with Git. Every test but those of the last has a compiler that is made up, so the first three need no Emojicode.
+CI runs exactly these scripts: all of them on Linux, the native program on macOS as well, and the tests and the native program on Windows, with the bash that comes with Git. Every test but those of the last has a compiler that is made up, so the first three need no Emojicode.
 
 ## Releasing
 
 A release is made by the workflow `.github/workflows/release.yml`, and by nothing else.
 
 1. Set `<Version>` in `Directory.Build.props`, and merge that.
-2. Run the workflow **Release** by hand, from the Actions tab or with `gh workflow run release.yml`. It builds `pmj` for the three machines, runs each, and keeps the four files of a release with the run. It releases nothing. Look at what it kept.
-3. Push the tag, which is `v` and the version: `git tag v0.1.0 && git push origin v0.1.0`. The same workflow then makes the release.
+2. Run the workflow **Release** by hand, from the Actions tab or with `gh workflow run release.yml`. It builds `pmj` for the three machines, runs each, and keeps the four files of a release with the run. It releases nothing: it is a rehearsal. To look at what it kept, find the run with `gh run list --workflow release.yml` and fetch the files with `gh run download <run> -n assets -D <an empty directory>`.
+3. Tag the commit that was merged, and push the tag, which is `v` and the version: `git switch main && git pull && git tag v0.1.0 && git push origin v0.1.0`. The same workflow then builds the three programs again, runs each, and makes the release.
 
-A tag that is not the version stops the workflow before it builds anything, and a release that is there already is never changed. [Record 0011](docs/decisions/0011-released-programs.md) says why, and what the three scripts it runs are for: `scripts/release-tag.sh`, `scripts/glibc-floor.sh` and `scripts/release-assets.sh`.
+- **What a run by hand kept is not what a release carries.** A tag builds the programs again, and a program built twice is not the same bytes twice. The digests of a release are the ones the release itself carries, in `pmj-<version>.sha256` and in its notes. A tool that pins a digest takes it from there, and never from a run by hand.
+- **A tag that is not the version stops the workflow before it builds anything,** and a release that is there already is never changed.
+
+[Record 0011](docs/decisions/0011-released-programs.md) says why, and what the three scripts the workflow runs are for: `scripts/release-tag.sh`, `scripts/glibc-floor.sh` and `scripts/release-assets.sh`.
 
 ## Layout
 

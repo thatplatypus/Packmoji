@@ -41,7 +41,7 @@ $expected = (Select-String -Path "pmj-$version.sha256" -Pattern "win-x64\.exe$")
 if ((Get-FileHash "pmj-$version-win-x64.exe" -Algorithm SHA256).Hash -ne $expected) { throw "this is not the program the release holds" }
 ```
 
-- **A digest that comes with a program shows that the program arrived whole, and not who made it.** A tool that fetches `pmj` keeps the digest it expects with its own code, and holds the program to that.
+- **A digest that comes with a program shows that the program arrived whole, and not who made it.** A tool that fetches `pmj` keeps the digest it expects with its own code, taken once from the release's own `pmj-<version>.sha256`, and holds the program to that.
 - **No program is signed.** macOS holds back a program that a browser fetched, until the mark the browser left on it is taken away: `xattr -d com.apple.quarantine pmj`. `curl` leaves no such mark.
 - **What `pmj` does on Windows is less than elsewhere:** see [pmj on Windows](#pmj-on-windows).
 

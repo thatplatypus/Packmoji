@@ -12,7 +12,7 @@ Until now `pmj` could be had only by building it. Blazemoji is the first tool th
 ## Decision
 
 - **A release is made by a workflow, when a tag `v<version>` is pushed,** and by nothing else. The tag has to be the version in `Directory.Build.props`, or the workflow stops before it builds.
-- **The same workflow, run by hand, builds everything and releases nothing.** What it built is kept with the run for a week, to be looked at before a tag is pushed.
+- **The same workflow, run by hand, builds everything and releases nothing.** What it built is kept with the run for a week, to be looked at before a tag is pushed. It is a rehearsal: a tag builds the programs again, and what a release carries is what the run that made it built and ran.
 - **A release is made once.** If one of that tag is there, the workflow fails and changes nothing.
 - **A release carries four files:** `pmj-<version>-linux-x64`, `pmj-<version>-osx-arm64` and `pmj-<version>-win-x64.exe`, each the program itself, and `pmj-<version>.sha256`, with a line for each as `sha256sum` writes and checks them. The notes of the release hold the same digests.
 - **Each program is built on its own system and run there before it is kept,** by the script that runs the native program in CI.
@@ -56,6 +56,7 @@ On 2026-10-10 the workflow was run on a branch, for no tag, and what it kept was
 ## Consequences
 
 - **A release cannot be mended.** One that is wrong is followed by another version.
+- **What a run by hand kept is not what a release carries.** A native program built twice is not the same bytes twice: the same commit, published twice in the same place on 2026-10-10, gave two programs that differ in 47 bytes. So the digests of a release are the ones the release carries, and a tool that pins one takes it from there. Releasing the very bytes that were looked at would take a workflow that promotes what an earlier run kept, which was not asked for.
 - **The first release is the owner's to make:** the workflow by hand, a look at what it kept, then the tag.
 - **Raising the version is all a release needs** beside the tag. The guide names the assets by `<version>`, and its one example names 0.1.0.
 - **A program that a browser fetched is held back by macOS** until the mark the browser left on it is taken away. A script's is not.

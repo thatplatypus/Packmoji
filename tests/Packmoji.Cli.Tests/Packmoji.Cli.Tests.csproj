@@ -27,6 +27,7 @@
     <None Include="..\..\docs\cli.md" Link="docs\cli.md" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\docs\cli.md')" />
     <None Include="..\..\docs\publishing.md" Link="docs\publishing.md" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\docs\publishing.md')" />
     <None Include="..\..\docs\building.md" Link="docs\building.md" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\docs\building.md')" />
+    <None Include="..\..\README.md" Link="docs\README.md" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

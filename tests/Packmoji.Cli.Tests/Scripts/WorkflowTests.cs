@@ -138,6 +138,26 @@ namespace Packmoji.Cli.Tests.Scripts
             File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "docs", "cli.md")).ReplaceLineEndings("\n").ShouldContain("\n## Getting pmj\n");
         }
 
+        // A program built twice is not the same bytes twice, so what a run by hand kept is not what a
+        // tag releases. Whoever makes a release goes by the README, and it has to say so.
+        [Fact]
+        public void The_README_says_that_a_tag_builds_the_programs_again_and_where_a_releases_digests_are()
+        {
+            var release = Workflow("release.yml");
+            Job(release, "programs").ShouldNotContain("\n    if:");
+            Job(release, "release").ShouldNotContain("run-id");
+
+            var readme = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "docs", "README.md")).ReplaceLineEndings("\n");
+            var start = readme.IndexOf("\n## Releasing\n", StringComparison.Ordinal);
+            start.ShouldBeGreaterThan(0, "the README has no section on releasing");
+            var releasing = readme[start..readme.IndexOf("\n## ", start + 1, StringComparison.Ordinal)];
+
+            releasing.ShouldContain("builds the three programs again");
+            releasing.ShouldContain("never from a run by hand");
+            releasing.ShouldContain("gh run download");
+            releasing.ShouldContain("git switch main && git pull");
+        }
+
         [Fact]
         public void A_tag_that_is_not_the_version_stops_a_release_before_anything_is_built()
         {
