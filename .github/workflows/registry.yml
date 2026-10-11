@@ -1,0 +1,113 @@
+# Keeps the registry: the files, on a branch of their own, that say which versions of which
+# packages there are. It looks at the releases of the repositories that
+# registry-repositories.txt lists, and records what it finds.
+#
+# It is two jobs, because the token that writes the registry is a token for the repository that
+# pmj itself is released from. The first job asks GitHub, reads archives that strangers made, and
+# may write nothing. The second may write, and reads nothing but what the first made, as data: it
+# holds that to the rules of a registry and to the registry as it stood, and commits it.
+#
+# Each step runs something that also runs at a desk: scripts/registry-tree.sh,
+# scripts/registry-commit.sh, and the two commands of src/Packmoji.Indexer.
+name: Registry
+
+on:
+  schedule:
+    # Every hour, and not on the hour, which is when GitHub's own queue is longest.
+    - cron: "17 * * * *"
+  push:
+    branches: [ "main" ]
+    paths: [ "registry-repositories.txt" ]
+  workflow_dispatch:
+
+# Nothing here may write to the repository but the one job that commits the registry.
+permissions:
+  contents: read
+
+# One run at a time. Two would both write the branch, and the second would be refused.
+concurrency:
+  group: registry
+  cancel-in-progress: false
+
+# The branch the registry is kept on, which both scripts are told here and nowhere else.
+env:
+  REGISTRY_BRANCH: registry
+
+jobs:
+  read:
+    name: Look at the releases
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+    # This job pushes nothing, so it keeps no way to.
+    - name: Checkout
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      with:
+        persist-credentials: false
+
+    - name: Setup .NET (from global.json)
+      uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+      with:
+        global-json-file: global.json
+
+    - name: Take the registry as it stands
+      run: scripts/registry-tree.sh "$RUNNER_TEMP/made/registry"
+
+    # The token raises the limit of GitHub's API. In this job it may read this repository and
+    # nothing more.
+    - name: Bring it to its next state
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: dotnet run --project src/Packmoji.Indexer -c Release -- run --registry "$RUNNER_TEMP/made/registry" --repositories registry-repositories.txt
+
+    # Beside the registry and not in it, so that there is always something to keep: a registry
+    # that holds nothing is no file at all, and the job that follows has to be told that too.
+    - name: Say which run made it
+      run: echo "run $GITHUB_RUN_ID, of commit $GITHUB_SHA" > "$RUNNER_TEMP/made/run.txt"
+
+    - name: Keep what was made
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      with:
+        name: registry
+        path: ${{ runner.temp }}/made/
+        if-no-files-found: error
+        retention-days: 7
+
+  write:
+    name: Hold it to the rules and commit it
+    needs: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+    - name: Checkout
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+    - name: Setup .NET (from global.json)
+      uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+      with:
+        global-json-file: global.json
+
+    # Taken again, here. What the first job's work is held to is the registry as this job finds
+    # it, and not as the first job says it was.
+    - name: Take the registry as it stands
+      run: scripts/registry-tree.sh "$RUNNER_TEMP/before" "$RUNNER_TEMP/commit"
+
+    # Outside the checkout, so that nothing of it is beside the code this job builds and runs.
+    - name: Fetch what the first job made
+      uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      with:
+        name: registry
+        path: ${{ runner.temp }}/made
+
+    # It is read as data, by the registry's own reader, and none of it is run. A registry that
+    # holds nothing is no directory at all, so one is made for it.
+    - name: Hold it to the registry as it stood
+      run: |
+        mkdir -p "$RUNNER_TEMP/made/registry"
+        dotnet run --project src/Packmoji.Indexer -c Release -- check --before "$RUNNER_TEMP/before" --after "$RUNNER_TEMP/made/registry" --message "$RUNNER_TEMP/words"
+
+    # The commit follows the one the registry was taken from above, and is never forced.
+    - name: Commit it
+      run: scripts/registry-commit.sh "$RUNNER_TEMP/made/registry" "$RUNNER_TEMP/words" "$RUNNER_TEMP/commit"
