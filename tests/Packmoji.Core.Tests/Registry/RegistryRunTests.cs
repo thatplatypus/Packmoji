@@ -642,6 +642,120 @@ namespace Packmoji.Core.Tests.Registry
             host.Downloads.Count.ShouldBe(3);
         }
 
+        // Otherwise the repository that comes first by name, with enough new files at every run,
+        // would keep every repository after it waiting for ever, and anyone who is listed could be that one.
+        [Fact]
+        public async Task The_files_of_one_repository_do_not_keep_anothers_waiting_however_many_they_are()
+        {
+            const string many = "github.com/aaa/many";
+            var host = new ListedReleases();
+            foreach (var name in new[] { "one", "two", "three", "four", "five" })
+            {
+                host.Package(many, $"@aaa/{name}", "1.0.0");
+            }
+
+            host.Package(G, "@thatplatypus/crypto", "0.1.0");
+            var limits = new RegistryLimits(MaxDownloads: 3, MaxBytes: long.MaxValue);
+
+            var first = await RunOn(host, [many, G], limits: limits);
+            var second = await RunOn(host, [many, G], first.After, Later, limits);
+
+            first.After.Package(Crypto).ShouldNotBeNull();
+            Said(first).ShouldBe(
+            [
+                $"added @aaa/five 1.0.0 from {many}",
+                $"added @thatplatypus/crypto 0.1.0 from {G}",
+                $"added @aaa/four 1.0.0 from {many}",
+                $"left for the next run: one-v1.0.0 in {many}",
+                $"left for the next run: three-v1.0.0 in {many}",
+                $"left for the next run: two-v1.0.0 in {many}",
+            ]);
+            Said(second).ShouldBe([$"added @aaa/one 1.0.0 from {many}", $"added @aaa/three 1.0.0 from {many}", $"added @aaa/two 1.0.0 from {many}"]);
+            host.Downloads.Count.ShouldBe(6);
+        }
+
+        [Fact]
+        public async Task A_turn_is_one_file_downloaded_and_what_costs_no_download_ends_no_turn()
+        {
+            const string alpha = "github.com/thatplatypus/alpha";
+            const string beta = "github.com/thatplatypus/beta";
+            var host = new ListedReleases()
+                .Package(alpha, "@thatplatypus/crypto", "0.1.0")
+                .Package(alpha, "@thatplatypus/deflate", "0.1.0")
+                .Package(beta, "@thatplatypus/grapevine", "0.1.0");
+            var first = await RunOn(host, [alpha, beta]);
+            host.Release(alpha, "json-v1.0.0", "json-1.0.0.pmj.tar.gz", [1, 2, 3])
+                .Package(alpha, "@thatplatypus/sockets_more", "1.0.0")
+                .Package(alpha, "@thatplatypus/words", "1.0.0")
+                .Package(beta, "@thatplatypus/zebra", "1.0.0");
+            host.Downloads.Clear();
+
+            var second = await RunOn(host, [alpha, beta], first.After, Later);
+
+            // Of alpha's first turn: two versions it knows by their digests and a name that is refused
+            // unseen, none of which is a download, and then the one file that is.
+            Said(second).ShouldBe(
+            [
+                $"refused json-v1.0.0 in {alpha}: the name json is one of the compiler's own packages",
+                $"added @thatplatypus/sockets_more 1.0.0 from {alpha}",
+                $"added @thatplatypus/zebra 1.0.0 from {beta}",
+                $"added @thatplatypus/words 1.0.0 from {alpha}",
+            ]);
+            host.Downloads.Count.ShouldBe(3);
+        }
+
+        [Fact]
+        public async Task With_nothing_left_of_the_limit_what_needs_no_file_is_still_done_in_every_repository()
+        {
+            const string alpha = "github.com/thatplatypus/alpha";
+            const string beta = "github.com/thatplatypus/beta";
+            var host = new ListedReleases()
+                .Package(alpha, "@thatplatypus/crypto", "0.1.0")
+                .Package(alpha, "@thatplatypus/deflate", "0.1.0")
+                .Release(alpha, "json-v1.0.0", "json-1.0.0.pmj.tar.gz", [1, 2, 3])
+                .Package(beta, "@thatplatypus/grapevine", "0.1.0")
+                .Release(beta, "testtube-v1.0.0", "testtube-1.0.0.pmj.tar.gz", [1, 2, 3])
+                .Package(beta, "@thatplatypus/zebra", "1.0.0");
+
+            var result = await RunOn(host, [alpha, beta], limits: new RegistryLimits(MaxDownloads: 1, MaxBytes: long.MaxValue));
+
+            Said(result).ShouldBe(
+            [
+                $"added @thatplatypus/crypto 0.1.0 from {alpha}",
+                $"left for the next run: grapevine-v0.1.0 in {beta}",
+                $"refused testtube-v1.0.0 in {beta}: the name testtube is one of the compiler's own packages",
+                $"left for the next run: zebra-v1.0.0 in {beta}",
+                $"left for the next run: deflate-v0.1.0 in {alpha}",
+                $"refused json-v1.0.0 in {alpha}: the name json is one of the compiler's own packages",
+            ]);
+            result.After.Refused.Select(file => file.Repository.ToString()).ShouldBe([alpha, beta]);
+        }
+
+        [Fact]
+        public async Task What_is_gone_from_a_repository_is_said_when_all_of_its_releases_have_been_looked_at()
+        {
+            const string alpha = "github.com/thatplatypus/alpha";
+            const string beta = "github.com/thatplatypus/beta";
+            var host = new ListedReleases()
+                .Package(alpha, "@thatplatypus/crypto", "0.1.0")
+                .Package(beta, "@thatplatypus/grapevine", "0.1.0");
+            var first = await RunOn(host, [alpha, beta]);
+            host.Delete(alpha, "crypto-v0.1.0")
+                .Package(alpha, "@thatplatypus/deflate", "0.1.0")
+                .Package(alpha, "@thatplatypus/words", "1.0.0")
+                .Package(beta, "@thatplatypus/zebra", "1.0.0");
+
+            var second = await RunOn(host, [alpha, beta], first.After, Later);
+
+            Said(second).ShouldBe(
+            [
+                $"added @thatplatypus/deflate 0.1.0 from {alpha}",
+                $"added @thatplatypus/zebra 1.0.0 from {beta}",
+                $"added @thatplatypus/words 1.0.0 from {alpha}",
+                $"gone: the release of @thatplatypus/crypto 0.1.0 is no longer in {alpha}",
+            ]);
+        }
+
         [Fact]
         public async Task A_run_downloads_no_more_bytes_than_its_limit_by_what_the_list_says_each_file_is()
         {

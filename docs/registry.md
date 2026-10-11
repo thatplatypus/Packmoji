@@ -203,6 +203,7 @@ For each listed repository, and each claim in it:
 - **A repository that cannot be reached is left as it was,** and the others are still done.
 - **A repository that is taken off the list keeps its versions.** They are not looked at again.
 - **A run downloads at most 64 files and 256 MiB.** What is over is left for the next run.
+- **The repositories take turns at that.** One file is downloaded for each in its order, and then for each again, round and round. So the releases of one repository, however many they are, do not keep another's waiting.
 - **A run that finds nothing new writes nothing.**
 
 ## What never changes

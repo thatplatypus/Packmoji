@@ -21,6 +21,11 @@ namespace Packmoji.Core.Registry
     /// refused, are known again by the digest the host lists for the release's file, and nothing is
     /// downloaded for them. The same releases and the same registry give the same next state,
     /// whatever order anything was listed in.
+    ///
+    /// A run may download only so much, and the repositories take turns at it: each in its order is
+    /// looked at until one file has been downloaded for it, and then the next is, round and round.
+    /// Looked at one after another to its end, the repository that comes first by name could use up
+    /// all of a run at every run, and keep every repository after it waiting for ever.
     /// </remarks>
     public static class RegistryRun
     {
@@ -41,9 +46,24 @@ namespace Packmoji.Core.Registry
             ArgumentNullException.ThrowIfNull(limits);
 
             var run = new Run(before, host, new DateTimeOffset(now.UtcTicks - (now.UtcTicks % TimeSpan.TicksPerSecond), TimeSpan.Zero), limits);
+            var waiting = new List<Looked>();
             foreach (var repository in repositories.Distinct().OrderBy(repository => repository.ToString(), StringComparer.Ordinal))
             {
-                await run.LookAtAsync(repository, cancellationToken);
+                if (await run.ListAsync(repository, cancellationToken) is { } listed && !await run.TakeTurnAsync(listed, cancellationToken))
+                {
+                    waiting.Add(listed);
+                }
+            }
+
+            while (waiting.Count > 0)
+            {
+                foreach (var listed in waiting.ToList())
+                {
+                    if (await run.TakeTurnAsync(listed, cancellationToken))
+                    {
+                        waiting.Remove(listed);
+                    }
+                }
             }
 
             return run.Finish();
@@ -52,6 +72,17 @@ namespace Packmoji.Core.Registry
         // A release that claims to be a version of a package: its tag names one, and it carries the
         // file of that name, which the host says is uploaded and gives a digest for.
         private sealed record Claim(string Tag, string Bare, SemanticVersion Version, string Asset, ReleaseFile File, ReleaseInfo Release);
+
+        /// <summary>A repository whose releases were listed: its claims that have not been looked at yet, and what has been refused of those that have.</summary>
+        /// <param name="RefusedBefore">What the registry held as refused in it when the run began.</param>
+        /// <param name="Refused">What this run refuses in it, which is what the registry will hold.</param>
+        private sealed record Looked(
+            RepositoryRef Repository,
+            IReadOnlyList<RefusedRelease> RefusedBefore,
+            Queue<Claim> Claims,
+            List<RefusedRelease> Refused,
+            HashSet<string> Tags,
+            HashSet<(string Bare, SemanticVersion Version)> Claimed);
 
         private sealed class Run(RegistryState before, IReleaseHost host, DateTimeOffset now, RegistryLimits limits)
         {
@@ -65,7 +96,8 @@ namespace Packmoji.Core.Registry
             private int _downloads;
             private long _bytes;
 
-            public async Task LookAtAsync(RepositoryRef repository, CancellationToken cancellationToken)
+            /// <summary>Asks a repository for its releases. Null when it could not be asked, and then nothing of it is looked at.</summary>
+            public async Task<Looked?> ListAsync(RepositoryRef repository, CancellationToken cancellationToken)
             {
                 var refusedBefore = before.RefusedIn(repository)?.Releases ?? [];
                 IReadOnlyList<ReleaseInfo> releases;
@@ -78,34 +110,56 @@ namespace Packmoji.Core.Registry
                     // Left as it was: a repository that could not be asked is not one that has released nothing.
                     _refused[repository] = refusedBefore.ToList();
                     Say(RegistryNoteKind.Unreachable, $"could not list the releases of {repository} ({failure.Diagnostic.Code})");
-                    return;
+                    return null;
                 }
 
-                var refused = _refused[repository] = [];
-                var claimed = new HashSet<(string Bare, SemanticVersion Version)>();
-                var tags = new HashSet<string>(StringComparer.Ordinal);
-                foreach (var claim in Claims(releases))
+                var claims = Claims(releases).ToList();
+                return new Looked(
+                    repository,
+                    refusedBefore,
+                    new Queue<Claim>(claims),
+                    _refused[repository] = [],
+                    claims.Select(claim => claim.Tag).ToHashSet(StringComparer.Ordinal),
+                    claims.Select(claim => (claim.Bare, claim.Version)).ToHashSet());
+            }
+
+            /// <summary>
+            /// One turn of a repository: its claims are looked at in order until one of them has cost a
+            /// download. A claim that costs none ends no turn, so what is known already, and what is
+            /// left when the run may download no more, are gone through at once.
+            /// </summary>
+            /// <returns>Whether every claim of the repository has now been looked at.</returns>
+            public async Task<bool> TakeTurnAsync(Looked looked, CancellationToken cancellationToken)
+            {
+                var repository = looked.Repository;
+                var downloads = _downloads;
+                while (downloads == _downloads && looked.Claims.TryDequeue(out var claim))
                 {
-                    tags.Add(claim.Tag);
-                    claimed.Add((claim.Bare, claim.Version));
-                    if (await JudgeAsync(repository, claim, refusedBefore.FirstOrDefault(release => release.Tag == claim.Tag), cancellationToken) is { } refusal)
+                    if (await JudgeAsync(repository, claim, looked.RefusedBefore.FirstOrDefault(release => release.Tag == claim.Tag), cancellationToken) is { } refusal)
                     {
-                        refused.Add(refusal);
+                        looked.Refused.Add(refusal);
                     }
                 }
 
-                foreach (var gone in refusedBefore.Where(release => !tags.Contains(release.Tag)))
+                if (looked.Claims.Count > 0)
+                {
+                    return false;
+                }
+
+                foreach (var gone in looked.RefusedBefore.Where(release => !looked.Tags.Contains(release.Tag)))
                 {
                     Say(RegistryNoteKind.NoLongerRefused, $"no longer refused: {gone.Tag} is gone from {repository}");
                 }
 
                 foreach (var (name, versions) in _packages.OrderBy(package => package.Key))
                 {
-                    foreach (var version in versions.Values.Where(version => version.Source == repository && !claimed.Contains((name.Name, version.Version))).OrderBy(version => version.Version))
+                    foreach (var version in versions.Values.Where(version => version.Source == repository && !looked.Claimed.Contains((name.Name, version.Version))).OrderBy(version => version.Version))
                     {
                         Say(RegistryNoteKind.Gone, $"gone: the release of {name} {version.Version} is no longer in {repository}");
                     }
                 }
+
+                return true;
             }
 
             public RegistryRunResult Finish() => new(
