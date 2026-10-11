@@ -180,64 +180,12 @@ namespace Packmoji.GitHub
             return releases;
         }
 
-        private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, string what, CancellationToken cancellationToken)
-        {
-            request.Headers.UserAgent.ParseAdd(_userAgent);
-            try
-            {
-                return await _http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-            }
-            catch (HttpRequestException failure)
-            {
-                throw Unreachable(what, failure.Message);
-            }
-            catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
-            {
-                throw Unreachable(what, "there was no answer in time");
-            }
-            finally
-            {
-                request.Dispose();
-            }
-        }
+        private Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, string what, CancellationToken cancellationToken) =>
+            Answers.SendAsync(_http, request, _userAgent, why => Unreachable(what, why), cancellationToken);
 
         /// <summary>The body of an answer, or null when it is longer than <paramref name="maxBytes"/>.</summary>
-        private async Task<byte[]?> ReadAsync(HttpResponseMessage response, int maxBytes, string what, CancellationToken cancellationToken)
-        {
-            // HttpClient's own limit on time ends when the start of an answer arrives. An answer that
-            // then goes quiet would be waited on for ever, so each read is given a limit of its own.
-            using var patience = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            try
-            {
-                await using var body = await response.Content.ReadAsStreamAsync(cancellationToken);
-                using var read = new MemoryStream();
-                var buffer = new byte[81_920];
-                while (true)
-                {
-                    patience.CancelAfter(_quiet);
-                    var count = await body.ReadAsync(buffer, patience.Token);
-                    if (count == 0)
-                    {
-                        return read.ToArray();
-                    }
-
-                    if (read.Length + count > maxBytes)
-                    {
-                        return null;
-                    }
-
-                    read.Write(buffer, 0, count);
-                }
-            }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-            {
-                throw Unreachable(what, "the answer stopped coming");
-            }
-            catch (Exception failure) when (failure is HttpRequestException or IOException)
-            {
-                throw Unreachable(what, failure.Message);
-            }
-        }
+        private Task<byte[]?> ReadAsync(HttpResponseMessage response, int maxBytes, string what, CancellationToken cancellationToken) =>
+            Answers.ReadAsync(response, maxBytes, _quiet, why => Unreachable(what, why), cancellationToken);
 
         private static (int Count, List<ReleaseInfo> Published) Parse(byte[] body, string what)
         {
