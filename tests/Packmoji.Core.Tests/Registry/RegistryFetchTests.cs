@@ -74,6 +74,41 @@ namespace Packmoji.Core.Tests.Registry
             host.Downloads.ShouldBeEmpty();
         }
 
+        // The bytes are the version's, wherever they came from. What the registry says the version
+        // needs is still only what the registry says, until it has been held to them: with a full
+        // cache nothing is downloaded, and a record that lies would otherwise never be found out.
+        [Fact]
+        public async Task What_the_cache_holds_is_held_to_the_record_as_what_is_downloaded_is()
+        {
+            var host = Released();
+            var recorded = await RecordedAsync(await IndexedAsync(host), "@thatplatypus/grapevine", "0.3.0");
+            var store = new MemoryAssetStore();
+            await RegistryFetch.FetchAsync(recorded, host, store, TestContext.Current.CancellationToken);
+            host.Downloads.Clear();
+            var lied = recorded with { Dependencies = [new Dependency(Sample.Name("@thatplatypus/crypto"), Sample.Requirement("1.0"))] };
+
+            var diagnostic = await ShouldStop(() => RegistryFetch.FetchAsync(lied, host, store, TestContext.Current.CancellationToken), DiagnosticCodes.RegistryMismatch);
+
+            diagnostic.Reason.ShouldBe("the registry says it needs @thatplatypus/crypto@1.0, and the manifest in its archive says @thatplatypus/crypto@1.0, @thatplatypus/deflate@0.1");
+            host.Downloads.ShouldBeEmpty();
+        }
+
+        [Fact]
+        public async Task Bytes_in_the_cache_that_are_another_package_than_the_record_names_are_refused_though_their_digest_is_the_records()
+        {
+            var host = Released();
+            var crypto = await RecordedAsync(await IndexedAsync(host), "@thatplatypus/crypto", "1.0.0");
+            var store = new MemoryAssetStore();
+            await RegistryFetch.FetchAsync(crypto, host, store, TestContext.Current.CancellationToken);
+            host.Downloads.Clear();
+            var lied = crypto with { Name = Grapevine, Version = Sample.Version("9.0.0") };
+
+            var diagnostic = await ShouldStop(() => RegistryFetch.FetchAsync(lied, host, store, TestContext.Current.CancellationToken), DiagnosticCodes.RegistryMismatch);
+
+            diagnostic.Reason.ShouldBe("the manifest in its archive is that of \"@thatplatypus/crypto\"");
+            host.Downloads.ShouldBeEmpty();
+        }
+
         [Fact]
         public async Task What_the_cache_holds_under_the_digest_and_is_not_those_bytes_is_downloaded_again()
         {

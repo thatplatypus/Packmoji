@@ -21,7 +21,7 @@ namespace Packmoji.Cli.Commands
         /// <summary>Holds what the project's lockfile holds to what is published, and chooses nothing. Only for a project that has a lockfile.</summary>
         Task<ResolveResult> CheckAsync(CancellationToken cancellationToken);
 
-        /// <summary>Sees to it that the archive of a version this gave is in the cache.</summary>
+        /// <summary>Sees to it that the archive of a version this gave is in the cache, and is what was said of the version.</summary>
         Task FetchAsync(PublishedVersion published, CancellationToken cancellationToken);
     }
 }

@@ -435,6 +435,38 @@ namespace Packmoji.Cli.Tests.Commands
             sandbox.Cached().Where(file => file.Contains("/crypto/", StringComparison.Ordinal)).ShouldBeEmpty();
         }
 
+        // With the bytes in the cache nothing is downloaded, so this is the only place such a record
+        // can be found out before the two files are written from it.
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task A_record_that_says_otherwise_than_the_manifest_is_refused_though_the_cache_already_holds_the_version(bool archiveAlone)
+        {
+            using var sandbox = await WithARegistryAsync();
+            (await sandbox.RunAsync("add", "@thatplatypus/crypto")).Status.ShouldBe(0);
+            if (archiveAlone)
+            {
+                foreach (var unpacked in Directory.GetDirectories(Path.Combine(sandbox.Home, "cache"), "*", SearchOption.AllDirectories).Where(directory => Path.GetFileName(directory).Length == 64))
+                {
+                    Sandbox.Forget(unpacked);
+                }
+            }
+
+            VersionRequirement.TryParse("0.1", out var requirement, out _).ShouldBeTrue();
+            var deflate = sandbox.Registry.Packages.Single(package => package.Name.Name == "deflate").Name;
+            sandbox.Rerecord("@thatplatypus/crypto", "1.0.0", version => version with { Dependencies = [new Dependency(deflate, requirement!)] });
+            var (manifest, locked, downloads) = (sandbox.Read("packmoji.json"), sandbox.Read("packmoji.lock"), sandbox.GitHub.Downloads.Count());
+
+            var run = await sandbox.RunAsync("add", "@thatplatypus/deflate");
+
+            run.Status.ShouldBe(1);
+            run.Error.ShouldStartWith("error[registry.mismatch]: What GitHub serves for \"@thatplatypus/crypto\" 1.0.0 is not what the registry recorded.");
+            run.Error.ShouldContain("  why: the registry says it needs @thatplatypus/deflate@0.1, and the manifest in its archive says nothing");
+            sandbox.Read("packmoji.json").ShouldBe(manifest);
+            sandbox.Read("packmoji.lock").ShouldBe(locked);
+            sandbox.GitHub.Downloads.Count().ShouldBe(downloads, "the version's bytes are in the cache, and nothing else is fetched once the record is found out");
+        }
+
         [Fact]
         public async Task A_release_the_registry_recorded_and_that_is_gone_is_said_to_be_gone()
         {

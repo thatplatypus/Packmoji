@@ -19,12 +19,20 @@ namespace Packmoji.Core.Registry
     /// version, the repository and the dependencies that the registry gave. A registry that is
     /// wrong, or that someone has changed, can then name a digest for a version and do no more: it
     /// cannot have a resolution choose by one set of dependencies and a build use another.
+    ///
+    /// Bytes that the cache already holds are held to the record in the same way. With a full
+    /// cache nothing is downloaded, and a record that says other than the bytes do would otherwise
+    /// be written into a lockfile before anything had looked.
     /// </remarks>
     public static class RegistryFetch
     {
         private const string TellTheKeeper = "tell whoever keeps the registry: what it holds of this version was not made from the version's own archive";
 
-        /// <summary>Makes sure the archive of a version is in the cache. One that is there under its digest is not downloaded again.</summary>
+        /// <summary>
+        /// Makes sure the archive of a version is in the cache, and is what the registry said of the
+        /// version. One that is there under its digest is not downloaded again, and is held to the
+        /// record all the same.
+        /// </summary>
         /// <param name="published">The version, as the registry gave it.</param>
         public static async Task FetchAsync(PublishedVersion published, IReleaseHost releases, IAssetStore store, CancellationToken cancellationToken)
         {
@@ -34,6 +42,7 @@ namespace Packmoji.Core.Registry
             var (name, version) = (published.Name, published.Version);
             if (await store.FindAsync(name, version, published.Sha256, cancellationToken) is { } kept && Sha256Digest.Of(kept.Span) == published.Sha256)
             {
+                Hold(published, kept);
                 return;
             }
 
@@ -58,6 +67,15 @@ namespace Packmoji.Core.Registry
                     "do not use this version. Tell its author, and whoever keeps the registry: a version's bytes never change, and the registry quarantines one whose bytes did");
             }
 
+            Hold(published, archive);
+            await store.KeepAsync(name, version, digest, archive, cancellationToken);
+        }
+
+        // Bytes of the recorded digest, held to what else the registry said of the version: that
+        // they are that package at that version, living where it said, and needing what it said.
+        private static void Hold(PublishedVersion published, ReadOnlyMemory<byte> archive)
+        {
+            var (name, version) = (published.Name, published.Version);
             var verdict = ReleaseRule.Judge(name, version, published.Source, archive);
             if (!verdict.Taken)
             {
@@ -70,8 +88,6 @@ namespace Packmoji.Core.Registry
             {
                 throw Mismatch(name, version, $"the registry says it needs {Listed(recorded)}, and the manifest in its archive says {Listed(says)}", TellTheKeeper);
             }
-
-            await store.KeepAsync(name, version, digest, archive, cancellationToken);
         }
 
         private static List<string> Needs(IReadOnlyList<Dependency> dependencies) =>

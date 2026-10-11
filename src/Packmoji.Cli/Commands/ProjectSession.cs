@@ -261,18 +261,20 @@ namespace Packmoji.Cli.Commands
         private static string Count(int packages) => packages switch { 0 => "no package", 1 => "1 package", _ => $"{packages} packages" };
 
         // The finder sees to it that each archive of a graph is in the cache, and here each is
-        // unpacked beside itself. A package that is unpacked already was fetched before.
+        // unpacked beside itself. The finder is asked of every package, unpacked or not: with a
+        // registry it is also what holds the bytes to what the registry said of the version, and
+        // bytes that were fetched before have to be held to what it says now.
         private async Task FetchAsync(ResolvedGraph graph, IPackageFinder finder, CancellationToken cancellationToken)
         {
             foreach (var package in graph.Packages)
             {
                 var published = package.Published;
+                await finder.FetchAsync(published, cancellationToken);
                 if (Directory.Exists(Store.DirectoryPath(published.Name, published.Version, published.Sha256)))
                 {
                     continue;
                 }
 
-                await finder.FetchAsync(published, cancellationToken);
                 Store.Unpack(published.Name, published.Version, published.Sha256, await FilesOfAsync(published.Name, published.Version, published.Sha256, cancellationToken));
             }
         }
