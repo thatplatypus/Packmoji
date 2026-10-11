@@ -824,8 +824,9 @@ namespace Packmoji.Cli.Tests.Commands
         public async Task Verify_goes_on_asking_the_registry_when_one_of_its_files_does_not_read()
         {
             using var sandbox = await AddedAsync();
-            sandbox.GitHub.Registry[Crypto] = Encoding.UTF8.GetBytes("not a file of a registry");
             sandbox.Rerecord("@thatplatypus/grapevine", "0.3.0", version => Marked(version, VersionStatus.Quarantined));
+
+            // After the registry is recorded again, which serves every file of it anew.
             sandbox.GitHub.Registry[Crypto] = Encoding.UTF8.GetBytes("not a file of a registry");
 
             var run = await sandbox.RunAsync("verify");

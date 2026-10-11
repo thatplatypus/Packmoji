@@ -123,6 +123,6 @@ Look in `packmoji.lock` for the digest `pmj pack` printed. It is the same.
 ## A release never changes
 
 - **Publish a new version. Never replace the file of an old one.** Every project that uses a version has its digest in a lockfile, and a file with other bytes stops each of them with `lock.mismatch`, which is what a tampered release looks like.
-- **Do not delete a release that someone may depend on.** `pmj install` then fails for them with `resolve.version-missing`. The registry keeps what it recorded of the version.
+- **Do not delete a release that someone may depend on.** `pmj install` then fails for them: with `resolve.version-missing` when they find packages on GitHub itself, and with `registry.mismatch` when they name a registry, which says that the release it recorded is no longer there. The registry keeps what it recorded of the version.
 - **The registry quarantines a version whose file was replaced,** for everyone and for good.
 - **How a version is withdrawn is not decided yet.** Until it is, publish a version that fixes what was wrong.
