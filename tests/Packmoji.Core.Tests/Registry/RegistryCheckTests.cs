@@ -49,6 +49,28 @@ namespace Packmoji.Core.Tests.Registry
             result.Summary.ShouldBe("");
         }
 
+        // A run holds a version's bytes to a digest, and nothing more: no run verifies an
+        // attestation. So a new version that claims one was not made by a run that did its work.
+        [Fact]
+        public void A_new_version_that_claims_to_be_attested_is_refused_for_a_run_verifies_by_checksum()
+        {
+            var attested = Version("1.2.0") with { Verified = VerificationLevel.Attestation };
+
+            ShouldBreak(With("@thatplatypus/crypto", Version("1.0.0"), Version("1.1.0"), attested))
+                .ShouldBe("@thatplatypus/crypto 1.2.0 is new and is said to be verified by attestation, and a run verifies a version by its checksum");
+            ShouldBreak(With("@thatplatypus/grapevine", Version("0.3.0") with { Verified = VerificationLevel.Attestation }))
+                .ShouldStartWith("@thatplatypus/grapevine 0.3.0 is new and is said to be verified by attestation");
+        }
+
+        [Fact]
+        public void A_version_that_stood_as_attested_is_not_the_runs_doing()
+        {
+            var before = State(Package("@thatplatypus/crypto", Version("1.0.0") with { Verified = VerificationLevel.Attestation }));
+            var after = State(Package("@thatplatypus/crypto", Version("1.0.0") with { Verified = VerificationLevel.Attestation }, Version("1.1.0")));
+
+            ShouldAllow(before, after).ShouldHaveSingleItem().ShouldStartWith("added @thatplatypus/crypto 1.1.0 ");
+        }
+
         [Fact]
         public void A_new_package_that_holds_no_version_is_refused()
         {

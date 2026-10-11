@@ -58,6 +58,11 @@ namespace Packmoji.Core.Registry
                         {
                             broken.Add($"{subject} is new and is {RegistryStatuses.Name(holds.Status)}, and a new version begins active");
                         }
+                        else if (holds.Verified != VerificationLevel.Checksum)
+                        {
+                            // No run verifies more than that. A level a run could not have reached is not a run's work.
+                            broken.Add($"{subject} is new and is said to be verified by {VerificationLevels.Name(holds.Verified)}, and a run verifies a version by its checksum");
+                        }
                         else
                         {
                             changes.Add((Added, $"added {subject} from {holds.Source}, sha256 {holds.Sha256}"));

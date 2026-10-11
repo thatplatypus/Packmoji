@@ -595,7 +595,7 @@ With nothing said, `pmj` finds packages on GitHub itself, as above. With a regis
 - **Nothing is sent to a registry but the request for a file.** No token goes there.
 - **`--repository` is refused,** with `registry.repository`. The registry says where each package lives.
 - **`PACKMOJI_SCOPES` holds as it does without one.** The file of a package outside the list is not asked for.
-- **`packmoji.lock` is the same file.** One written with a registry is, for the same packages, to the byte what is written without one, and a project can go from one to the other.
+- **`packmoji.lock` is the same file.** One written with a registry is, for the same packages, to the byte what is written without one, and a project can go from one to the other. It says that a version was verified by its checksum, which is what `pmj` did, whatever a registry says of an attestation.
 - **A version that was withdrawn is not chosen, and goes on being installed where it is locked,** with a warning. One that was quarantined stops a resolution and an install.
 - **What the cache holds is installed without asking.** So a build with no network works with a registry named as it does without one, and what the registry has learned since is heard by the next command that asks it: one that chooses versions, one that has to fetch, and `pmj verify`.
 

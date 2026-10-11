@@ -19,7 +19,7 @@ Blazemoji runs `pmj` for visitors, and relies on what it does today: an install 
 - **A package the registry does not have is not looked for on GitHub.** The fix that is printed says how to ask GitHub itself.
 - **A registry that cannot be read stops the command.** Nothing is passed over for direct mode.
 - **`--repository` is refused with a registry.** The registry says where a package lives.
-- **The lockfile is the same file.** One written with a registry is, for the same packages, the bytes one written without it is.
+- **The lockfile is the same file.** One written with a registry is, for the same packages, the bytes one written without it is. It records that a version was verified by its checksum, which is what `pmj` did, whatever level a registry gives.
 - **What the lockfile holds and the cache has is installed without asking anyone.** Statuses are held when the registry is read: by a command that chooses versions, by one that has to fetch, and by `pmj verify`, which asks about every locked package.
 - **No token is sent to a registry.**
 - **`PACKMOJI_SCOPES` holds as it does without a registry,** and the place that reads the registry asks for the file of no package outside the list, whatever asked.
