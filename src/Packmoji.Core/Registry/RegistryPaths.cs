@@ -38,24 +38,25 @@ namespace Packmoji.Core.Registry
             return $"{RefusedDirectory}/{repository.Owner}/{repository.Name}{Extension}";
         }
 
-        /// <summary>The package whose file is at a path, when the path is exactly the one that package's file has.</summary>
+        /// <summary>
+        /// The package whose file is at a path. A name has one spelling, so a path that gives a name
+        /// is exactly the path that name's file has.
+        /// </summary>
         public static bool TryParsePackage(string path, [NotNullWhen(true)] out PackageName? name)
         {
             ArgumentNullException.ThrowIfNull(path);
             name = null;
             return TrySplit(path, PackagesDirectory, out var owner, out var named)
-                && PackageName.TryParse($"@{owner}/{named}", out name, out _)
-                && string.Equals(Package(name), path, StringComparison.Ordinal);
+                && PackageName.TryParse($"@{owner}/{named}", out name, out _);
         }
 
-        /// <summary>The repository whose refused releases are at a path, when the path is exactly the one that repository's file has.</summary>
+        /// <summary>The repository whose refused releases are at a path. A repository has one spelling too.</summary>
         public static bool TryParseRefused(string path, [NotNullWhen(true)] out RepositoryRef? repository)
         {
             ArgumentNullException.ThrowIfNull(path);
             repository = null;
             return TrySplit(path, RefusedDirectory, out var owner, out var named)
-                && RepositoryRef.TryParse($"{RepositoryRef.Host}/{owner}/{named}", out repository, out _)
-                && string.Equals(Refused(repository), path, StringComparison.Ordinal);
+                && RepositoryRef.TryParse($"{RepositoryRef.Host}/{owner}/{named}", out repository, out _);
         }
 
         // <directory>/<owner>/<name>.json, and nothing more or less.

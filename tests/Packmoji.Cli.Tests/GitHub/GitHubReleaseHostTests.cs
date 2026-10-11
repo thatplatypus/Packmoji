@@ -216,6 +216,7 @@ namespace Packmoji.Cli.Tests.GitHub
         [InlineData("{ \"name\": \"a.tar.gz\", \"size\": null, \"digest\": null, \"state\": null }")]
         [InlineData("{ \"name\": \"a.tar.gz\", \"digest\": \"sha256:E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855\" }")]
         [InlineData("{ \"name\": \"a.tar.gz\", \"digest\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\" }")]
+        [InlineData("{ \"name\": \"a.tar.gz\", \"digest\": \"sha512:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\" }")]
         public async Task What_a_list_does_not_say_of_a_file_or_says_in_a_way_pmj_does_not_know_is_not_known_and_stops_nothing(string asset)
         {
             var github = WithCrypto();

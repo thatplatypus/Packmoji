@@ -90,7 +90,7 @@ namespace Packmoji.Core.Tests.Docs
         [Fact]
         public void Every_reason_a_release_is_refused_for_is_in_the_guide_with_its_code_and_the_guide_gives_no_other()
         {
-            RefusalReasons.All.Count.ShouldBe(9);
+            RefusalReasons.All.Count.ShouldBe(10);
             foreach (var (code, words) in RefusalReasons.All)
             {
                 // Where a sentence ends with what was found, the guide has the kind of thing it is, between angle brackets.

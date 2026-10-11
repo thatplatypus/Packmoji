@@ -1,3 +1,4 @@
+using System.Text;
 using Packmoji.Core.Archives;
 using Packmoji.Core.Diagnostics;
 using Packmoji.Core.Direct;
@@ -243,13 +244,8 @@ namespace Packmoji.Core.Registry
                     };
                 }
 
-                if (!_packages.TryGetValue(name, out versions))
-                {
-                    _packages[name] = versions = [];
-                }
-
                 var published = verdict.Published;
-                versions[claim.Version] = new RegistryVersion(
+                var record = new RegistryVersion(
                     claim.Version,
                     VersionStatus.Active,
                     repository,
@@ -260,6 +256,21 @@ namespace Packmoji.Core.Registry
                     claim.Release.Published!.Value.ToUniversalTime(),
                     now,
                     published.Dependencies);
+
+                // The file of a package is read again at the next run, by a reader that refuses one
+                // that is too large. A version that would take it past that is not recorded.
+                IEnumerable<RegistryVersion> recorded = _packages.TryGetValue(name, out versions) ? versions.Values : [];
+                if (Encoding.UTF8.GetByteCount(RegistryPackageWriter.Write(new RegistryPackage(name, [.. recorded, record]))) > limits.MaxFileBytes)
+                {
+                    return Refuse(repository, claim, null, DiagnosticCodes.ReleaseInvalid, RefusalReasons.RecordTooLarge);
+                }
+
+                if (versions is null)
+                {
+                    _packages[name] = versions = [];
+                }
+
+                versions[claim.Version] = record;
                 Say(RegistryNoteKind.Added, $"added {name} {claim.Version} from {repository}");
                 return null;
             }

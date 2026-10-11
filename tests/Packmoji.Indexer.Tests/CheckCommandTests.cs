@@ -123,6 +123,25 @@ namespace Packmoji.Indexer.Tests
             File.ReadAllText(Message).ShouldBeEmpty();
         }
 
+        // What a run made may be a stranger's work by way of a run that was misled. A file of any
+        // size could be among it, so one that is too large is refused by its length, before it is read.
+        [Fact]
+        public async Task A_file_too_large_to_be_one_of_a_registrys_is_refused_by_its_length()
+        {
+            var (before, after) = await BegunAsync();
+            File.WriteAllBytes(Path.Combine(after, "v1", "packages", "thatplatypus", "deflate.json"), new byte[4_194_305]);
+
+            var status = await CheckAsync(before, after);
+
+            status.ShouldBe(1);
+            _desk.Error.ShouldBe(
+                """
+                What the run made cannot be read as a registry.
+                  v1/packages/thatplatypus/deflate.json is larger than 4194304 bytes, which is the most a file of a registry may be.
+
+                """.ReplaceLineEndings("\n"));
+        }
+
         [Fact]
         public async Task A_registry_that_does_not_read_as_it_stands_is_said_to_be_that_and_not_the_runs_work()
         {

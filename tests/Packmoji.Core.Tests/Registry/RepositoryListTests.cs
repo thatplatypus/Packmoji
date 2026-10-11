@@ -74,6 +74,23 @@ namespace Packmoji.Core.Tests.Registry
         }
 
         [Fact]
+        public void A_line_is_held_to_every_line_before_it_and_not_only_to_the_first()
+        {
+            var diagnostic = ShouldFailAtMark("github.com/thatplatypus/crypto\ngithub.com/thatplatypus/grapevine\n§github.com/thatplatypus/deflate\n", DiagnosticCodes.RegistryInvalid);
+
+            diagnostic.Fix.ShouldContain("before github.com/thatplatypus/grapevine");
+        }
+
+        [Fact]
+        public void Each_line_out_of_place_is_one_problem_and_a_line_in_its_place_after_one_is_none()
+        {
+            var result = RepositoryList.Read("github.com/thatplatypus/grapevine\ngithub.com/thatplatypus/crypto\ngithub.com/thatplatypus/zebra\ngithub.com/thatplatypus/deflate\n");
+
+            result.Diagnostics.Select(diagnostic => (diagnostic.Code, diagnostic.Location!.Line)).ShouldBe([(DiagnosticCodes.RegistryInvalid, 2), (DiagnosticCodes.RegistryInvalid, 4)]);
+            result.Diagnostics[1].Fix.ShouldContain("before github.com/thatplatypus/grapevine");
+        }
+
+        [Fact]
         public void Every_line_that_is_wrong_is_said()
         {
             var result = RepositoryList.Read("github.com/thatplatypus/grapevine\nnot one\ngithub.com/thatplatypus/crypto\ngithub.com/thatplatypus/grapevine\n");

@@ -224,11 +224,12 @@ namespace Packmoji.Core.Tests.Registry
         }
 
         [Fact]
-        public void A_change_that_breaks_the_rule_has_no_title()
+        public void A_change_that_breaks_the_rule_has_no_title_whatever_else_changed_with_it()
         {
-            var result = RegistryCheck.Between(Before, RegistryState.Empty);
+            var result = RegistryCheck.Between(Before, State(Package("@thatplatypus/crypto", Version("1.0.0"), Version("1.1.0"), Version("1.2.0"))));
 
             result.Allowed.ShouldBeFalse();
+            result.Changes.ShouldHaveSingleItem().ShouldStartWith("added @thatplatypus/crypto 1.2.0 ");
             result.Summary.ShouldBe("");
         }
     }

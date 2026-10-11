@@ -16,6 +16,7 @@ namespace Packmoji.Core.Registry
         public const string NotAnArchive = "its file is not an archive as pmj pack writes one";
         public const string ManifestUnreadable = "the packmoji.json in its archive cannot be read as a manifest";
         public const string NotTheListedDigest = "what GitHub serves for it does not have the digest that GitHub lists for it";
+        public const string RecordTooLarge = "what would be recorded of it is more than the file of its package may hold";
 
         /// <summary>Ends with the package whose manifest it is.</summary>
         public const string OtherPackage = "the manifest in its archive is that of {0}";
@@ -45,6 +46,7 @@ namespace Packmoji.Core.Registry
             (DiagnosticCodes.ReleaseInvalid, OtherRepository),
             (DiagnosticCodes.ReleaseInvalid, AlreadyIndexed),
             (DiagnosticCodes.ReleaseInvalid, NotTheListedDigest),
+            (DiagnosticCodes.ReleaseInvalid, RecordTooLarge),
             (DiagnosticCodes.NameReserved, ReservedName),
         ];
 
