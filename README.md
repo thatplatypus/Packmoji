@@ -14,9 +14,10 @@ Packmoji is being built one milestone at a time. What works today:
 - **Dependencies, with no registry.** `pmj add`, `remove`, `install` and `update` find packages on GitHub directly, as releases of their repositories, and lock the exact bytes. `pmj tree` shows what is locked, and `pmj verify` checks it again.
 - **Packing.** `pmj pack` writes the one file a release carries, the same bytes from the same files on every machine.
 - **Building.** `pmj build` compiles what a project depends on with the Emojicode compiler, C and C++ included, each package once for the whole machine, and then the project. `pmj run` builds an application and runs it.
+- **A registry, kept as files.** Every hour a workflow looks at the releases of the repositories on a list, and records each version on a branch of this repository: where it lives, which bytes it is, and what it needs. Nothing has to be kept running. `pmj` does not read it yet. [The registry](docs/registry.md) says what it holds and how a repository comes to be listed.
 - **One native binary.** `pmj` publishes with Native AOT and needs no .NET where it runs. A release carries it for Linux and Windows on x86-64 and for macOS on Apple silicon, each with its digest: [Getting pmj](docs/cli.md#getting-pmj). On Windows it manages packages and does not build.
 
-What does not work yet: `pmj test`, and the registry, `publish` and attestations, which follow.
+What does not work yet: `pmj test`, `pmj` reading the registry, `publish` and attestations, which follow.
 
 ```sh
 pmj new @you/site
@@ -67,13 +68,16 @@ A release is made by the workflow `.github/workflows/release.yml`, and by nothin
 
 | Path | Holds |
 |---|---|
-| `src/Packmoji.Core` | Names, versions, the manifest, the lockfile, the resolver, the archive, how a package is found with no registry, and the order and the key of a build. It depends on nothing outside .NET |
+| `src/Packmoji.Core` | Names, versions, the manifest, the lockfile, the resolver, the archive, how a package is found with no registry, the registry's files and what may become of them, and the order and the key of a build. It depends on nothing outside .NET |
 | `src/Packmoji.GitHub` | How `pmj` speaks to GitHub: downloading a release's file, and listing a repository's releases |
 | `src/Packmoji.Cli` | `pmj`: the commands, the cache, and the build |
+| `src/Packmoji.Indexer` | The program that keeps a registry: it brings one to its next state from what has been released, and holds one state to the one before it |
+| `registry-repositories.txt` | The repositories whose releases the registry indexes |
 | `tests/` | The tests of each, and the container the real compiler runs in |
 | `samples/hello-pkg` | Two small libraries, one with C++, and an application that uses them. The tests pack, install, build and run them |
 | `docs/cli.md` | The commands, what they print, how they end, and where they find things |
 | `docs/publishing.md` | How to publish a package |
+| `docs/registry.md` | What the registry holds, what is indexed, how a repository comes to be listed, and how the registry is kept |
 | `docs/manifest.md` | The reference for `packmoji.json` and `packmoji.lock`, and every diagnostic code |
 | `docs/resolution.md` | How `pmj` chooses versions, what stops it, and what to do then |
 | `docs/building.md` | How `pmj` builds: what it needs, what each tool is asked, where things go, and what to do when a build stops |

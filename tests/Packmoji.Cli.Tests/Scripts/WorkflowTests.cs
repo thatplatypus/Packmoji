@@ -254,6 +254,25 @@ namespace Packmoji.Cli.Tests.Scripts
         }
 
         [Fact]
+        public void The_guide_to_the_registry_names_the_branch_the_hour_and_the_two_jobs_as_the_workflow_has_them()
+        {
+            var guide = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "docs", "registry.md")).ReplaceLineEndings("\n");
+            var registry = Workflow("registry.yml");
+            var branch = Regex.Match(registry, @"\n  REGISTRY_BRANCH: (\S+)\n").Groups[1].Value;
+
+            branch.ShouldNotBeEmpty();
+            guide.ShouldContain($"On the branch `{branch}` of ");
+            guide.ShouldContain($"\nhttps://raw.githubusercontent.com/thatplatypus/Packmoji/{branch}/v1/packages/");
+            Regex.IsMatch(registry, "\n    - cron: \"[0-9]+ \\* \\* \\* \\*\"\n").ShouldBeTrue("the schedule is no longer once an hour");
+            guide.ShouldContain("runs every hour, when the list changes, and when it is started by hand");
+            guide.ShouldContain("a new release is in the registry within the hour");
+            guide.ShouldContain("\n| `read` | Read this repository | ");
+            guide.ShouldContain("\n| `write` | Write to this repository | ");
+            Job(registry, "read").ShouldNotBeEmpty();
+            Job(registry, "write").ShouldNotBeEmpty();
+        }
+
+        [Fact]
         public void A_tag_that_is_not_the_version_stops_a_release_before_anything_is_built()
         {
             var programs = Job(Workflow("release.yml"), "programs");

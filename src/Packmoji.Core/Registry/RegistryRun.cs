@@ -144,14 +144,14 @@ namespace Packmoji.Core.Registry
                 // whole of the check on who may publish under a scope, and nothing a manifest says changes it.
                 if (!PackageName.TryParse($"@{repository.Owner}/{claim.Bare}", out var name, out _))
                 {
-                    return Refuse(repository, claim, refusedBefore, DiagnosticCodes.NameReserved, $"the name {claim.Bare} is one of the compiler's own packages");
+                    return Refuse(repository, claim, refusedBefore, DiagnosticCodes.NameReserved, RefusalReasons.Of(RefusalReasons.ReservedName, claim.Bare));
                 }
 
                 if (_packages.TryGetValue(name, out var versions) && versions.TryGetValue(claim.Version, out var held))
                 {
                     if (held.Source != repository)
                     {
-                        return Refuse(repository, claim, refusedBefore, DiagnosticCodes.ReleaseInvalid, $"this version is already in the registry, from {held.Source}");
+                        return Refuse(repository, claim, refusedBefore, DiagnosticCodes.ReleaseInvalid, RefusalReasons.Of(RefusalReasons.AlreadyIndexed, held.Source));
                     }
 
                     // The host's own digest holds every version at every run for the price of the
@@ -201,7 +201,7 @@ namespace Packmoji.Core.Registry
 
                 if (claim.File.Size > PackageArchive.MaxBytes)
                 {
-                    return Refuse(repository, claim, null, DiagnosticCodes.ArchiveInvalid, TooLarge);
+                    return Refuse(repository, claim, null, DiagnosticCodes.ArchiveInvalid, RefusalReasons.TooLarge);
                 }
 
                 if (AtLimit(repository, claim))
@@ -217,7 +217,7 @@ namespace Packmoji.Core.Registry
                 catch (PackageSourceException failure) when (failure.Diagnostic.Code == DiagnosticCodes.ArchiveInvalid)
                 {
                     // More bytes than the list said, and more than an archive may be.
-                    return Refuse(repository, claim, null, DiagnosticCodes.ArchiveInvalid, TooLarge);
+                    return Refuse(repository, claim, null, DiagnosticCodes.ArchiveInvalid, RefusalReasons.TooLarge);
                 }
 
                 if (downloaded is not { } archive)
@@ -227,7 +227,7 @@ namespace Packmoji.Core.Registry
 
                 if (Sha256Digest.Of(archive.Span) != listed)
                 {
-                    return Refuse(repository, claim, null, DiagnosticCodes.ReleaseInvalid, "what GitHub serves for it does not have the digest that GitHub lists for it");
+                    return Refuse(repository, claim, null, DiagnosticCodes.ReleaseInvalid, RefusalReasons.NotTheListedDigest);
                 }
 
                 var verdict = ReleaseRule.Judge(name, claim.Version, repository, archive);
@@ -235,11 +235,11 @@ namespace Packmoji.Core.Registry
                 {
                     return verdict.Fault switch
                     {
-                        ReleaseFault.NotAnArchive => Refuse(repository, claim, null, DiagnosticCodes.ArchiveInvalid, "its file is not an archive as pmj pack writes one"),
-                        ReleaseFault.OtherPackage => Refuse(repository, claim, null, DiagnosticCodes.ReleaseInvalid, $"the manifest in its archive is that of {verdict.Manifest!.Package.Name}"),
-                        ReleaseFault.OtherVersion => Refuse(repository, claim, null, DiagnosticCodes.ReleaseInvalid, $"the manifest in its archive gives the version {verdict.Manifest!.Package.Version}"),
-                        ReleaseFault.OtherRepository => Refuse(repository, claim, null, DiagnosticCodes.ReleaseInvalid, $"the manifest in its archive says that the package lives in {verdict.Manifest!.Repository}"),
-                        _ => Refuse(repository, claim, null, DiagnosticCodes.ReleaseInvalid, "the packmoji.json in its archive cannot be read as a manifest"),
+                        ReleaseFault.NotAnArchive => Refuse(repository, claim, null, DiagnosticCodes.ArchiveInvalid, RefusalReasons.NotAnArchive),
+                        ReleaseFault.OtherPackage => Refuse(repository, claim, null, DiagnosticCodes.ReleaseInvalid, RefusalReasons.Of(RefusalReasons.OtherPackage, verdict.Manifest!.Package.Name)),
+                        ReleaseFault.OtherVersion => Refuse(repository, claim, null, DiagnosticCodes.ReleaseInvalid, RefusalReasons.Of(RefusalReasons.OtherVersion, verdict.Manifest!.Package.Version)),
+                        ReleaseFault.OtherRepository => Refuse(repository, claim, null, DiagnosticCodes.ReleaseInvalid, RefusalReasons.Of(RefusalReasons.OtherRepository, verdict.Manifest!.Repository)),
+                        _ => Refuse(repository, claim, null, DiagnosticCodes.ReleaseInvalid, RefusalReasons.ManifestUnreadable),
                     };
                 }
 
@@ -263,8 +263,6 @@ namespace Packmoji.Core.Registry
                 Say(RegistryNoteKind.Added, $"added {name} {claim.Version} from {repository}");
                 return null;
             }
-
-            private const string TooLarge = "its file is larger than 16777216 bytes";
 
             // A release that was refused before for the same file is the same refusal, and is said once: when it was first refused.
             private RefusedRelease Refuse(RepositoryRef repository, Claim claim, RefusedRelease? refusedBefore, string code, string why)
