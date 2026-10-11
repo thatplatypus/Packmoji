@@ -1,0 +1,5 @@
+# The repositories whose releases the registry indexes.
+#
+# One repository to a line, written github.com/<owner>/<repo> in lowercase, in order, and none
+# twice. A pull request changes this list. A line that begins with # is for a person.
+github.com/thatplatypus/grapevine
