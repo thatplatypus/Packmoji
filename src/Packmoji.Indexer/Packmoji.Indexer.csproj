@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Packmoji.Indexer</RootNamespace>
+    <!-- It compares and sorts by code point everywhere, as pmj does, so that the same registry is the
+         same bytes on every machine. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Packmoji.Indexer.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Packmoji.Core\Packmoji.Core.csproj" />
+    <ProjectReference Include="..\Packmoji.GitHub\Packmoji.GitHub.csproj" />
+  </ItemGroup>
+
+</Project>

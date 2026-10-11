@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
@@ -9,9 +10,16 @@ namespace Packmoji.Cli.Tests.TestSupport
     /// GitHub as pmj sees it over HTTP, held in memory: releases that can be downloaded by their
     /// address, and the list of a repository's releases. It answers as GitHub was seen to answer on
     /// 2026-10-09, and it keeps every request, so that a test can say what was asked and with what.
+    /// A registry's files are served from it too, at an address of their own, as they are served
+    /// from GitHub in fact.
     /// </summary>
     internal sealed class FakeGitHub : HttpMessageHandler
     {
+        /// <summary>The address the registry's files are under.</summary>
+        public const string RegistryAddress = "https://registry.example/files";
+
+        private const string RegistryHost = "registry.example";
+
         private readonly List<Release> _releases = [];
         private readonly HashSet<string> _repositories = new(StringComparer.OrdinalIgnoreCase);
 
@@ -22,7 +30,16 @@ namespace Packmoji.Cli.Tests.TestSupport
         public IEnumerable<string> Downloads => Requests.Where(request => request.Uri.Host == "github.com").Select(request => request.Uri.AbsolutePath);
 
         /// <summary>The lists of releases asked for, each as the path of its address.</summary>
-        public IEnumerable<string> Listings => Requests.Where(request => request.Uri.Host != "github.com").Select(request => request.Uri.AbsolutePath);
+        public IEnumerable<string> Listings => Requests.Where(request => request.Uri.Host.StartsWith("api.", StringComparison.Ordinal)).Select(request => request.Uri.AbsolutePath);
+
+        /// <summary>The files of the registry asked for, each as its path under the registry's address.</summary>
+        public IEnumerable<string> RegistryReads => Requests.Where(request => request.Uri.Host == RegistryHost).Select(request => request.Uri.AbsolutePath["/files/".Length..]);
+
+        /// <summary>The files of the registry, each by its path under the registry's address.</summary>
+        public Dictionary<string, byte[]> Registry { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>When set, the registry answers every request with this status and nothing else, while GitHub answers as ever.</summary>
+        public HttpStatusCode? RegistryAnswer { get; set; }
 
         /// <summary>When set, the API refuses as it does when its limit on requests is reached.</summary>
         public bool RateLimited { get; set; }
@@ -90,8 +107,36 @@ namespace Packmoji.Cli.Tests.TestSupport
                 return Task.FromResult(answer);
             }
 
+            if (uri.Host == RegistryHost)
+            {
+                return Task.FromResult(Read(uri));
+            }
+
             var parts = uri.AbsolutePath.Trim('/').Split('/').Select(Uri.UnescapeDataString).ToArray();
             return Task.FromResult(uri.Host.StartsWith("api.", StringComparison.Ordinal) ? List(uri, parts) : Download(uri, parts));
+        }
+
+        // registry.example/files/<path>, which is a file or is not there, as a file of a branch is.
+        private HttpResponseMessage Read(Uri uri)
+        {
+            if (RegistryAnswer is { } status)
+            {
+                return new HttpResponseMessage(status);
+            }
+
+            return uri.AbsolutePath.StartsWith("/files/", StringComparison.Ordinal) && Registry.TryGetValue(uri.AbsolutePath["/files/".Length..], out var bytes)
+                ? new HttpResponseMessage(HttpStatusCode.OK) { Content = Body(uri, bytes, "text/plain") }
+                : new HttpResponseMessage(HttpStatusCode.NotFound);
+        }
+
+        private HttpContent Body(Uri uri, byte[] bytes, string type)
+        {
+            HttpContent content = Stalls ? new StreamContent(new StalledStream(bytes))
+                : Delivered is { } delivered ? new StreamContent(new ToldStream(bytes, () => delivered(uri.AbsolutePath)))
+                : SaysLength ? new ByteArrayContent(bytes)
+                : new StreamContent(new UnseekableStream(bytes));
+            content.Headers.ContentType = new MediaTypeHeaderValue(type);
+            return content;
         }
 
         // github.com/<owner>/<repo>/releases/download/<tag>/<asset>, with the owner and the repository in any case.
@@ -109,12 +154,7 @@ namespace Packmoji.Cli.Tests.TestSupport
                 return new HttpResponseMessage(HttpStatusCode.NotFound);
             }
 
-            HttpContent content = Stalls ? new StreamContent(new StalledStream(bytes))
-                : Delivered is { } delivered ? new StreamContent(new ToldStream(bytes, () => delivered(uri.AbsolutePath)))
-                : SaysLength ? new ByteArrayContent(bytes)
-                : new StreamContent(new UnseekableStream(bytes));
-            content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
-            return new HttpResponseMessage(HttpStatusCode.OK) { Content = content };
+            return new HttpResponseMessage(HttpStatusCode.OK) { Content = Body(uri, bytes, "application/octet-stream") };
         }
 
         // api.github.com/repos/<owner>/<repo>/releases?per_page=100&page=N
@@ -162,12 +202,15 @@ namespace Packmoji.Cli.Tests.TestSupport
                     json.WriteBoolean("draft", release.Draft);
                     json.WriteBoolean("prerelease", release.Prerelease);
                     json.WriteBoolean("immutable", false);
+                    json.WriteString("published_at", "2026-10-09T12:00:00Z");
                     json.WriteStartArray("assets");
                     foreach (var asset in release.Assets)
                     {
                         json.WriteStartObject();
                         json.WriteString("name", asset.Key);
                         json.WriteNumber("size", asset.Value.Length);
+                        json.WriteString("digest", "sha256:" + Convert.ToHexStringLower(SHA256.HashData(asset.Value)));
+                        json.WriteString("state", "uploaded");
                         json.WriteEndObject();
                     }
 

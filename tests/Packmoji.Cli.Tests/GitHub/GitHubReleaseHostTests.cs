@@ -4,6 +4,7 @@ using Packmoji.Cli.Tests.TestSupport;
 using Packmoji.Core.Diagnostics;
 using Packmoji.Core.Direct;
 using Packmoji.Core.Identity;
+using Packmoji.Core.Lockfiles;
 using Packmoji.GitHub;
 using Shouldly;
 using Xunit;
@@ -171,6 +172,83 @@ namespace Packmoji.Cli.Tests.GitHub
             request.Authorization.ShouldBeNull();
             request.UserAgent.ShouldBe("pmj/0.1.0");
             request.Accept.ShouldBe("application/vnd.github+json");
+        }
+
+        [Fact]
+        public async Task A_list_says_of_each_file_how_long_it_is_what_its_digest_is_and_that_it_is_uploaded()
+        {
+            var releases = await Host(WithCrypto()).ListAsync(Grapevine, TestContext.Current.CancellationToken);
+
+            var file = releases.ShouldHaveSingleItem().Files.ShouldHaveSingleItem();
+            file.Name.ShouldBe("crypto-1.0.0.pmj.tar.gz");
+            file.Size.ShouldBe(Archive.Length);
+            file.Sha256.ShouldBe(Sha256Digest.Of(Archive));
+            file.IsUploaded.ShouldBeTrue();
+        }
+
+        [Fact]
+        public async Task A_list_says_when_a_release_was_published_and_whether_it_can_still_be_changed()
+        {
+            var github = WithCrypto();
+            github.ListBody = """
+                [
+                  { "tag_name": "crypto-v1.0.0", "published_at": "2026-10-11T15:02:11Z", "immutable": true, "assets": [] },
+                  { "tag_name": "crypto-v1.1.0", "published_at": "2026-10-12T08:00:00Z", "immutable": false, "assets": [] }
+                ]
+                """;
+
+            var releases = await Host(github).ListAsync(Grapevine, TestContext.Current.CancellationToken);
+
+            releases.Select(release => (release.Tag, release.Published, release.IsImmutable)).ShouldBe(
+            [
+                ("crypto-v1.0.0", new DateTimeOffset(2026, 10, 11, 15, 2, 11, TimeSpan.Zero), true),
+                ("crypto-v1.1.0", new DateTimeOffset(2026, 10, 12, 8, 0, 0, TimeSpan.Zero), false),
+            ]);
+        }
+
+        // GitHub has said these of a file only since 2025, and may one day say them otherwise. What
+        // finds packages without a registry needs none of them, so none of them may stop it.
+        [Theory]
+        [InlineData("{ \"name\": \"a.tar.gz\" }")]
+        [InlineData("{ \"name\": \"a.tar.gz\", \"size\": \"large\", \"digest\": 7, \"state\": true }")]
+        [InlineData("{ \"name\": \"a.tar.gz\", \"size\": -1, \"digest\": \"sha256:abc\", \"state\": \"starter\" }")]
+        [InlineData("{ \"name\": \"a.tar.gz\", \"size\": 1.5, \"digest\": \"md5:d41d8cd98f00b204e9800998ecf8427e\", \"state\": \"open\" }")]
+        [InlineData("{ \"name\": \"a.tar.gz\", \"size\": null, \"digest\": null, \"state\": null }")]
+        [InlineData("{ \"name\": \"a.tar.gz\", \"digest\": \"sha256:E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855\" }")]
+        [InlineData("{ \"name\": \"a.tar.gz\", \"digest\": \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\" }")]
+        [InlineData("{ \"name\": \"a.tar.gz\", \"digest\": \"sha512:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\" }")]
+        public async Task What_a_list_does_not_say_of_a_file_or_says_in_a_way_pmj_does_not_know_is_not_known_and_stops_nothing(string asset)
+        {
+            var github = WithCrypto();
+            github.ListBody = $"[ {{ \"tag_name\": \"crypto-v1.0.0\", \"assets\": [ {asset} ] }} ]";
+
+            var release = (await Host(github).ListAsync(Grapevine, TestContext.Current.CancellationToken)).ShouldHaveSingleItem();
+
+            release.Published.ShouldBeNull();
+            release.IsImmutable.ShouldBeFalse();
+            var file = release.Files.ShouldHaveSingleItem();
+            file.Name.ShouldBe("a.tar.gz");
+            file.Size.ShouldBe(0);
+            file.Sha256.ShouldBeNull();
+            file.IsUploaded.ShouldBeFalse();
+        }
+
+        [Theory]
+        [InlineData("\"yesterday\"")]
+        [InlineData("7")]
+        [InlineData("null")]
+        [InlineData("\"2026-10-11 15:02:11\"")]
+        [InlineData("\"2026-10-11T15:02:11+02:00\"")]
+        [InlineData("\"2026-13-41T15:02:11Z\"")]
+        public async Task A_time_of_publishing_that_is_not_written_as_github_writes_one_is_not_known(string says)
+        {
+            var github = WithCrypto();
+            github.ListBody = $"[ {{ \"tag_name\": \"crypto-v1.0.0\", \"published_at\": {says}, \"immutable\": \"yes\", \"assets\": [] }} ]";
+
+            var release = (await Host(github).ListAsync(Grapevine, TestContext.Current.CancellationToken)).ShouldHaveSingleItem();
+
+            release.Published.ShouldBeNull();
+            release.IsImmutable.ShouldBeFalse();
         }
 
         [Fact]

@@ -88,5 +88,10 @@ namespace Packmoji.Core.Diagnostics
         public const string RunFailed = "run.failed";
 
         public const string ScopeNotAllowed = "scope.not-allowed";
+
+        public const string RegistryInvalid = "registry.invalid";
+        public const string RegistryUnreachable = "registry.unreachable";
+        public const string RegistryMismatch = "registry.mismatch";
+        public const string RegistryRepository = "registry.repository";
     }
 }

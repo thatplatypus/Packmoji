@@ -41,7 +41,7 @@ namespace Packmoji.Cli.Commands
 
             var changed = ProjectSession.Checked(without);
             return changed.Succeeded
-                ? await project.ResolveAsync(changed.Value, project.Source(alsoLookIn.Value), $"Removed {name}.", json, cancellationToken)
+                ? await project.ResolveAsync(changed.Value, project.Finder(alsoLookIn.Value), $"Removed {name}.", json, cancellationToken)
                 : reply.Stop(changed.Diagnostics, changed.Omitted);
         }
     }

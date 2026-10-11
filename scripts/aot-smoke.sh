@@ -22,6 +22,11 @@
 # which requests came with a token. So this is also where pmj is held, over real HTTP, to following
 # a download where it is sent and to giving its token to the API alone.
 #
+# Then it is run once through a registry. The registry's keeper makes one of the same release, by
+# asking the same server, and the server serves the registry's files beside everything else. With
+# the registry named, the native pmj adds the library to a second application: it asks GitHub's
+# API nothing, sends the registry no token, and writes the lockfile that was written without one.
+#
 # Last, the native pmj builds the application and runs it. The compiler, the C++ compiler and the
 # archiver are stood in for by small scripts, since no Emojicode compiler runs on every machine
 # this runs on. What that shows is the native binary starting programs, reading what they print,
@@ -33,6 +38,7 @@
 # start as programs.
 set -euo pipefail
 cd "$(dirname "$0")/.."
+repository="$PWD"
 
 rid="${1:?usage: scripts/aot-smoke.sh <runtime identifier, such as osx-arm64, linux-x64 or win-x64>}"
 dotnet publish src/Packmoji.Cli -c Release -r "$rid"
@@ -131,11 +137,14 @@ plain < "$work/gone.said" > "$work/gone.err"
 grep -qx 'error\[entry.not-found\]: The entry file "src/lib.🍇" was not found.' "$work/gone.err" || { cat "$work/gone.err" >&2; fail "pmj pack did not name the missing source file, src/lib.🍇, in UTF-8 on standard error"; }
 cd "$work/greeter"
 
-# The release that would carry it, laid out as GitHub's addresses are, and served from here.
+# The release that would carry it, laid out as GitHub's addresses are, and served from here. It
+# is listed as GitHub lists one, with when it was published and the size and the digest of its
+# file: pmj reads the tag and the file's name, and the registry's keeper reads the rest.
 release="$work/site/smoke/greeter/releases/download/greeter-v0.1.0"
 mkdir -p "$release" "$work/site/repos/smoke/greeter"
 cp target/greeter-0.1.0.pmj.tar.gz "$release/"
-echo '[{"tag_name":"greeter-v0.1.0","draft":false,"prerelease":false,"assets":[{"name":"greeter-0.1.0.pmj.tar.gz"}]}]' > "$work/site/repos/smoke/greeter/releases"
+size="$(wc -c < target/greeter-0.1.0.pmj.tar.gz | tr -d ' ')"
+echo "[{\"tag_name\":\"greeter-v0.1.0\",\"draft\":false,\"prerelease\":false,\"immutable\":false,\"published_at\":\"2026-10-11T15:02:11Z\",\"assets\":[{\"name\":\"greeter-0.1.0.pmj.tar.gz\",\"size\":$size,\"digest\":\"sha256:$digest\",\"state\":\"uploaded\"}]}]" > "$work/site/repos/smoke/greeter/releases"
 
 cat > "$work/github.py" <<'PYTHON'
 import http.server
@@ -179,6 +188,11 @@ class GitHub(Files):
     kind = "api"
 
     def do_GET(self):
+        # A registry's files, which are files and nothing else: one that is not there is 404.
+        if self.path.startswith("/registry/"):
+            self.note("registry")
+            http.server.SimpleHTTPRequestHandler.do_GET(self)
+            return
         if "/releases/download/" not in self.path:
             super().do_GET()
             return
@@ -272,6 +286,45 @@ case "$answer" in
   *) echo "$answer" >&2; fail "pmj install --json did not answer with what is locked" ;;
 esac
 [ ! -s "$work/json.err" ] || { cat "$work/json.err" >&2; fail "pmj install --json wrote to standard error"; }
+
+# Once through a registry. Its keeper makes one of the release above, asking this same server,
+# and the server serves the files it writes.
+echo "github.com/smoke/greeter" > "$work/listed.txt"
+dotnet run --project "$repository/src/Packmoji.Indexer" -c Release -- run --registry "$work/site/registry" --repositories "$work/listed.txt" > "$work/indexed.said" 2>&1 || { cat "$work/indexed.said" >&2; fail "the registry's keeper did not make a registry of the release"; }
+plain < "$work/indexed.said" > "$work/indexed.log"
+grep -qx "added @smoke/greeter 0.1.0 from github.com/smoke/greeter" "$work/indexed.log" || { cat "$work/indexed.log" >&2; fail "the registry's keeper did not add the library"; }
+registry="http://127.0.0.1:$port/registry"
+
+# A second application, on a machine that has fetched nothing, with the registry named. The
+# library is listed and chosen from the registry, and downloaded from where the registry says.
+cd "$work"
+pmj new @smoke/second > /dev/null
+cd second
+chmod -R u+w "$PACKMOJI_HOME" && rm -rf "$PACKMOJI_HOME"
+asked="$(wc -l < "$work/asked.log")"
+PACKMOJI_REGISTRY="$registry" pmj add @smoke/greeter > /dev/null
+tail -n +"$((asked + 1))" "$work/asked.log" > "$work/asked-with-a-registry.log"
+grep -qx "registry /registry/v1/packages/smoke/greeter.json token=no" "$work/asked-with-a-registry.log" || fail "the registry was not asked for the library's file, or was sent the token"
+if grep -q "^api " "$work/asked-with-a-registry.log"; then fail "GitHub's API was asked something though a registry was named"; fi
+grep -qx "download $download token=no" "$work/asked-with-a-registry.log" || fail "what the registry led to was not downloaded from GitHub itself, or was asked for with the token"
+cmp -s packmoji.lock "$work/app/packmoji.lock" || fail "the lockfile written with a registry is not the one written without it"
+[ -f "$unpacked" ] || fail "what the registry led to was not unpacked into the cache at $unpacked"
+
+verified="$(PACKMOJI_REGISTRY="$registry" pmj verify | plain)"
+case "$verified" in
+  *"Verified 1 package: its release, and what the registry records of it, are what packmoji.lock holds."*) ;;
+  *) echo "$verified" >&2; fail "pmj verify did not hold the library to the registry" ;;
+esac
+
+# A package the registry does not have is said to be that, and nothing but the registry is asked about it.
+asked="$(wc -l < "$work/asked.log")"
+status=0
+PACKMOJI_REGISTRY="$registry" pmj add @smoke/nothing > /dev/null 2> "$work/nothing.said" || status=$?
+plain < "$work/nothing.said" > "$work/nothing.err"
+[ "$status" -eq 1 ] || { cat "$work/nothing.err" >&2; fail "pmj add ended with status $status for a package the registry does not have"; }
+grep -qx 'error\[package.not-found\]: "@smoke/nothing" is not in the registry.' "$work/nothing.err" || { cat "$work/nothing.err" >&2; fail "pmj add did not say that the registry does not have the package"; }
+[ "$(tail -n +"$((asked + 1))" "$work/asked.log")" = "registry /registry/v1/packages/smoke/nothing.json token=no" ] || fail "something other than the registry was asked about a package it does not have"
+cd "$work/app"
 
 if [ -n "$windows" ]; then
   for command in build run; do

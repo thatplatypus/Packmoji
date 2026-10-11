@@ -172,6 +172,10 @@ namespace Packmoji.Core.Direct
                 ? NotFound(name, version, LookedIn(name, version), chain)
                 : null;
 
+        // A version the lockfile holds was found once, where the lockfile says it lives. That it is
+        // no longer published is then what there is to say, and the resolver says it.
+        Diagnostic? IExplainsMissing.MissingThoughLocked(PackageName name, SemanticVersion version, string? chain) => null;
+
         /// <summary>Says that a package could not be placed: where pmj looked for it, and how to say where it is.</summary>
         /// <param name="askedFor">How a resolution came to ask for the version, when one did.</param>
         public static Diagnostic NotFound(PackageName name, SemanticVersion? version, IReadOnlyList<RepositoryRef> lookedIn, string? askedFor = null)
@@ -225,49 +229,29 @@ namespace Packmoji.Core.Direct
             }
         }
 
-        private static PublishedVersion Describe(PackageName name, SemanticVersion version, RepositoryRef repository, ReadOnlyMemory<byte> archive)
+        /// <summary>
+        /// The version that an archive is, held to the one rule a release is taken by. What the rule
+        /// found wrong is thrown, said as pmj says it.
+        /// </summary>
+        internal static PublishedVersion Describe(PackageName name, SemanticVersion version, RepositoryRef repository, ReadOnlyMemory<byte> archive)
         {
-            var files = PackageArchive.Read(archive);
-            if (!files.Succeeded)
+            var verdict = ReleaseRule.Judge(name, version, repository, archive);
+            if (verdict.Taken)
             {
-                throw Invalid(name, version, repository, files.Diagnostics[0].Reason, tellTheAuthor: true);
+                return verdict.Published;
             }
 
-            var manifest = ManifestReader.Read(files.Value.First(file => file.Path.Value == ManifestReader.FileName).Content);
-            if (!manifest.Succeeded)
+            if (verdict.Fault == ReleaseFault.OtherRepository)
             {
-                var first = manifest.Diagnostics[0];
-                throw Invalid(name, version, repository, $"its {ManifestReader.FileName} cannot be read: {first.Message} That is because {first.Reason}", tellTheAuthor: true);
-            }
-
-            var package = manifest.Value.Package;
-            if (package.Name != name)
-            {
-                throw Invalid(name, version, repository, $"the manifest in its archive is that of \"{package.Name}\"", tellTheAuthor: true);
-            }
-
-            if (package.Version != version)
-            {
-                throw Invalid(name, version, repository, $"the manifest in its archive gives the version {package.Version}", tellTheAuthor: true);
-            }
-
-            if (manifest.Value.Repository != repository)
-            {
+                var lives = verdict.Manifest!.Repository;
                 throw new PackageSourceException(new Diagnostic(
                     DiagnosticCodes.ReleaseInvalid,
                     $"The release {ReleaseTag.For(name, version)} in {repository} is not \"{name}\" {version}.",
-                    $"the manifest in its archive says that the package lives in {manifest.Value.Repository}, and a release counts only where its package says it lives",
-                    $"tell its author: the manifest has to give \"repository\": \"{repository}\" under \"package\", or the release has to be made in {manifest.Value.Repository}"));
+                    verdict.Reason,
+                    $"tell its author: the manifest has to give \"repository\": \"{repository}\" under \"package\", or the release has to be made in {lives}"));
             }
 
-            return new PublishedVersion(
-                name,
-                version,
-                VersionStatus.Active,
-                repository,
-                Sha256Digest.Of(archive.Span),
-                VerificationLevel.Checksum,
-                manifest.Value.Dependencies ?? []);
+            throw Invalid(name, version, repository, verdict.Reason, tellTheAuthor: true);
         }
 
         private static PackageSourceException Invalid(PackageName name, SemanticVersion version, RepositoryRef repository, string reason, bool tellTheAuthor) =>

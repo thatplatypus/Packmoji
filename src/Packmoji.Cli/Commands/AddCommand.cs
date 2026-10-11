@@ -75,22 +75,30 @@ namespace Packmoji.Cli.Commands
 
             // The repository is where this package is looked for first, and a place to look for
             // whatever it needs: what is released beside a package is what it most often depends on.
-            var source = project.Source([.. told.Values], told);
+            var finder = project.Finder([.. told.Values], told);
             requirement ??= existing?.Requirement;
             if (requirement is null)
             {
-                if (await source.ListVersionsAsync(name, cancellationToken) is not { } listed)
+                var found = await finder.ListAsync(name, cancellationToken);
+                if (!found.Succeeded)
                 {
-                    return reply.Stop(DirectPackageSource.NotFound(name, null, source.LookedIn(name)));
+                    return reply.Stop(found.Diagnostics);
                 }
 
+                var listed = found.Value;
                 if (VersionCatalog.Latest(listed.Versions) is not { } latest)
                 {
-                    return reply.Stop(new Diagnostic(
-                        DiagnosticCodes.VersionNoneReleased,
-                        $"No version of \"{name}\" has been released that is not a pre-release.",
-                        $"{listed.Repository} has released {listed.Versions.Count} of it, each a pre-release, and pmj takes a pre-release only when it is named",
-                        $"to use one, name it: pmj add {name}@{listed.Versions[^1]}"));
+                    return reply.Stop(listed.Versions.Count == 0
+                        ? new Diagnostic(
+                            DiagnosticCodes.VersionNoneReleased,
+                            $"No version of \"{name}\" can be begun with.",
+                            $"{listed.Holder} versions of it, and each has been withdrawn by its author or quarantined",
+                            "ask its author for a new release: a version that was withdrawn or quarantined is refused when it is named, too")
+                        : new Diagnostic(
+                            DiagnosticCodes.VersionNoneReleased,
+                            $"No version of \"{name}\" has been released that is not a pre-release.",
+                            $"{listed.Holder} {listed.Versions.Count} of it, each a pre-release, and pmj takes a pre-release only when it is named",
+                            $"to use one, name it: pmj add {name}@{listed.Versions[^1]}"));
                 }
 
                 VersionRequirement.TryParse(latest.ToString(), out requirement, out _);
@@ -113,7 +121,7 @@ namespace Packmoji.Cli.Commands
                     _ when wasDev != asDev => $"Moved {name} to {DevDependencies}, asking for {asked.Requirement}.",
                     _ => $"Changed the requirement on {name} from {existing.Requirement} to {asked.Requirement}.",
                 };
-                return await project.ResolveAsync(changed.Value, source, said, json, cancellationToken);
+                return await project.ResolveAsync(changed.Value, finder, said, json, cancellationToken);
             }
 
             // Nothing to change in the manifest. There is still a lockfile to write when the project
@@ -123,7 +131,7 @@ namespace Packmoji.Cli.Commands
                 return project.Unchanged($"{ManifestReader.FileName} already asks for {name} at {existing.Requirement}.", json);
             }
 
-            return await project.ResolveAsync(project.Manifest, source, said: null, json, cancellationToken);
+            return await project.ResolveAsync(project.Manifest, finder, said: null, json, cancellationToken);
         }
     }
 }

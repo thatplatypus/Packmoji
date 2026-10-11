@@ -8,6 +8,7 @@ using Packmoji.Core.Direct;
 using Packmoji.Core.Identity;
 using Packmoji.Core.Lockfiles;
 using Packmoji.Core.Manifests;
+using Packmoji.Core.Registry;
 using Packmoji.Core.Reports;
 using Packmoji.Core.Resolution;
 using Packmoji.Core.Versioning;
@@ -21,6 +22,8 @@ namespace Packmoji.Cli.Commands
     /// </summary>
     internal sealed class ProjectSession
     {
+        private readonly IRegistryFiles? _registry;
+
         private ProjectSession(PmjHost host, Manifest manifest, Lockfile? lockfile, ScopeLimit allowed)
         {
             Host = host;
@@ -31,6 +34,7 @@ namespace Packmoji.Cli.Commands
 
             // The last line of a limit on scopes: whatever asks, an owner outside it is asked nothing.
             Releases = allowed.IsSet ? new ScopedReleaseHost(host.Releases, allowed) : host.Releases;
+            _registry = host.Registry is { } registry && allowed.IsSet ? new ScopedRegistryFiles(registry, allowed) : host.Registry;
         }
 
         public PmjHost Host { get; }
@@ -46,6 +50,9 @@ namespace Packmoji.Cli.Commands
 
         /// <summary>Where releases are asked for. An owner outside <see cref="Allowed"/> is asked nothing.</summary>
         public IReleaseHost Releases { get; }
+
+        /// <summary>The registry this project's packages are found in, or null when none is named and they are found among GitHub's releases.</summary>
+        public IRegistryFiles? Registry => _registry;
 
         /// <summary>Whether there is a lockfile and it still answers what the manifest asks for. When it does, nothing needs to be chosen.</summary>
         [MemberNotNullWhen(true, nameof(Lockfile))]
@@ -92,11 +99,17 @@ namespace Packmoji.Cli.Commands
                 : opened;
         }
 
-        /// <summary>Where this project's packages are found. One is made for a command and used for all of it, because it learns as it goes.</summary>
-        /// <param name="alsoLookIn">Repositories that were named as places to look in as well.</param>
+        /// <summary>
+        /// Where this project's packages are found: in the registry when one is named, and among
+        /// GitHub's releases when none is. One is made for a command and used for all of it, because
+        /// it learns as it goes.
+        /// </summary>
+        /// <param name="alsoLookIn">Repositories that were named as places to look in as well. A registry is told of none.</param>
         /// <param name="told">Where a package lives, for a package someone has said it of.</param>
-        public DirectPackageSource Source(IReadOnlyList<RepositoryRef> alsoLookIn, IReadOnlyDictionary<PackageName, RepositoryRef>? told = null) =>
-            new(Releases, Store, Manifest, Lockfile, told, alsoLookIn);
+        public IPackageFinder Finder(IReadOnlyList<RepositoryRef> alsoLookIn, IReadOnlyDictionary<PackageName, RepositoryRef>? told = null) =>
+            _registry is null
+                ? new DirectFinder(new DirectPackageSource(Releases, Store, Manifest, Lockfile, told, alsoLookIn), Lockfile, Allowed)
+                : new RegistryFinder(_registry, Releases, Store, Lockfile, Allowed);
 
         /// <summary>
         /// A changed manifest as its file will read. The rules that hold across a manifest are the
@@ -146,10 +159,11 @@ namespace Packmoji.Cli.Commands
         /// </summary>
         public async Task<ResolveResult> FetchLockedAsync(IReadOnlyList<RepositoryRef> alsoLookIn, CancellationToken cancellationToken)
         {
-            var check = await LockCheck.CheckAsync(Lockfile!, Source(alsoLookIn), cancellationToken);
+            var finder = Finder(alsoLookIn);
+            var check = await finder.CheckAsync(cancellationToken);
             if (check.Succeeded)
             {
-                await FetchAsync(check.Graph, cancellationToken);
+                await FetchAsync(check.Graph, finder, cancellationToken);
             }
 
             return check;
@@ -160,19 +174,19 @@ namespace Packmoji.Cli.Commands
         /// the lockfile, and the manifest too when it was changed. Nothing is written unless all of
         /// it can be.
         /// </summary>
-        /// <param name="source">The source the command has been using, so that what it learned is not asked again.</param>
+        /// <param name="finder">The finder the command has been using, so that what it learned is not asked again.</param>
         /// <param name="said">What the command did to the manifest, said first when it has been done. Null when it changed nothing.</param>
         /// <param name="json">Whether to answer a tool, with one JSON object.</param>
-        public async Task<int> ResolveAsync(Manifest manifest, DirectPackageSource source, string? said, bool json, CancellationToken cancellationToken)
+        public async Task<int> ResolveAsync(Manifest manifest, IPackageFinder finder, string? said, bool json, CancellationToken cancellationToken)
         {
-            var result = await DirectResolver.ResolveAsync(manifest, Lockfile, source, Allowed, cancellationToken);
+            var result = await finder.ResolveAsync(manifest, cancellationToken);
             if (!result.Succeeded)
             {
                 return DiagnosticPrinter.Report(Host, result.Diagnostics, result.OmittedDiagnostics, json);
             }
 
             // Fetched before anything is written, so that a project is never left locked to what could not be had.
-            await FetchAsync(result.Graph, cancellationToken);
+            await FetchAsync(result.Graph, finder, cancellationToken);
 
             // The manifest and the lockfile, or neither: a manifest that asks for what no lockfile answers is half of a command.
             var locked = result.Graph.ToLockfile(manifest);
@@ -192,9 +206,9 @@ namespace Packmoji.Cli.Commands
         /// has to download to find out stays in the cache, where it does no harm.
         /// </summary>
         /// <param name="json">Whether to answer a tool, with one JSON object.</param>
-        public async Task<int> PreviewAsync(Manifest manifest, DirectPackageSource source, string? said, bool json, CancellationToken cancellationToken)
+        public async Task<int> PreviewAsync(Manifest manifest, IPackageFinder finder, string? said, bool json, CancellationToken cancellationToken)
         {
-            var result = await DirectResolver.ResolveAsync(manifest, Lockfile, source, Allowed, cancellationToken);
+            var result = await finder.ResolveAsync(manifest, cancellationToken);
             if (!result.Succeeded)
             {
                 return DiagnosticPrinter.Report(Host, result.Diagnostics, result.OmittedDiagnostics, json);
@@ -246,13 +260,16 @@ namespace Packmoji.Cli.Commands
 
         private static string Count(int packages) => packages switch { 0 => "no package", 1 => "1 package", _ => $"{packages} packages" };
 
-        // Every archive of a graph is in the cache by now: the source keeps what it downloads, and
-        // what it did not download it took from the cache. Here each is unpacked beside itself.
-        private async Task FetchAsync(ResolvedGraph graph, CancellationToken cancellationToken)
+        // The finder sees to it that each archive of a graph is in the cache, and here each is
+        // unpacked beside itself. The finder is asked of every package, unpacked or not: with a
+        // registry it is also what holds the bytes to what the registry said of the version, and
+        // bytes that were fetched before have to be held to what it says now.
+        private async Task FetchAsync(ResolvedGraph graph, IPackageFinder finder, CancellationToken cancellationToken)
         {
             foreach (var package in graph.Packages)
             {
                 var published = package.Published;
+                await finder.FetchAsync(published, cancellationToken);
                 if (Directory.Exists(Store.DirectoryPath(published.Name, published.Version, published.Sha256)))
                 {
                     continue;

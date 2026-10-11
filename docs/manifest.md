@@ -340,7 +340,7 @@ The codes that begin with `compiler.`, `build.`, `built.`, `packages.` and `run.
 
 | Code | Raised when |
 |---|---|
-| `file.too-large` | A manifest is over 1 MiB, or a lockfile is over 4 MiB |
+| `file.too-large` | A manifest is over 1 MiB, or a lockfile or a registry's file of a package is over 4 MiB |
 | `json.syntax` | A file is not strict JSON, is not UTF-8, is empty, or holds merge conflict markers |
 | `json.duplicate-key` | A key appears twice in one object |
 | `json.wrong-type` | A value is of the wrong kind, such as a number where a string belongs |
@@ -393,8 +393,8 @@ The codes that begin with `compiler.`, `build.`, `built.`, `packages.` and `run.
 | `project.unreadable` | A project's file could not be read or written, or a directory that a build writes into is a symbolic link |
 | `dependency.exists` | `pmj add` was given a package the manifest already has, and no requirement to change it to |
 | `dependency.not-found` | `pmj remove` or `pmj update` named a package the manifest does not have |
-| `package.not-found` | No release of a package is in any repository `pmj` looked in |
-| `version.none-released` | Every released version of a package is a pre-release, and none was asked for by name |
+| `package.not-found` | No release of a package is in any repository `pmj` looked in. Or, with a registry named, the registry has no file of the package |
+| `version.none-released` | Every released version of a package is a pre-release, and none was asked for by name. Or, in a registry, every version of it has been withdrawn or quarantined |
 | `release.invalid` | A release is there, and its archive is not that package at that version in that repository |
 | `archive.invalid` | An archive is not the bytes `pmj pack` writes, is over a limit, or holds two files that the disk it is unpacked on keeps as one |
 | `pack.nothing` | `pmj pack` would write an archive without the package's entry file, because no pattern of the manifest selects it |
@@ -421,3 +421,7 @@ The codes that begin with `compiler.`, `build.`, `built.`, `packages.` and `run.
 | `run.not-an-app` | `pmj run` was run in a library, which has no program to run |
 | `run.failed` | The program was built and could not be started |
 | `scope.not-allowed` | A package that the project asks for, locks or comes to need is of a scope that `PACKMOJI_SCOPES` does not allow |
+| `registry.invalid` | A file of a registry breaks a rule of its format, or is not the file of what it was read as |
+| `registry.unreachable` | A file of the registry could not be had: the network failed, or the answer was neither the file nor that there is none |
+| `registry.mismatch` | What GitHub serves for a version is not what the registry recorded of it: other bytes, a manifest that says otherwise, or nothing at all |
+| `registry.repository` | `--repository` was given while a registry is named. The registry says where a package lives |

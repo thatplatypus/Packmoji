@@ -1,7 +1,9 @@
+using System.Text;
 using Packmoji.Cli.Building;
 using Packmoji.Core.Identity;
 using Packmoji.Core.Lockfiles;
 using Packmoji.Core.Manifests;
+using Packmoji.Core.Registry;
 using Packmoji.Core.Versioning;
 using Packmoji.GitHub;
 using Shouldly;
@@ -67,6 +69,12 @@ namespace Packmoji.Cli.Tests.TestSupport
 
         public FakeGitHub GitHub { get; } = new();
 
+        /// <summary>The registry of this machine's GitHub, as it is served. It holds nothing until <see cref="IndexAsync"/> has run.</summary>
+        public RegistryState Registry { get; private set; } = RegistryState.Empty;
+
+        /// <summary>Whether pmj is told of the registry. It is from the first run that keeps one, until a test says otherwise.</summary>
+        public bool NamesRegistry { get; set; }
+
         /// <summary>The compiler and the other tools of a build, made up. They are on this machine's <c>PATH</c> from the start.</summary>
         public FakeTools Tools { get; }
 
@@ -115,6 +123,7 @@ namespace Packmoji.Cli.Tests.TestSupport
                 WorkingDirectory = PathOf(directory),
                 HomeDirectory = Home,
                 Releases = new GitHubReleaseHost(new HttpClient(GitHub, disposeHandler: false)),
+                Registry = NamesRegistry ? new HttpRegistryFiles(new HttpClient(GitHub, disposeHandler: false), new Uri(FakeGitHub.RegistryAddress)) : null,
                 Out = output,
                 Error = error,
                 Variable = Variable,
@@ -138,6 +147,56 @@ namespace Packmoji.Cli.Tests.TestSupport
                 new HttpClient(GitHub, disposeHandler: false),
                 new StringWriter(),
                 new StringWriter());
+
+        /// <summary>
+        /// Keeps the registry as its workflow does: one run over these repositories of the made-up
+        /// GitHub, from where the last run left it, with the files it makes served at the registry's
+        /// address. From then on pmj is told of the registry. What the run asked of GitHub is
+        /// forgotten, so that a test counts only what pmj asks.
+        /// </summary>
+        /// <returns>What the run said it did, a line for each thing.</returns>
+        public async Task<IReadOnlyList<string>> IndexAsync(params string[] repositories)
+        {
+            var listed = repositories.Select(text =>
+            {
+                RepositoryRef.TryParse(text, out var repository, out _).ShouldBeTrue();
+                return repository!;
+            }).ToList();
+            var asked = GitHub.Requests.Count;
+            var run = await RegistryRun.RunAsync(
+                Registry,
+                listed,
+                new GitHubReleaseHost(new HttpClient(GitHub, disposeHandler: false)),
+                new DateTimeOffset(2026, 10, 11, 15, 17, 40, TimeSpan.Zero),
+                RegistryLimits.Default,
+                TestContext.Current.CancellationToken);
+            GitHub.Requests.RemoveRange(asked, GitHub.Requests.Count - asked);
+            Serve(run.After);
+            NamesRegistry = true;
+            return run.Notes.Select(note => note.Text).ToList();
+        }
+
+        /// <summary>Serves a registry in place of the one that was served, as a commit to its branch does.</summary>
+        public void Serve(RegistryState registry)
+        {
+            Registry = registry;
+            GitHub.Registry.Clear();
+            foreach (var (path, text) in registry.Files())
+            {
+                GitHub.Registry[path] = Encoding.UTF8.GetBytes(text);
+            }
+        }
+
+        /// <summary>Changes what the registry holds of one version, as a person's own commit to its branch does.</summary>
+        public void Rerecord(string name, string version, Func<RegistryVersion, RegistryVersion> change)
+        {
+            PackageName.TryParse(name, out var package, out _).ShouldBeTrue();
+            SemanticVersion.TryParse(version, out var parsed, out _).ShouldBeTrue();
+            var held = Registry.Package(package!).ShouldNotBeNull();
+            held.Find(parsed!).ShouldNotBeNull();
+            var changed = held with { Versions = held.Versions.Select(one => one.Version == parsed ? change(one) : one).ToList() };
+            Serve(new RegistryState(Registry.Packages.Select(other => other.Name == changed.Name ? changed : other), Registry.Refused));
+        }
 
         /// <summary>
         /// Puts a made-up tool on this machine, as a file whose first line says which tool it is.

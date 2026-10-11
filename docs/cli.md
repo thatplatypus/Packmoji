@@ -2,7 +2,7 @@
 
 `pmj` makes projects, fetches the packages they depend on, builds them and runs them, and packs a package for release. This page says what each command does, what it prints, how it ends, and where it finds things.
 
-Packages are found on GitHub directly, as releases of their repositories. There is no registry yet.
+Packages are found on GitHub directly, as releases of their repositories. When a [registry](registry.md) is named, they are found there: see [With a registry](#with-a-registry).
 
 `pmj` builds with the Emojicode compiler, which it does not bring with it. [How pmj builds](building.md) says what a build needs and what it does.
 
@@ -130,7 +130,7 @@ pmj add <@scope/name>[@<requirement>] [--dev] [--repository <github.com/owner/re
 - **With a requirement, it is written as you gave it.** `pmj add @thatplatypus/crypto@1.2` asks for 1.2.0 or anything later on the line `1.x`. See [How pmj chooses versions](resolution.md).
 - **A pre-release is added only by naming it,** as in `pmj add @thatplatypus/crypto@2.0.0-rc.1`.
 - **`--dev` puts it under `devDependencies`:** needed to develop this project, and not by what depends on it.
-- **`--repository` says where the package lives.** It is needed only in the cases described under [How a package is found](#how-a-package-is-found).
+- **`--repository` says where the package lives.** It is needed only in the cases described under [How a package is found](#how-a-package-is-found). With a registry named it is refused, for the registry says where a package lives.
 
 A package the project already depends on:
 
@@ -225,12 +225,14 @@ Downloads every locked package again, whatever the cache holds, and checks three
 | The file its release carries today | The digest and the repository in `packmoji.lock` |
 | The archive in the cache | The same digest |
 | The files unpacked beside that archive | The archive |
+| What the registry records of the version, when a registry is named | The digest, the repository and the dependencies in `packmoji.lock`, and that the version has not been quarantined |
 
 `verify` changes nothing. It does not repair the cache and does not write what it downloads: what it finds is for you to act on. It ends with status 0 only if every package is exactly what the lockfile holds.
 
 - **Every package is checked,** whatever was wrong with the one before, and every problem is reported.
 - **A release that is not what was locked is `lock.mismatch`.** A copy in the cache that is not is `cache.mismatch`.
 - **It says how much of what is locked the cache holds.** A cache that holds nothing has nothing wrong with it.
+- **With a registry named, this is where a quarantine is learned of.** `pmj install` asks nobody about a package whose locked bytes are in the cache, so it does not hear that a version was quarantined after it was locked. `pmj verify` asks the registry about every locked package. A version that was quarantined is `resolve.quarantined`, and one that its author withdrew is a warning.
 
 ### pmj build
 
@@ -508,7 +510,8 @@ Each file `pmj` writes is written whole beside its place and then put there in o
 | `GITHUB_TOKEN`, `GH_TOKEN` | A token for GitHub's API, which raises its limit. The first that is set is used |
 | `PACKMOJI_GITHUB` | Another address for `https://github.com`, where releases are downloaded from |
 | `PACKMOJI_GITHUB_API` | Another address for `https://api.github.com`, where versions are listed |
-| `PACKMOJI_DIRECT` | Accepted, as `--direct` is. Finding packages on GitHub directly is the only way there is yet |
+| `PACKMOJI_REGISTRY` | The address of a [registry](registry.md) to find packages in: what its `v1` is under. Not set, packages are found on GitHub itself |
+| `PACKMOJI_DIRECT` | Set to `1`, packages are found on GitHub itself, whatever registry is named. `--direct` says the same for one command |
 | `PACKMOJI_SCOPES` | The scopes `pmj` may depend on, with commas between them, as in `thatplatypus,emojicode`. Not set, any scope |
 | `EMOJICODEC` | The Emojicode compiler that a build uses. Without it, the first `emojicodec` on `PATH` |
 | `EMOJICODE_PACKAGES_PATH` | Where the compiler's own packages are, which a program is linked with. The compiler reads it too. Without it, `/usr/local/EmojicodePackages` |
@@ -520,6 +523,7 @@ Each file `pmj` writes is written whole beside its place and then put there in o
 - **Every command that reads what a project depends on holds to the list:** `add`, `remove`, `install`, `update`, `tree`, `verify`, `build` and `run`. A project that already asks for a package outside it is refused by `remove` too, and its manifest is mended by hand. Once the manifest no longer asks for it, `pmj install` locks the project again without it: a lockfile that no longer answers the manifest is not held to the list, since nothing of it is used.
 - **A scope is written as a package's name has it, without the `@`.** A list that cannot be read stops those commands, with `config.invalid`, before either file of the project is read: a limit that was mistyped is never taken for no limit. That holds for a variable that is set to nothing, which is what a missing setting leaves on a server. To have no limit, do not set the variable.
 - **The two addresses are for a GitHub of your own, and for tests.** Each begins with `http://` or `https://`, and they are set together or not at all: with one alone, `pmj` would download from one GitHub and list versions from another. A token goes to whatever address you give for the API.
+- **A registry's address begins with `http://` or `https://`,** and holds the name of a machine and a path and nothing else. `PACKMOJI_DIRECT` is `1` or is not set: `pmj` does not guess what anything else was meant to say. Either of them, when it cannot be used, stops a command that would ask the registry something, with `config.invalid`, and `--direct` on the command line is the way past it.
 - **Each of the four programs is one program, with no arguments:** a path, or a name that is looked for in the directories of `PATH`. A variable that is set to nothing says nothing.
 - **A build reads the six of them only when it needs them.** A package of Emojicode alone needs no C++ compiler, and a command that does not build needs none of this.
 - **What `pmj` is told here and cannot use stops it,** with `config.invalid`, before anything is asked of anyone: an address that is not one, one address without the other, or a token that could not be sent. It is never passed over for what `pmj` does when nothing is said. An address or a token that cannot be used stops only a command that asks something of GitHub: `pmj new` is not stopped by one, and neither is `pmj install` when the cache holds what is locked. A list of scopes that cannot be read stops every command that reads what a project depends on, whatever the cache holds.
@@ -565,6 +569,45 @@ pmj install --repository github.com/thatplatypus/grapevine
 
 - **GitHub's API answers 60 requests an hour to someone it does not know,** and 5,000 with a token. Set `GITHUB_TOKEN` if you meet the limit.
 - **Downloading a release's file needs no token** and does not count against that limit.
+
+## With a registry
+
+A [registry](registry.md) says which versions of a package there are, where each lives, which bytes it is and what it needs. `pmj` reads one when it is told where it is:
+
+```sh
+export PACKMOJI_REGISTRY=https://raw.githubusercontent.com/thatplatypus/Packmoji/registry
+```
+
+With nothing said, `pmj` finds packages on GitHub itself, as above. With a registry named:
+
+| Command | With a registry |
+|---|---|
+| `add` with no requirement, and `update` | The versions are the registry's. The latest is the highest that is not a pre-release and has been neither withdrawn nor quarantined. GitHub's API is asked nothing |
+| `add`, `install`, `update` and `remove`, when versions are chosen | Each version asked about is answered from its package's file. No archive is downloaded to find out what a version needs |
+| Fetching what was chosen, or what is locked | The file is downloaded from GitHub by the release's own address, and is kept only if it is the bytes the registry recorded and its manifest says what the registry says |
+| `install`, `build` and `run`, with a lockfile that answers the manifest | A locked package whose bytes are in the cache is not asked about. One that has to be fetched is first held to the registry |
+| `verify` | Every locked package is held to the registry as well as to its release |
+| `tree`, `pack`, `new` and `init` | Nothing changes. They ask nobody |
+
+- **A package the registry does not have is `package.not-found`.** `pmj` does not go and look on GitHub by itself: whoever named a registry is held to it. `--direct` asks GitHub itself, for one command.
+- **An address with no registry behind it answers the same way,** of every package: there is no file at it, as there is none of a package a registry does not have. `pmj` cannot tell the two apart, so it names the file it asked for, and says first to check the address.
+- **A registry that cannot be read stops the command,** with `registry.unreachable`. A file of it that does not read is `registry.invalid`. Neither is passed over.
+- **What GitHub serves is held to what the registry recorded.** Other bytes, a manifest that says otherwise, or a release that is gone is `registry.mismatch`, and nothing of it is kept.
+- **Nothing is sent to a registry but the request for a file.** No token goes there.
+- **`--repository` is refused,** with `registry.repository`. The registry says where each package lives.
+- **`PACKMOJI_SCOPES` holds as it does without one.** The file of a package outside the list is not asked for.
+- **`packmoji.lock` is the same file.** One written with a registry is, for the same packages, to the byte what is written without one, and a project can go from one to the other. It says that a version was verified by its checksum, which is what `pmj` did, whatever a registry says of an attestation.
+- **A version that was withdrawn is not chosen, and goes on being installed where it is locked,** with a warning. One that was quarantined stops a resolution and an install.
+- **What the cache holds is installed without asking.** So a build with no network works with a registry named as it does without one, and what the registry has learned since is heard by the next command that asks it: one that chooses versions, one that has to fetch, and `pmj verify`.
+
+A package that is not in the registry:
+
+```
+$ pmj add @thatplatypus/sockets_more
+error[package.not-found]: "@thatplatypus/sockets_more" is not in the registry.
+  why: https://raw.githubusercontent.com/thatplatypus/Packmoji/registry/v1/packages/thatplatypus/sockets_more.json is not there
+  fix: check that https://raw.githubusercontent.com/thatplatypus/Packmoji/registry is the address a registry's v1 is under, for one that is not answers the same way; if it is, and the package's repository is on the registry's list, a release is in the registry within the hour; to ask GitHub itself, run the command again with --direct
+```
 
 ## The cache
 
@@ -616,9 +659,10 @@ On Windows `pmj` manages packages, and builds nothing.
 | A signed program, and an installer | Later |
 | `test` | Later. Emojicode has no way of its own to say what a package's tests are, and one has to be chosen first |
 | Building several packages at once, and compiling a project only when it has changed | Later |
-| A registry, and `search` and `info` | The registry |
+| Reading [the registry](registry.md) with nothing said | Later. Until then it is named with `PACKMOJI_REGISTRY` |
+| `search` and `info` | Later. They need a file that lists every package, which the registry does not have yet |
 | `publish`, attestations, and a release workflow | Publishing |
 | Installing for a project that requires attestation | Publishing. Until then such a project is refused, with `attestation.unverifiable`: a requirement that cannot be checked is not met |
-| A configuration file | The registry |
+| A configuration file | Later |
 | Downloading several packages at once | Later |
 | `pmj cache clean` | Later. Deleting the cache's directory does the same |

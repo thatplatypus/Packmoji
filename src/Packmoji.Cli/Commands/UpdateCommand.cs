@@ -58,18 +58,19 @@ namespace Packmoji.Cli.Commands
             }
 
             var every = (project.Manifest.Dependencies ?? []).Concat(project.Manifest.DevDependencies ?? []).Select(dependency => dependency.Name);
-            var source = project.Source(alsoLookIn.Value!);
+            var finder = project.Finder(alsoLookIn.Value!);
             var manifest = project.Manifest;
             var raised = new List<string>();
             foreach (var name in (named.Count > 0 ? named : every).Distinct().Order())
             {
                 var asked = ManifestEditor.Find(manifest, name, out var dev)!;
-                if (await source.ListVersionsAsync(name, cancellationToken) is not { } listed)
+                var listed = await finder.ListAsync(name, cancellationToken);
+                if (!listed.Succeeded)
                 {
-                    return reply.Stop(DirectPackageSource.NotFound(name, null, source.LookedIn(name)));
+                    return reply.Stop(listed.Diagnostics);
                 }
 
-                if (VersionCatalog.LatestOnLine(listed.Versions, asked.Requirement) is { } latest && VersionRequirement.TryParse(latest.ToString(), out var higher, out _))
+                if (VersionCatalog.LatestOnLine(listed.Value.Versions, asked.Requirement) is { } latest && VersionRequirement.TryParse(latest.ToString(), out var higher, out _))
                 {
                     manifest = ManifestEditor.With(manifest, new Dependency(name, higher), dev);
                     raised.Add($"  {name} from {asked.Requirement} to {higher}");
@@ -94,8 +95,8 @@ namespace Packmoji.Cli.Commands
                     Environment.NewLine,
                     [$"{(dryRun ? "Would raise" : "Raised")} {raised.Count} requirement{(raised.Count == 1 ? "" : "s")} in {ManifestReader.FileName}:", .. raised]);
             return dryRun
-                ? await project.PreviewAsync(changed.Value, source, said, json, cancellationToken)
-                : await project.ResolveAsync(changed.Value, source, said, json, cancellationToken);
+                ? await project.PreviewAsync(changed.Value, finder, said, json, cancellationToken)
+                : await project.ResolveAsync(changed.Value, finder, said, json, cancellationToken);
         }
     }
 }

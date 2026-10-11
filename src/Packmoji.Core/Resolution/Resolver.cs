@@ -75,7 +75,7 @@ namespace Packmoji.Core.Resolution
             foreach (var node in graph.Nodes.Where(node => node.Published is null).OrderBy(node => node.Name).ThenBy(node => node.Version))
             {
                 errors.Add(() => locked.Contains((node.Name, node.Version))
-                    ? ResolveDiagnostics.VersionGone(graph, node)
+                    ? (source as IExplainsMissing)?.MissingThoughLocked(node.Name, node.Version, graph.ChainTo(node.Via)) ?? ResolveDiagnostics.VersionGone(graph, node)
                     : (source as IExplainsMissing)?.Missing(node.Name, node.Version, graph.ChainTo(node.Via)) ?? ResolveDiagnostics.VersionMissing(graph, node));
             }
 

@@ -7,7 +7,8 @@ namespace Packmoji.Core.Tests.Direct
 {
     public sealed class VersionCatalogTests
     {
-        private static ReleaseInfo Release(string tag, params string[] assets) => new(tag, tag.Contains("-beta") || tag.Contains("-rc"), assets);
+        private static ReleaseInfo Release(string tag, params string[] assets) =>
+            new(tag, tag.Contains("-beta") || tag.Contains("-rc"), assets.Select(asset => new ReleaseFile(asset)).ToList());
 
         private static readonly ReleaseInfo[] Releases =
         [
