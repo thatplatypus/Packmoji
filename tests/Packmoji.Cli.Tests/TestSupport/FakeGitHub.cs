@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
@@ -162,12 +163,15 @@ namespace Packmoji.Cli.Tests.TestSupport
                     json.WriteBoolean("draft", release.Draft);
                     json.WriteBoolean("prerelease", release.Prerelease);
                     json.WriteBoolean("immutable", false);
+                    json.WriteString("published_at", "2026-10-09T12:00:00Z");
                     json.WriteStartArray("assets");
                     foreach (var asset in release.Assets)
                     {
                         json.WriteStartObject();
                         json.WriteString("name", asset.Key);
                         json.WriteNumber("size", asset.Value.Length);
+                        json.WriteString("digest", "sha256:" + Convert.ToHexStringLower(SHA256.HashData(asset.Value)));
+                        json.WriteString("state", "uploaded");
                         json.WriteEndObject();
                     }
 
