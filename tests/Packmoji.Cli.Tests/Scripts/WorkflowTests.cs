@@ -166,7 +166,7 @@ namespace Packmoji.Cli.Tests.Scripts
         {
             Workflow("registry.yml").ShouldContain(
                 "\non:\n  schedule:\n    # Every hour, and not on the hour, which is when GitHub's own queue is longest.\n    - cron: \"17 * * * *\"\n"
-                + "  push:\n    branches: [ \"main\" ]\n    paths: [ \"registry-repositories.txt\" ]\n  workflow_dispatch:\n\n");
+                + "  push:\n    branches: [ \"main\", \"m4-registry-rehearsal\" ]\n    paths: [ \"registry-repositories.txt\" ]\n  workflow_dispatch:\n\n");
         }
 
         [Fact]
@@ -265,7 +265,7 @@ namespace Packmoji.Cli.Tests.Scripts
         {
             var registry = Workflow("registry.yml");
 
-            registry.ShouldContain("\nenv:\n  REGISTRY_BRANCH: registry\n");
+            registry.ShouldContain("\nenv:\n  REGISTRY_BRANCH: registry-rehearsal\n");
             Regex.Matches(registry, "REGISTRY_BRANCH").Count.ShouldBe(1);
             foreach (var script in new[] { "registry-tree.sh", "registry-commit.sh" })
             {
@@ -288,8 +288,9 @@ namespace Packmoji.Cli.Tests.Scripts
             var branch = Regex.Match(registry, @"\n  REGISTRY_BRANCH: (\S+)\n").Groups[1].Value;
 
             branch.ShouldNotBeEmpty();
-            guide.ShouldContain($"On the branch `{branch}` of ");
-            guide.ShouldContain($"\nhttps://raw.githubusercontent.com/thatplatypus/Packmoji/{branch}/v1/packages/");
+            branch.ShouldBe("registry-rehearsal");
+            guide.ShouldContain("On the branch `registry` of ");
+            guide.ShouldContain("\nhttps://raw.githubusercontent.com/thatplatypus/Packmoji/registry/v1/packages/");
             Regex.IsMatch(registry, "\n    - cron: \"[0-9]+ \\* \\* \\* \\*\"\n").ShouldBeTrue("the schedule is no longer once an hour");
             guide.ShouldContain("runs every hour, when the list changes, and when it is started by hand");
             guide.ShouldContain("a new release is in the registry within the hour");

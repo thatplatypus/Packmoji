@@ -2,5 +2,5 @@
 #
 # One repository to a line, written github.com/<owner>/<repo> in lowercase, in order, and none
 # twice. A pull request changes this list. A line that begins with # is for a person.
-# REHEARSAL ONLY: after the review, a plant, with the step as it was before its fix.
+# REHEARSAL ONLY, on a branch that is NOT FOR MERGING. The branch to merge is m4-registry.
 github.com/thatplatypus/grapevine
