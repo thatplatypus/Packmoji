@@ -14,16 +14,17 @@ namespace Packmoji.Cli
     public static class PmjCommandLine
     {
         private const string JsonOption = "--json";
+        private const string DirectOption = "--direct";
 
         public static RootCommand Build(PmjHost host)
         {
             ArgumentNullException.ThrowIfNull(host);
             var root = new RootCommand("Packmoji, the package manager for Emojicode.")
             {
-                new Option<bool>("--direct")
+                new Option<bool>(DirectOption)
                 {
                     Recursive = true,
-                    Description = "Find packages on GitHub itself, with no registry. That is the only way there is yet, so this changes nothing.",
+                    Description = "Find packages on GitHub itself, whatever registry PACKMOJI_REGISTRY names. With no registry named, this changes nothing.",
                 },
                 Scaffolding(host, "new", "Make a project in a new directory named after it.", inPlace: false),
                 Scaffolding(host, "init", "Make a project in this directory.", inPlace: true),
@@ -53,8 +54,15 @@ namespace Packmoji.Cli
             ArgumentNullException.ThrowIfNull(args);
             ArgumentNullException.ThrowIfNull(host);
 
-            // A package is named @scope/name, and the parser would otherwise take that for the name of a file of arguments.
-            var parsed = Build(host).Parse(args, new ParserConfiguration { ResponseFileTokenReplacer = null });
+            var parsed = Parse(args, host);
+            if (parsed.Errors.Count == 0 && host.Registry is not null && parsed.GetValue<bool>(DirectOption))
+            {
+                // Each command is built over the host it will run on, so the command line is read
+                // again over a host that has no registry.
+                host = host.Direct();
+                parsed = Parse(args, host);
+            }
+
             if (parsed.Errors.Count > 0)
             {
                 foreach (var error in parsed.Errors)
@@ -64,6 +72,15 @@ namespace Packmoji.Cli
 
                 host.Error.WriteLine($"Run {Asked(parsed)} --help to see how it is used.");
                 return ExitStatus.Usage;
+            }
+
+            // Held here, before any command is run, so that no command has to remember to. When what
+            // was said of a registry cannot be used, whether one is named at all is what cannot be
+            // told, and that is the problem to say.
+            if (host.Registry is not null && GaveRepository(parsed))
+            {
+                var problem = host.Registry is UnusableRegistry unusable ? unusable.Problem : CommandDiagnostics.RepositoryWithRegistry();
+                return DiagnosticPrinter.Report(host, [problem], json: AskedForJson(parsed));
             }
 
             try
@@ -89,6 +106,10 @@ namespace Packmoji.Cli
                 return ExitStatus.InternalError;
             }
         }
+
+        // A package is named @scope/name, and the parser would otherwise take that for the name of a file of arguments.
+        private static ParseResult Parse(string[] args, PmjHost host) =>
+            Build(host).Parse(args, new ParserConfiguration { ResponseFileTokenReplacer = null });
 
         private static Command Scaffolding(PmjHost host, string name, string description, bool inPlace)
         {
@@ -225,6 +246,11 @@ namespace Packmoji.Cli
         // is caught here was thrown from inside one that may.
         private static bool AskedForJson(ParseResult parsed) =>
             parsed.CommandResult.Command.Options.OfType<Option<bool>>().FirstOrDefault(option => option.Name == JsonOption) is { } json && parsed.GetValue(json);
+
+        // Whether the command that was run was told where to look, by the option that only some commands have.
+        private static bool GaveRepository(ParseResult parsed) =>
+            parsed.CommandResult.Command.Options.FirstOrDefault(option => option.Name == RepositoryOption.Name) is { } repository
+            && parsed.GetResult(repository) is { Implicit: false };
 
         private static Option<bool> Json() =>
             new(JsonOption) { Description = "Answer a tool: one JSON object on standard output, with what was found and any problems in it." };

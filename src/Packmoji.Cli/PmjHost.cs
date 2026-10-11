@@ -4,6 +4,7 @@ using Packmoji.Cli.Projects;
 using Packmoji.Core.Diagnostics;
 using Packmoji.Core.Direct;
 using Packmoji.Core.Identity;
+using Packmoji.Core.Registry;
 using Packmoji.GitHub;
 
 namespace Packmoji.Cli
@@ -17,8 +18,12 @@ namespace Packmoji.Cli
     {
         private const string SiteVariable = "PACKMOJI_GITHUB";
         private const string ApiVariable = "PACKMOJI_GITHUB_API";
+        private const string RegistryVariable = "PACKMOJI_REGISTRY";
+        private const string DirectVariable = "PACKMOJI_DIRECT";
 
         private static readonly string[] TokenVariables = ["GITHUB_TOKEN", "GH_TOKEN"];
+
+        private IRegistryFiles? _registry;
 
         public required string WorkingDirectory { get; init; }
 
@@ -26,6 +31,26 @@ namespace Packmoji.Cli
         public required string HomeDirectory { get; init; }
 
         public required IReleaseHost Releases { get; init; }
+
+        /// <summary>
+        /// The registry packages are found in, when the environment names one. Null when it names
+        /// none, or says to ask GitHub itself: packages are then found among GitHub's releases, as
+        /// they were before there was a registry.
+        /// </summary>
+        public IRegistryFiles? Registry
+        {
+            get => _registry;
+            init => _registry = value;
+        }
+
+        /// <summary>This host with no registry: what a command is run on when it is told to ask GitHub itself.</summary>
+        internal PmjHost Direct()
+        {
+            // A copy of all of it, so that nothing a host is ever given can be left behind here.
+            var direct = (PmjHost)MemberwiseClone();
+            direct._registry = null;
+            return direct;
+        }
 
         public required TextWriter Out { get; init; }
 
@@ -69,7 +94,7 @@ namespace Packmoji.Cli
         public static PmjHost FromEnvironment(TextWriter output, TextWriter error) =>
             From(Environment.GetEnvironmentVariable, Directory.GetCurrentDirectory(), new HttpClient(), output, error);
 
-        /// <summary>The host that an environment describes: where the cache is kept, which GitHub is spoken to, and a token for its API.</summary>
+        /// <summary>The host that an environment describes: where the cache is kept, which GitHub is spoken to, a token for its API, and a registry if one is named.</summary>
         /// <param name="variable">Gives the value of an environment variable, or null when it is not set.</param>
         public static PmjHost From(Func<string, string?> variable, string workingDirectory, HttpClient http, TextWriter output, TextWriter error)
         {
@@ -80,6 +105,7 @@ namespace Packmoji.Cli
                 WorkingDirectory = workingDirectory,
                 HomeDirectory = string.IsNullOrEmpty(home) ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".packmoji") : home,
                 Releases = GitHub(variable, http),
+                Registry = RegistryFiles(variable, http),
                 Out = output,
                 Error = error,
                 Variable = variable,
@@ -94,8 +120,9 @@ namespace Packmoji.Cli
         private static IReleaseHost GitHub(Func<string, string?> variable, HttpClient http)
         {
             Diagnostic? problem = null;
-            var site = Address(variable, SiteVariable, ref problem);
-            var api = Address(variable, ApiVariable, ref problem);
+            var fix = $"set it to an address such as https://github.example.com, or unset it: without {SiteVariable} and {ApiVariable}, pmj speaks to github.com";
+            var site = Address(variable, SiteVariable, fix, ref problem);
+            var api = Address(variable, ApiVariable, fix, ref problem);
             if (problem is null && (site is null) != (api is null))
             {
                 var (set, unset) = site is null ? (ApiVariable, SiteVariable) : (SiteVariable, ApiVariable);
@@ -110,9 +137,41 @@ namespace Packmoji.Cli
             return problem is null ? new GitHubReleaseHost(http, site, api, token, $"pmj/{Version}") : new UnusableReleaseHost(problem);
         }
 
-        // Another address for GitHub or for its API: for a test of the native binary, or a GitHub of
-        // one's own. A variable that is set to nothing says nothing.
-        private static Uri? Address(Func<string, string?> variable, string name, ref Diagnostic? problem)
+        // The registry the environment names, or none. What the environment says and pmj cannot use
+        // is a registry that gives the problem to whatever first asks it for a file. It is never read
+        // as no registry: someone who names one so as to be held to it would then not be.
+        private static IRegistryFiles? RegistryFiles(Func<string, string?> variable, HttpClient http)
+        {
+            var direct = variable(DirectVariable)?.Trim();
+            if (direct == "1")
+            {
+                // Whatever registry is named, and so whether or not what names it can be used.
+                return null;
+            }
+
+            if (!string.IsNullOrEmpty(direct))
+            {
+                return new UnusableRegistry(new Diagnostic(
+                    DiagnosticCodes.ConfigInvalid,
+                    $"{DirectVariable} is set to something other than 1.",
+                    "set to 1, it has pmj find packages on GitHub itself, whatever registry is named; pmj does not guess what anything else was meant to say",
+                    "set it to 1, or unset it"));
+            }
+
+            Diagnostic? problem = null;
+            var address = Address(
+                variable,
+                RegistryVariable,
+                $"set it to the address that a registry's v1 is under, such as https://raw.githubusercontent.com/thatplatypus/Packmoji/registry, or unset it: without {RegistryVariable}, pmj finds packages on GitHub itself",
+                ref problem);
+            return problem is not null ? new UnusableRegistry(problem)
+                : address is null ? null
+                : new HttpRegistryFiles(http, address, $"pmj/{Version}");
+        }
+
+        // An address the environment gives: another one for GitHub or for its API, for a test of the
+        // native binary or a GitHub of one's own, or a registry's. A variable that is set to nothing says nothing.
+        private static Uri? Address(Func<string, string?> variable, string name, string fix, ref Diagnostic? problem)
         {
             var text = variable(name)?.Trim();
             if (string.IsNullOrEmpty(text))
@@ -135,7 +194,7 @@ namespace Packmoji.Cli
                 !web ? "it does not begin with http:// or https://"
                 : !read ? "it cannot be read as an address"
                 : "it holds something other than the name of a machine and a path: a name and a password, a query, or a fragment",
-                $"set it to an address such as https://github.example.com, or unset it: without {SiteVariable} and {ApiVariable}, pmj speaks to github.com");
+                fix);
             return null;
         }
 

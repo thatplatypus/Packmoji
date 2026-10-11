@@ -393,8 +393,8 @@ The codes that begin with `compiler.`, `build.`, `built.`, `packages.` and `run.
 | `project.unreadable` | A project's file could not be read or written, or a directory that a build writes into is a symbolic link |
 | `dependency.exists` | `pmj add` was given a package the manifest already has, and no requirement to change it to |
 | `dependency.not-found` | `pmj remove` or `pmj update` named a package the manifest does not have |
-| `package.not-found` | No release of a package is in any repository `pmj` looked in |
-| `version.none-released` | Every released version of a package is a pre-release, and none was asked for by name |
+| `package.not-found` | No release of a package is in any repository `pmj` looked in. Or, with a registry named, the registry has no file of the package |
+| `version.none-released` | Every released version of a package is a pre-release, and none was asked for by name. Or, in a registry, every version of it has been withdrawn or quarantined |
 | `release.invalid` | A release is there, and its archive is not that package at that version in that repository |
 | `archive.invalid` | An archive is not the bytes `pmj pack` writes, is over a limit, or holds two files that the disk it is unpacked on keeps as one |
 | `pack.nothing` | `pmj pack` would write an archive without the package's entry file, because no pattern of the manifest selects it |

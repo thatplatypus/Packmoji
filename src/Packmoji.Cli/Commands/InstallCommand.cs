@@ -35,7 +35,7 @@ namespace Packmoji.Cli.Commands
 
             return locked
                 ? reply.Stop(CommandDiagnostics.LockWouldChange(missing: project.Lockfile is null))
-                : await project.ResolveAsync(project.Manifest, project.Source(alsoLookIn.Value), said: null, json, cancellationToken);
+                : await project.ResolveAsync(project.Manifest, project.Finder(alsoLookIn.Value), said: null, json, cancellationToken);
         }
     }
 }

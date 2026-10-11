@@ -2,7 +2,7 @@
 
 The registry says which versions of which packages there are, and which bytes each one is. It is files, and nothing else: there is no server to ask, and nothing to keep running. A workflow looks at the releases of the repositories on a list, and writes what it finds to a branch of this repository.
 
-`pmj` does not read the registry yet. That comes next. Today `pmj` finds packages on GitHub itself: see [How a package is found](cli.md#how-a-package-is-found).
+`pmj` reads the registry when it is told where it is, with `PACKMOJI_REGISTRY`: see [With a registry](cli.md#with-a-registry). With nothing said, `pmj` finds packages on GitHub itself: see [How a package is found](cli.md#how-a-package-is-found).
 
 ## What it is for
 
@@ -264,7 +264,7 @@ dotnet run --project src/Packmoji.Indexer -c Release -- run --registry <director
 
 | Not yet | Comes with |
 |---|---|
-| `pmj` reading it | The next change to `pmj` |
+| `pmj` reading it with nothing said | Later. Until then it is named with `PACKMOJI_REGISTRY` |
 | Search, and a list of every package | `pmj search` and `pmj info` |
 | Withdrawing a version | A decision on how an author says so |
 | Verifying a build attestation | Publishing |

@@ -84,7 +84,7 @@ These were seen on 2026-10-11, and are what the design stands on.
 - **The registry cannot be asked why it refused a release.** The file of what was refused says, at the next run.
 - **Each run is two jobs in this repository's list of runs,** 24 times a day.
 - **GitHub turns the schedule off after 60 days in which nothing happens in the repository.** It is turned on again by hand.
-- **`pmj` does not read the registry yet.** Until it does, and until it reads one with nothing said, the address is the branch's own.
+- **`pmj` reads the registry only when it is told where it is:** record 0013. Until it reads one with nothing said, the address is the branch's own.
 - **Withdrawing a version is not decided.** A version whose release was deleted stays as it is, and a run says that the release is gone.
 - **A misled run can take a version's number.** What it adds is held to the rules and not to GitHub's list. A version it adds before any release carries it is quarantined when the real release comes, and a person's commit to the branch is what puts it right.
 - **The repositories take turns at what a run may download.** Whoever is listed could otherwise keep everyone after them waiting, by releasing enough.

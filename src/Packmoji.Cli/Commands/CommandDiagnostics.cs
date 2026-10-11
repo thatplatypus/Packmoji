@@ -43,6 +43,18 @@ namespace Packmoji.Cli.Commands
                 "this command reads what is locked, and chooses nothing itself",
                 $"run pmj install, which writes {LockfileReader.FileName}");
 
+        /// <summary>
+        /// For a command that was told where to look while a registry is named. A registry says where
+        /// each package lives, so a place that is named beside it could only be another, and then
+        /// whoever named the registry would not be held to it.
+        /// </summary>
+        public static Diagnostic RepositoryWithRegistry() =>
+            new(
+                DiagnosticCodes.RegistryRepository,
+                $"{RepositoryOption.Name} cannot be given while a registry is named.",
+                "the registry says where each package lives, and pmj looks nowhere else for one",
+                $"leave {RepositoryOption.Name} out; or give --direct as well, and pmj asks GitHub itself and asks the registry nothing");
+
         /// <summary>For a command that is forbidden to write the lockfile, and finds that it would have to.</summary>
         /// <param name="missing">Whether there is no lockfile at all, as against one the manifest has moved on from.</param>
         public static Diagnostic LockWouldChange(bool missing) =>

@@ -112,7 +112,7 @@ namespace Packmoji.Cli.Tests.Docs
                 new StringWriter(),
                 new StringWriter());
 
-            read.Order(StringComparer.Ordinal).ShouldBe(["GH_TOKEN", "GITHUB_TOKEN", "PACKMOJI_GITHUB", "PACKMOJI_GITHUB_API", "PACKMOJI_HOME"]);
+            read.Order(StringComparer.Ordinal).ShouldBe(["GH_TOKEN", "GITHUB_TOKEN", "PACKMOJI_DIRECT", "PACKMOJI_GITHUB", "PACKMOJI_GITHUB_API", "PACKMOJI_HOME", "PACKMOJI_REGISTRY"]);
             foreach (var variable in read)
             {
                 Guide("cli.md").ShouldContain($"`{variable}`");
@@ -213,6 +213,23 @@ namespace Packmoji.Cli.Tests.Docs
             lost.Status.ShouldBe(1);
             guide.ShouldContain(lost.Error.ReplaceLineEndings("\n").TrimEnd('\n'));
             ShouldShow(guide, await sandbox.RunAsync("add", "@thatplatypus/crypto", "--repository", "github.com/thatplatypus/grapevine"));
+        }
+
+        [Fact]
+        public async Task The_package_a_registry_does_not_have_is_shown_as_pmj_reports_it_with_the_address_the_guide_gives_the_registry()
+        {
+            const string registry = "https://raw.githubusercontent.com/thatplatypus/Packmoji/registry";
+            using var sandbox = Sandbox.WithGrapevine();
+            sandbox.Project("@you/site");
+            await sandbox.IndexAsync(Sandbox.Grapevine);
+            var guide = Guide("cli.md");
+
+            var run = await sandbox.RunAsync("add", "@thatplatypus/sockets_more");
+
+            run.Status.ShouldBe(1);
+            guide.ShouldContain("```sh\nexport PACKMOJI_REGISTRY=" + registry + "\n```");
+            guide.ShouldContain("$ pmj add @thatplatypus/sockets_more\n" + run.Error.ReplaceLineEndings("\n").Replace(FakeGitHub.RegistryAddress, registry).TrimEnd('\n') + "\n```");
+            Guide("registry.md").ShouldContain("\n" + registry + "/v1/packages/");
         }
 
         [Fact]

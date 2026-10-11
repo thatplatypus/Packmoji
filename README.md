@@ -14,10 +14,10 @@ Packmoji is being built one milestone at a time. What works today:
 - **Dependencies, with no registry.** `pmj add`, `remove`, `install` and `update` find packages on GitHub directly, as releases of their repositories, and lock the exact bytes. `pmj tree` shows what is locked, and `pmj verify` checks it again.
 - **Packing.** `pmj pack` writes the one file a release carries, the same bytes from the same files on every machine.
 - **Building.** `pmj build` compiles what a project depends on with the Emojicode compiler, C and C++ included, each package once for the whole machine, and then the project. `pmj run` builds an application and runs it.
-- **A registry, kept as files.** Every hour a workflow looks at the releases of the repositories on a list, and records each version on a branch of this repository: where it lives, which bytes it is, and what it needs. Nothing has to be kept running. `pmj` does not read it yet. [The registry](docs/registry.md) says what it holds and how a repository comes to be listed.
+- **A registry, kept as files.** Every hour a workflow looks at the releases of the repositories on a list, and records each version on a branch of this repository: where it lives, which bytes it is, and what it needs. Nothing has to be kept running. `pmj` reads it when `PACKMOJI_REGISTRY` says where it is, and then finds a package by its name, lists versions without GitHub's API, and holds what it downloads to what the registry recorded. [The registry](docs/registry.md) says what it holds and how a repository comes to be listed.
 - **One native binary.** `pmj` publishes with Native AOT and needs no .NET where it runs. A release carries it for Linux and Windows on x86-64 and for macOS on Apple silicon, each with its digest: [Getting pmj](docs/cli.md#getting-pmj). On Windows it manages packages and does not build.
 
-What does not work yet: `pmj test`, `pmj` reading the registry, `publish` and attestations, which follow.
+What does not work yet: `pmj test`, `pmj` reading the registry with nothing said, `publish` and attestations, which follow.
 
 ```sh
 pmj new @you/site

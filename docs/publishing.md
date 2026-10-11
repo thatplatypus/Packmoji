@@ -118,7 +118,7 @@ Look in `packmoji.lock` for the digest `pmj pack` printed. It is the same.
 - **A repository is listed by a pull request** that adds a line to `registry-repositories.txt`. [How a repository comes to be listed](registry.md#how-a-repository-comes-to-be-listed) says what the line is.
 - **A release of a listed repository is in the registry within the hour.** There is nothing to tell the registry.
 - **A release that is refused is written down, with why,** in the registry's file for the repository, under `v1/refused`. [Why a release is refused](registry.md#why-a-release-is-refused) has each reason and what to do about it.
-- **`pmj` does not read the registry yet,** so the check above is still how to see that a release can be used.
+- **`pmj` reads the registry only when it is told where it is,** so the check above is still how to see that a release can be used by everyone. With `PACKMOJI_REGISTRY` set, `pmj add` of the package says whether the registry has it.
 
 ## A release never changes
 
