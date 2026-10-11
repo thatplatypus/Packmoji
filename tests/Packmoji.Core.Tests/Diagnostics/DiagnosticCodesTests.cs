@@ -14,11 +14,16 @@ namespace Packmoji.Core.Tests.Diagnostics
             .ToArray();
 
         [Fact]
-        public void There_are_the_82_codes_of_the_six_designs() => Codes.Length.ShouldBe(82);
+        public void There_are_the_85_codes_of_the_six_designs() => Codes.Length.ShouldBe(85);
 
         [Fact]
-        public void The_code_for_a_file_of_a_registry_that_does_not_read_is_spelled_as_a_tool_matches_it() =>
+        public void The_four_codes_of_a_registry_are_spelled_as_a_tool_matches_them()
+        {
             DiagnosticCodes.RegistryInvalid.ShouldBe("registry.invalid");
+            DiagnosticCodes.RegistryUnreachable.ShouldBe("registry.unreachable");
+            DiagnosticCodes.RegistryMismatch.ShouldBe("registry.mismatch");
+            DiagnosticCodes.RegistryRepository.ShouldBe("registry.repository");
+        }
 
         [Fact]
         public void The_code_for_a_package_outside_the_allowed_scopes_is_spelled_as_a_tool_matches_it() =>

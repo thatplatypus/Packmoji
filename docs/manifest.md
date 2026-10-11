@@ -422,3 +422,6 @@ The codes that begin with `compiler.`, `build.`, `built.`, `packages.` and `run.
 | `run.failed` | The program was built and could not be started |
 | `scope.not-allowed` | A package that the project asks for, locks or comes to need is of a scope that `PACKMOJI_SCOPES` does not allow |
 | `registry.invalid` | A file of a registry breaks a rule of its format, or is not the file of what it was read as |
+| `registry.unreachable` | A file of the registry could not be had: the network failed, or the answer was neither the file nor that there is none |
+| `registry.mismatch` | What GitHub serves for a version is not what the registry recorded of it: other bytes, a manifest that says otherwise, or nothing at all |
+| `registry.repository` | `--repository` was given while a registry is named. The registry says where a package lives |

@@ -225,8 +225,11 @@ namespace Packmoji.Core.Direct
             }
         }
 
-        // Held to the one rule a release is taken by, and what the rule found wrong is said as pmj says it.
-        private static PublishedVersion Describe(PackageName name, SemanticVersion version, RepositoryRef repository, ReadOnlyMemory<byte> archive)
+        /// <summary>
+        /// The version that an archive is, held to the one rule a release is taken by. What the rule
+        /// found wrong is thrown, said as pmj says it.
+        /// </summary>
+        internal static PublishedVersion Describe(PackageName name, SemanticVersion version, RepositoryRef repository, ReadOnlyMemory<byte> archive)
         {
             var verdict = ReleaseRule.Judge(name, version, repository, archive);
             if (verdict.Taken)
