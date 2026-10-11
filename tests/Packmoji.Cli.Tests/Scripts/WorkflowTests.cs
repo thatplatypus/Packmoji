@@ -6,8 +6,9 @@ namespace Packmoji.Cli.Tests.Scripts
 {
     /// <summary>
     /// The workflows GitHub runs for this repository, held to a few rules that a reading of them
-    /// would otherwise have to hold: what they run is named by its commit, and only the one job
-    /// that makes a release may write to the repository, and only for a tag.
+    /// would otherwise have to hold: what they run is named by its commit, and only two jobs may
+    /// write to the repository. One makes a release, and only for a tag. The other commits the
+    /// registry, and reads nothing but what a job with no right to write has made.
     /// </summary>
     public sealed class WorkflowTests
     {
@@ -28,6 +29,7 @@ namespace Packmoji.Cli.Tests.Scripts
         [Theory]
         [InlineData("ci.yml")]
         [InlineData("release.yml")]
+        [InlineData("registry.yml")]
         public void Every_action_a_workflow_uses_is_named_by_its_commit_and_not_by_a_tag_that_can_move(string name)
         {
             var used = Regex.Matches(Workflow(name), @"^\s*(?:- )?uses:\s*(.+)$", RegexOptions.Multiline).Select(match => match.Groups[1].Value).ToList();
@@ -156,6 +158,99 @@ namespace Packmoji.Cli.Tests.Scripts
             releasing.ShouldContain("never from a run by hand");
             releasing.ShouldContain("gh run download");
             releasing.ShouldContain("git switch main && git pull");
+        }
+
+        // A schedule runs on the default branch alone, so nothing here can be started for another.
+        [Fact]
+        public void The_registry_is_kept_every_hour_when_its_list_changes_and_by_hand()
+        {
+            Workflow("registry.yml").ShouldContain(
+                "\non:\n  schedule:\n    # Every hour, and not on the hour, which is when GitHub's own queue is longest.\n    - cron: \"17 * * * *\"\n"
+                + "  push:\n    branches: [ \"main\" ]\n    paths: [ \"registry-repositories.txt\" ]\n  workflow_dispatch:\n\n");
+        }
+
+        [Fact]
+        public void One_run_keeps_the_registry_at_a_time_and_one_that_waits_is_not_stopped()
+        {
+            Workflow("registry.yml").ShouldContain("\nconcurrency:\n  group: registry\n  cancel-in-progress: false\n");
+        }
+
+        [Fact]
+        public void Only_the_job_that_commits_the_registry_may_write_and_the_job_that_reads_GitHub_may_not()
+        {
+            var registry = Workflow("registry.yml");
+
+            registry.ShouldContain("\npermissions:\n  contents: read\n");
+            Regex.Matches(registry, @"^\s*[a-z-]+: write$", RegexOptions.Multiline).Select(match => match.Value.Trim()).ShouldBe(["contents: write"]);
+            Job(registry, "write").ShouldContain("    permissions:\n      contents: write\n");
+            Job(registry, "read").ShouldNotContain("permissions:");
+            Job(registry, "read").ShouldContain("      with:\n        persist-credentials: false\n");
+        }
+
+        // The token that commits the registry is a token for the repository pmj is released from. So
+        // what reads GitHub, and archives that strangers made, is in the job that holds no such token.
+        [Fact]
+        public void What_reads_strangers_archives_runs_where_nothing_can_be_written_and_what_writes_reads_only_what_that_made()
+        {
+            var registry = Workflow("registry.yml");
+            var read = Job(registry, "read");
+            var write = Job(registry, "write");
+
+            read.ShouldContain("dotnet run --project src/Packmoji.Indexer -c Release -- run --registry \"$RUNNER_TEMP/made/registry\" --repositories registry-repositories.txt");
+            read.ShouldContain("        GITHUB_TOKEN: ${{ github.token }}\n");
+            write.ShouldContain("    needs: read\n");
+            write.ShouldNotContain("-- run ");
+            write.ShouldNotContain("github.token");
+            write.ShouldNotContain("GITHUB_TOKEN");
+            Regex.Matches(registry, @"Packmoji\.Indexer -c Release -- (\S+)").Select(match => match.Groups[1].Value).ShouldBe(["run", "check"]);
+        }
+
+        [Fact]
+        public void The_job_that_writes_takes_the_registry_itself_checks_the_runs_work_against_it_and_commits_what_it_checked()
+        {
+            var write = Job(Workflow("registry.yml"), "write");
+            var taken = write.IndexOf("scripts/registry-tree.sh \"$RUNNER_TEMP/before\" \"$RUNNER_TEMP/commit\"", StringComparison.Ordinal);
+            var fetched = write.IndexOf("actions/download-artifact@", StringComparison.Ordinal);
+            var checkedAt = write.IndexOf("-- check --before \"$RUNNER_TEMP/before\" --after \"$RUNNER_TEMP/made/registry\" --message \"$RUNNER_TEMP/words\"", StringComparison.Ordinal);
+            var committed = write.IndexOf("scripts/registry-commit.sh \"$RUNNER_TEMP/made/registry\" \"$RUNNER_TEMP/words\" \"$RUNNER_TEMP/commit\"", StringComparison.Ordinal);
+
+            taken.ShouldBeGreaterThan(0);
+            fetched.ShouldBeGreaterThan(taken);
+            checkedAt.ShouldBeGreaterThan(fetched);
+            committed.ShouldBeGreaterThan(checkedAt);
+            write.ShouldContain("        path: ${{ runner.temp }}/made\n");
+        }
+
+        // A step that may fail and be passed over would let a check that said no be followed by a commit.
+        [Fact]
+        public void No_step_that_keeps_the_registry_may_fail_and_be_passed_over_and_none_is_run_only_sometimes()
+        {
+            var registry = Workflow("registry.yml");
+
+            registry.ShouldNotContain("continue-on-error");
+            registry.ShouldNotContain("\n    if:");
+            registry.ShouldNotContain("\n      if:");
+            registry.ShouldNotContain("|| true");
+        }
+
+        [Fact]
+        public void The_branch_the_registry_is_kept_on_is_named_once_for_everything_that_runs()
+        {
+            var registry = Workflow("registry.yml");
+
+            registry.ShouldContain("\nenv:\n  REGISTRY_BRANCH: registry\n");
+            Regex.Matches(registry, "REGISTRY_BRANCH").Count.ShouldBe(1);
+            foreach (var script in new[] { "registry-tree.sh", "registry-commit.sh" })
+            {
+                File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "scripts", script)).ShouldContain("branch=\"${REGISTRY_BRANCH:-registry}\"");
+            }
+        }
+
+        [Fact]
+        public void The_list_the_workflow_is_started_by_is_the_list_the_indexer_reads()
+        {
+            File.Exists(Path.Combine(AppContext.BaseDirectory, "registry-repositories.txt")).ShouldBeTrue();
+            Regex.Matches(Workflow("registry.yml"), @"registry-repositories\.txt").Count.ShouldBe(3);
         }
 
         [Fact]

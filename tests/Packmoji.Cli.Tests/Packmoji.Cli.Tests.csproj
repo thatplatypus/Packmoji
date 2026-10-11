@@ -44,6 +44,7 @@
     <None Include="..\..\scripts\release-tag.sh" Link="scripts\release-tag.sh" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\scripts\release-tag.sh')" />
     <None Include="..\..\scripts\registry-tree.sh" Link="scripts\registry-tree.sh" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\scripts\registry-commit.sh" Link="scripts\registry-commit.sh" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\registry-repositories.txt" Link="registry-repositories.txt" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\Directory.Build.props" Link="Directory.Build.props" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\.github\workflows\*.yml" Link="workflows\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
