@@ -103,9 +103,18 @@ jobs:
 
     # It is read as data, by the registry's own reader, and none of it is run. A registry that
     # holds nothing is no directory at all, so one is made for it.
+    #
+    # What the check prints repeats what the first job's files say, and the runner takes a line of
+    # a step's output for a command to itself when it begins "::" or holds "##[". So commands are
+    # stopped for as long as the check prints, with a word that is made here and that the first
+    # job never saw. The check is the last thing run, so the step ends as the check ended.
     - name: Hold it to the registry as it stood
       run: |
         mkdir -p "$RUNNER_TEMP/made/registry"
+        marker="$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
+        [ "${#marker}" -eq 32 ]
+        echo "::stop-commands::$marker"
+        trap 'echo "::$marker::"' EXIT
         dotnet run --project src/Packmoji.Indexer -c Release -- check --before "$RUNNER_TEMP/before" --after "$RUNNER_TEMP/made/registry" --message "$RUNNER_TEMP/words"
 
     # The commit follows the one the registry was taken from above, and is never forced.

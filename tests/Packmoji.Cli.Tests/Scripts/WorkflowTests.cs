@@ -230,7 +230,34 @@ namespace Packmoji.Cli.Tests.Scripts
             registry.ShouldNotContain("continue-on-error");
             registry.ShouldNotContain("\n    if:");
             registry.ShouldNotContain("\n      if:");
-            registry.ShouldNotContain("|| true");
+            registry.ShouldNotContain("||");
+        }
+
+        // What the check prints repeats what the first job's files say, and the runner takes a line
+        // of a step's output for a command to itself when it begins "::" or holds "##[". The first
+        // job is the one that may have been misled, so the job that may write stops commands for as
+        // long as the check prints, with a word made there, which the first job never saw.
+        [Fact]
+        public void The_job_that_writes_stops_the_runners_commands_for_as_long_as_the_check_prints()
+        {
+            var write = Job(Workflow("registry.yml"), "write");
+            string[] inOrder =
+            [
+                "        marker=\"$(od -An -N16 -tx1 /dev/urandom | tr -d ' \\n')\"\n",
+                "        [ \"${#marker}\" -eq 32 ]\n",
+                "        echo \"::stop-commands::$marker\"\n",
+                "        trap 'echo \"::$marker::\"' EXIT\n",
+                "        dotnet run --project src/Packmoji.Indexer -c Release -- check --before \"$RUNNER_TEMP/before\" --after \"$RUNNER_TEMP/made/registry\" --message \"$RUNNER_TEMP/words\"\n",
+            ];
+
+            var at = inOrder.Select(line => write.IndexOf(line, StringComparison.Ordinal)).ToList();
+
+            at.ShouldAllBe(index => index > 0);
+            at.ShouldBe(at.Order().ToList(), "each line follows the one before it");
+
+            // The check is the last thing the step runs, so the step ends as the check ended.
+            write[(at[^1] + inOrder[^1].Length)..].TrimStart('\n').ShouldStartWith("    # The commit follows");
+            Regex.Matches(Workflow("registry.yml"), "stop-commands").Count.ShouldBe(1);
         }
 
         [Fact]
