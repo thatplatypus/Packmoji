@@ -38,6 +38,7 @@ namespace Packmoji.Core.Registry
             var diagnostics = new DiagnosticList();
             var repositories = new List<RepositoryRef>();
             var lines = new Dictionary<string, int>(StringComparer.Ordinal);
+            string? greatest = null;
             var number = 0;
             foreach (var raw in text.Split('\n'))
             {
@@ -67,15 +68,23 @@ namespace Packmoji.Core.Registry
                     continue;
                 }
 
-                // Held against every line before it, so that one line out of place is one problem and not one for each line after it.
-                if (repositories.Select(earlier => earlier.ToString()).FirstOrDefault(earlier => string.CompareOrdinal(earlier, written) > 0) is { } later)
+                // Held against every line before it, so that one line out of place is one problem
+                // and not one for each line after it. The lines before are looked through only for a
+                // line that is out of place, which says what it should come before.
+                if (greatest is not null && string.CompareOrdinal(greatest, written) > 0)
                 {
+                    var later = repositories.Select(earlier => earlier.ToString()).First(earlier => string.CompareOrdinal(earlier, written) > 0);
                     diagnostics.Add(new Diagnostic(
                         DiagnosticCodes.RegistryInvalid,
                         $"{written} is out of order.",
                         "the list is kept in order, so that a line added to it has one place to go",
                         $"move the line to before {later}",
                         here));
+                }
+
+                else
+                {
+                    greatest = written;
                 }
 
                 lines.Add(written, number);

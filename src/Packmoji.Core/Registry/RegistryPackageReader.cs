@@ -190,7 +190,7 @@ namespace Packmoji.Core.Registry
                 published.Value,
                 indexed.Value,
                 dependencies,
-                status == VersionStatus.Quarantined ? quarantined : null);
+                quarantined);
         }
 
         private static VersionStatus? ReadStatus(JsonItem? item, DiagnosticList diagnostics)

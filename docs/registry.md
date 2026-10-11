@@ -179,6 +179,7 @@ A release that is no such claim is passed over, and nothing is said of it. A rep
 | `release.invalid` | the manifest in its archive says that the package lives in `<another repository>` | Give `package.repository` in the manifest, or release where it says |
 | `release.invalid` | this version is already in the registry, from `<a repository>` | A version is one thing for ever. Release the next version |
 | `release.invalid` | what GitHub serves for it does not have the digest that GitHub lists for it | Nothing: it is looked at again when GitHub's list changes |
+| `release.invalid` | what would be recorded of it is more than the file of its package may hold | A package's file is at most 4 MiB. One with that many versions, or a version that needs that much, has outgrown it |
 | `name.reserved` | the name `<name>` is one of the compiler's own packages | Name the package something else |
 
 A reason repeats nothing from inside an archive but a name, a version or a repository that was read and found well formed. To see everything that is wrong with a release, ask `pmj` itself: `pmj add @owner/name@version --repository github.com/owner/repo`.

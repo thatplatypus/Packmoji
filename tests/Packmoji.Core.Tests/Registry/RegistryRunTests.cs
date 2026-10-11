@@ -1,3 +1,4 @@
+using System.Text;
 using Packmoji.Core.Archives;
 using Packmoji.Core.Diagnostics;
 using Packmoji.Core.Identity;
@@ -226,6 +227,57 @@ namespace Packmoji.Core.Tests.Registry
 
             (await Run(host)).After.Package(Crypto).ShouldNotBeNull();
         }
+
+        [Fact]
+        public async Task The_size_that_is_recorded_is_the_files_own_and_not_what_the_list_said()
+        {
+            var host = new ListedReleases().Package(G, "@thatplatypus/crypto", "1.0.0").Change(G, "crypto-v1.0.0", release => release.ListedSize = 7);
+
+            var result = await Run(host);
+
+            Only(result.After, "@thatplatypus/crypto").Size.ShouldBe(host.Find(G, "crypto-v1.0.0").Bytes.Length);
+        }
+
+        // A file of the registry may be so large and no larger, and its own reader refuses one that is.
+        // So a version that would make its package's file too large is not recorded: a registry that
+        // could not be read again would stop every run after it, for every package.
+        [Fact]
+        public async Task A_version_whose_record_would_make_its_packages_file_too_large_is_refused_and_what_was_recorded_stays()
+        {
+            var host = new ListedReleases()
+                .Package(G, "@thatplatypus/crypto", "1.0.0")
+                .Package(G, "@thatplatypus/crypto", "1.1.0", "@thatplatypus/deflate@0.1", "@thatplatypus/grapevine@0.1")
+                .Package(G, "@thatplatypus/deflate", "0.1.0");
+            var one = Encoding.UTF8.GetByteCount(RegistryPackageWriter.Write((await Run(new ListedReleases().Package(G, "@thatplatypus/crypto", "1.0.0"))).After.Package(Crypto)!));
+            var limits = RegistryLimits.Default with { MaxFileBytes = one + 100 };
+
+            var result = await Run(host, limits: limits);
+
+            result.After.Package(Crypto).ShouldNotBeNull().Versions.Select(version => version.Version.ToString()).ShouldBe(["1.0.0"]);
+            result.After.Package(Sample.Name("@thatplatypus/deflate")).ShouldNotBeNull();
+            var refused = result.After.RefusedIn(Sample.Repository(G)).ShouldNotBeNull().Releases.ShouldHaveSingleItem();
+            refused.Tag.ShouldBe("crypto-v1.1.0");
+            refused.Code.ShouldBe(DiagnosticCodes.ReleaseInvalid);
+            refused.Why.ShouldBe("what would be recorded of it is more than the file of its package may hold");
+            foreach (var text in result.After.Files().Values)
+            {
+                Encoding.UTF8.GetByteCount(text).ShouldBeLessThanOrEqualTo(limits.MaxFileBytes);
+            }
+        }
+
+        [Fact]
+        public async Task A_packages_file_of_exactly_the_most_it_may_be_is_written()
+        {
+            var host = new ListedReleases().Package(G, "@thatplatypus/crypto", "1.0.0");
+            var one = Encoding.UTF8.GetByteCount(RegistryPackageWriter.Write((await Run(host)).After.Package(Crypto)!));
+
+            (await Run(host, limits: RegistryLimits.Default with { MaxFileBytes = one })).After.Package(Crypto).ShouldNotBeNull();
+            (await Run(host, limits: RegistryLimits.Default with { MaxFileBytes = one - 1 })).After.Package(Crypto).ShouldBeNull();
+        }
+
+        [Fact]
+        public void A_file_of_the_registry_is_written_no_larger_than_its_reader_reads() =>
+            RegistryLimits.Default.MaxFileBytes.ShouldBe(RegistryPackageReader.MaxBytes);
 
         [Fact]
         public async Task A_file_that_proves_to_be_over_the_limit_when_it_is_downloaded_is_refused_as_one_the_list_said_was()
