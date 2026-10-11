@@ -50,6 +50,22 @@ namespace Packmoji.Core.Tests.Registry
         }
 
         [Fact]
+        public void A_new_package_that_holds_no_version_is_refused()
+        {
+            ShouldBreak(With("@thatplatypus/hollow")).ShouldBe("the file of @thatplatypus/hollow is new and holds no version, and a package is in the registry by a version of it");
+        }
+
+        [Fact]
+        public void A_package_that_stood_with_no_version_as_only_a_person_could_have_left_it_is_not_the_runs_doing()
+        {
+            var before = new RegistryState([.. Before.Packages, Package("@thatplatypus/hollow")], []);
+            var after = new RegistryState([.. before.Packages.Where(package => package.Name != Sample.Name("@thatplatypus/crypto")), Package("@thatplatypus/crypto", Version("1.0.0"), Version("1.1.0"), Version("1.2.0"))], []);
+
+            ShouldAllow(before, before).ShouldBeEmpty();
+            ShouldAllow(before, after).ShouldHaveSingleItem().ShouldStartWith("added @thatplatypus/crypto 1.2.0 ");
+        }
+
+        [Fact]
         public void A_new_version_and_a_new_package_are_allowed_and_each_is_said_with_its_digest_and_its_source()
         {
             var after = new RegistryState(

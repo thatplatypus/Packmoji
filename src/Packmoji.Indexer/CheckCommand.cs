@@ -12,6 +12,8 @@ namespace Packmoji.Indexer
     {
         private const string TitlePrefix = "chore(registry): ";
 
+        private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
+
         /// <param name="message">Where the words of a commit are written, when they are wanted. The file is left empty when there is nothing to commit, or nothing that may be.</param>
         public static int Run(IndexerHost host, string before, string after, string? message)
         {
@@ -34,9 +36,10 @@ namespace Packmoji.Indexer
             }
 
             var result = RegistryCheck.Between(stood.State, made.State);
-            if (!result.Allowed)
+            var broken = NotAsWritten(stood, made.State, made.Bytes).Concat(result.Broken).ToList();
+            if (broken.Count > 0)
             {
-                return Stop(host, "The registry may not become what the run made of it.", result.Broken);
+                return Stop(host, "The registry may not become what the run made of it.", broken);
             }
 
             if (result.Changes.Count == 0)
@@ -58,10 +61,28 @@ namespace Packmoji.Indexer
                     words.Append(change).Append('\n');
                 }
 
-                File.WriteAllBytes(message, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false).GetBytes(words.ToString()));
+                File.WriteAllBytes(message, Utf8.GetBytes(words.ToString()));
             }
 
             return ExitStatus.Success;
+        }
+
+        // A run writes a file in the one form the registry is written in, and leaves every other
+        // file as it found it. So each file of what a run made is, to the byte, either the file that
+        // stood or what the registry writes of what the file holds. A reader passes over a key it
+        // does not know, and so a file that is neither holds something no reader shows: a key that a
+        // later reader might give a meaning to, or text that only someone who opens the file sees.
+        private static IEnumerable<string> NotAsWritten(RegistryRead stood, RegistryState made, IReadOnlyDictionary<string, byte[]> bytes)
+        {
+            var written = made.Files();
+            foreach (var (path, file) in bytes.OrderBy(read => read.Key, StringComparer.Ordinal))
+            {
+                var asItStood = stood.Bytes.TryGetValue(path, out var was) && was.AsSpan().SequenceEqual(file);
+                if (!asItStood && !(written.TryGetValue(path, out var text) && Utf8.GetBytes(text).AsSpan().SequenceEqual(file)))
+                {
+                    yield return $"{path} is not written as the registry writes it: to the byte, it is neither as it stood nor what the registry writes of what it holds.";
+                }
+            }
         }
 
         private static int Stop(IndexerHost host, string what, IEnumerable<string> problems)

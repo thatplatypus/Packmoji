@@ -37,6 +37,12 @@ namespace Packmoji.Core.Registry
                     continue;
                 }
 
+                // A run writes a package's file when it records a version of it, and at no other time.
+                if (was is null && now.Versions.Count == 0)
+                {
+                    broken.Add($"the file of {name} is new and holds no version, and a package is in the registry by a version of it");
+                }
+
                 foreach (var version in (was?.Versions ?? []).Concat(now.Versions).Select(held => held.Version).Distinct().Order())
                 {
                     var subject = $"{name} {version}";

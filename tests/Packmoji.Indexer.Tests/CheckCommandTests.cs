@@ -123,6 +123,116 @@ namespace Packmoji.Indexer.Tests
             File.ReadAllText(Message).ShouldBeEmpty();
         }
 
+        // A reader passes over a key it does not know, so that an older pmj can read a newer registry.
+        // What commits a run's work must not: whatever a misled run wrote beside what is read would
+        // stand in the registry, for a later reader to give a meaning to.
+        [Theory]
+        [InlineData("a key the registry does not write")]
+        [InlineData("a byte order mark")]
+        [InlineData("lines after its end")]
+        [InlineData("space where the registry writes none")]
+        public async Task A_file_a_run_changed_that_is_not_to_the_byte_what_the_registry_writes_of_it_is_refused(string holds)
+        {
+            var (before, after) = await BegunAsync();
+            _desk.GitHub.Package(G, "@thatplatypus/deflate", "0.1.0");
+            await _desk.IndexAsync();
+            const string path = "v1/packages/thatplatypus/crypto.json";
+            var written = Desk.Read(after, path);
+            var changed = holds switch
+            {
+                "a key the registry does not write" => written.Replace("  \"name\": ", "  \"attestation\": \"what a later reader may come to know\",\n  \"name\": "),
+                "a byte order mark" => "\uFEFF" + written,
+                "lines after its end" => written + "\n\n",
+                _ => written.Replace("  \"name\": ", "  \"name\":  "),
+            };
+            changed.ShouldNotBe(written);
+            Desk.Put(after, path, changed);
+            File.WriteAllText(Message, "left from another time");
+
+            var status = await CheckAsync(before, after);
+
+            status.ShouldBe(1);
+            _desk.Error.ShouldBe(
+                """
+                The registry may not become what the run made of it.
+                  v1/packages/thatplatypus/crypto.json is not written as the registry writes it: to the byte, it is neither as it stood nor what the registry writes of what it holds.
+
+                """.ReplaceLineEndings("\n"));
+            _desk.Out.ShouldBeEmpty();
+            File.ReadAllText(Message).ShouldBeEmpty();
+        }
+
+        [Fact]
+        public async Task A_new_file_that_is_not_written_as_the_registry_writes_it_is_refused_though_what_it_holds_may_be_added()
+        {
+            var (before, after) = await BegunAsync();
+            _desk.GitHub.Package(G, "@thatplatypus/deflate", "0.1.0");
+            await _desk.IndexAsync();
+            const string path = "v1/packages/thatplatypus/deflate.json";
+            Desk.Put(after, path, Desk.Read(after, path).Replace("  \"name\": ", "  \"planted\": true,\n  \"name\": "));
+
+            var status = await CheckAsync(before, after);
+
+            status.ShouldBe(1);
+            _desk.Error.ShouldContain("  v1/packages/thatplatypus/deflate.json is not written as the registry writes it: ");
+            File.ReadAllText(Message).ShouldBeEmpty();
+        }
+
+        [Fact]
+        public async Task A_file_of_what_was_refused_is_held_to_the_byte_as_a_packages_is()
+        {
+            var (before, after) = await BegunAsync();
+            _desk.GitHub.Release(G, "json-v1.0.0", "json-1.0.0.pmj.tar.gz", [1, 2, 3]);
+            await _desk.IndexAsync();
+            const string path = "v1/refused/thatplatypus/grapevine.json";
+            Desk.Put(after, path, Desk.Read(after, path) + " ");
+
+            var status = await CheckAsync(before, after);
+
+            status.ShouldBe(1);
+            _desk.Error.ShouldContain("  v1/refused/thatplatypus/grapevine.json is not written as the registry writes it: ");
+        }
+
+        // A person's own commit to the registry is not held: only what a run did to it is. A run
+        // leaves a file whose package it did not change exactly as it found it, whoever wrote it.
+        [Fact]
+        public async Task A_file_that_a_run_left_as_it_stood_is_not_held_to_how_the_registry_writes()
+        {
+            var (before, after) = await BegunAsync();
+            const string path = "v1/packages/thatplatypus/crypto.json";
+            var byHand = Desk.Read(after, path).Replace("  \"name\": ", "  \"note\": \"a person wrote this\",\n  \"name\":   ");
+            Desk.Put(before, path, byHand);
+            Desk.Put(after, path, byHand);
+            _desk.GitHub.Package(G, "@thatplatypus/deflate", "0.1.0");
+            await _desk.IndexAsync();
+
+            var status = await CheckAsync(before, after);
+
+            _desk.Error.ShouldBeEmpty();
+            status.ShouldBe(0);
+            _desk.Out.ShouldStartWith("added @thatplatypus/deflate 0.1.0 from ");
+            Desk.Read(after, path).ShouldBe(byHand);
+        }
+
+        [Fact]
+        public async Task A_new_file_of_a_package_that_holds_no_version_is_refused_for_a_run_never_writes_one()
+        {
+            var (before, after) = await BegunAsync();
+            Packmoji.Core.Identity.PackageName.TryParse("@thatplatypus/hollow", out var hollow, out _).ShouldBeTrue();
+            Desk.Put(after, "v1/packages/thatplatypus/hollow.json", Packmoji.Core.Registry.RegistryPackageWriter.Write(new Packmoji.Core.Registry.RegistryPackage(hollow!, [])));
+
+            var status = await CheckAsync(before, after);
+
+            status.ShouldBe(1);
+            _desk.Error.ShouldBe(
+                """
+                The registry may not become what the run made of it.
+                  the file of @thatplatypus/hollow is new and holds no version, and a package is in the registry by a version of it
+
+                """.ReplaceLineEndings("\n"));
+            File.ReadAllText(Message).ShouldBeEmpty();
+        }
+
         // What a run made may be a stranger's work by way of a run that was misled. A file of any
         // size could be among it, so one that is too large is refused by its length, before it is read.
         [Fact]

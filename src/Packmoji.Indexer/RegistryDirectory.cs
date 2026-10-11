@@ -20,12 +20,13 @@ namespace Packmoji.Indexer
             var packages = new List<RegistryPackage>();
             var refused = new List<RefusedReleases>();
             var problems = new List<string>();
+            var read = new Dictionary<string, byte[]>(StringComparer.Ordinal);
             if (Directory.Exists(directory))
             {
-                Walk(directory, "", packages, refused, problems);
+                Walk(directory, "", packages, refused, problems, read);
             }
 
-            return problems.Count > 0 ? new RegistryRead(null, problems) : new RegistryRead(new RegistryState(packages, refused), []);
+            return problems.Count > 0 ? new RegistryRead(null, problems, read) : new RegistryRead(new RegistryState(packages, refused), [], read);
         }
 
         /// <summary>
@@ -55,7 +56,7 @@ namespace Packmoji.Indexer
         private static string Local(string directory, string path) => Path.Combine(directory, path.Replace('/', Path.DirectorySeparatorChar));
 
         // In order of name at every level, so that what is wrong is said in the same order on every machine.
-        private static void Walk(string directory, string under, List<RegistryPackage> packages, List<RefusedReleases> refused, List<string> problems)
+        private static void Walk(string directory, string under, List<RegistryPackage> packages, List<RefusedReleases> refused, List<string> problems, Dictionary<string, byte[]> read)
         {
             foreach (var entry in Directory.EnumerateFileSystemEntries(directory).Order(StringComparer.Ordinal))
             {
@@ -67,18 +68,18 @@ namespace Packmoji.Indexer
                 }
                 else if (attributes.HasFlag(FileAttributes.Directory))
                 {
-                    Walk(entry, path + "/", packages, refused, problems);
+                    Walk(entry, path + "/", packages, refused, problems, read);
                 }
                 else if (RegistryPaths.TryParsePackage(path, out var name))
                 {
-                    if (Bytes(entry, path, problems) is { } bytes && Taken(RegistryPackageReader.Read(bytes, name, path), problems) is { } package)
+                    if (Bytes(entry, path, problems, read) is { } bytes && Taken(RegistryPackageReader.Read(bytes, name, path), problems) is { } package)
                     {
                         packages.Add(package);
                     }
                 }
                 else if (RegistryPaths.TryParseRefused(path, out var repository))
                 {
-                    if (Bytes(entry, path, problems) is { } bytes && Taken(RefusedReleasesReader.Read(bytes, repository, path), problems) is { } file)
+                    if (Bytes(entry, path, problems, read) is { } bytes && Taken(RefusedReleasesReader.Read(bytes, repository, path), problems) is { } file)
                     {
                         refused.Add(file);
                     }
@@ -91,7 +92,7 @@ namespace Packmoji.Indexer
         }
 
         // A file that is too large is not read at all: it is refused by its length.
-        private static byte[]? Bytes(string file, string path, List<string> problems)
+        private static byte[]? Bytes(string file, string path, List<string> problems, Dictionary<string, byte[]> read)
         {
             try
             {
@@ -101,7 +102,7 @@ namespace Packmoji.Indexer
                     return null;
                 }
 
-                return File.ReadAllBytes(file);
+                return read[path] = File.ReadAllBytes(file);
             }
             catch (Exception failure) when (failure is IOException or UnauthorizedAccessException)
             {
