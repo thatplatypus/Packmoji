@@ -2,6 +2,7 @@ using Packmoji.Core.Archives;
 using Packmoji.Core.Diagnostics;
 using Packmoji.Core.Direct;
 using Packmoji.Core.Identity;
+using Packmoji.Core.Lockfiles;
 
 namespace Packmoji.Core.Tests.TestSupport
 {
@@ -76,7 +77,10 @@ namespace Packmoji.Core.Tests.TestSupport
             Listings.Add(repository.ToString());
             IReadOnlyList<ReleaseInfo> releases = _releases
                 .Where(release => release.Key.Repository == repository.ToString())
-                .Select(release => new ReleaseInfo(release.Key.Tag, release.Value.Prerelease, release.Value.Assets.Keys.ToList()))
+                .Select(release => new ReleaseInfo(
+                    release.Key.Tag,
+                    release.Value.Prerelease,
+                    release.Value.Assets.Select(asset => new ReleaseFile(asset.Key, asset.Value.Length, Sha256Digest.Of(asset.Value), IsUploaded: true)).ToList()))
                 .ToList();
             return Task.FromResult(releases);
         }

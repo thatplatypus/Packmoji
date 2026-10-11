@@ -5,6 +5,7 @@ using System.Text.Json;
 using Packmoji.Core.Diagnostics;
 using Packmoji.Core.Direct;
 using Packmoji.Core.Identity;
+using Packmoji.Core.Lockfiles;
 
 namespace Packmoji.GitHub
 {
@@ -260,7 +261,7 @@ namespace Packmoji.GitHub
                         throw NotUnderstood(what);
                     }
 
-                    var names = new List<string>();
+                    var files = new List<ReleaseFile>();
                     foreach (var asset in assets.EnumerateArray())
                     {
                         if (asset.ValueKind != JsonValueKind.Object || !asset.TryGetProperty("name", out var name) || name.ValueKind != JsonValueKind.String)
@@ -268,13 +269,17 @@ namespace Packmoji.GitHub
                             throw NotUnderstood(what);
                         }
 
-                        names.Add(name.GetString()!);
+                        files.Add(new ReleaseFile(name.GetString()!, Size(asset), Digest(asset), Says(asset, "state", "uploaded")));
                     }
 
                     // A draft is not published. GitHub lists one only to those who may write to the repository.
                     if (!IsTrue(release, "draft"))
                     {
-                        published.Add(new ReleaseInfo(tag.GetString()!, IsTrue(release, "prerelease"), names));
+                        published.Add(new ReleaseInfo(tag.GetString()!, IsTrue(release, "prerelease"), files)
+                        {
+                            Published = Time(release, "published_at"),
+                            IsImmutable = IsTrue(release, "immutable"),
+                        });
                     }
                 }
 
@@ -289,6 +294,35 @@ namespace Packmoji.GitHub
         }
 
         private static bool IsTrue(JsonElement release, string property) => release.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.True;
+
+        // What follows is what GitHub says of a release and of each file beyond its name. Finding a
+        // package needs none of it, so what is missing, or is said in a way this does not know, is
+        // not known, and the list is still a list.
+        private static bool Says(JsonElement item, string property, string text) =>
+            item.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String && value.ValueEquals(text);
+
+        private static long Size(JsonElement asset) =>
+            asset.TryGetProperty("size", out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var size) && size > 0 ? size : 0;
+
+        // "sha256:" and the digest, which GitHub takes of a file when it is uploaded.
+        private static Sha256Digest? Digest(JsonElement asset)
+        {
+            const string Prefix = "sha256:";
+            return asset.TryGetProperty("digest", out var value)
+                && value.ValueKind == JsonValueKind.String
+                && value.GetString() is { } text
+                && text.StartsWith(Prefix, StringComparison.Ordinal)
+                && Sha256Digest.TryParse(text[Prefix.Length..], out var digest, out _)
+                    ? digest
+                    : null;
+        }
+
+        private static DateTimeOffset? Time(JsonElement release, string property) =>
+            release.TryGetProperty(property, out var value)
+            && value.ValueKind == JsonValueKind.String
+            && DateTimeOffset.TryParseExact(value.GetString(), "yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var time)
+                ? time
+                : null;
 
         // GitHub answers 403 or 429 when the limit is reached, and says so in its headers.
         private static bool IsLimit(HttpResponseMessage response) =>
