@@ -10,6 +10,11 @@ namespace Packmoji.Indexer
     /// work, so a file that is not one of the two kinds at its own path, and a link, stop the read,
     /// and a link is never followed.
     /// </summary>
+    /// <remarks>
+    /// A name is whatever made the file chose, and what stops a read is printed. So a name is said
+    /// only when it is made of the characters a registry's own paths are made of: every path that is
+    /// printed is then letters and digits of ASCII, hyphens, underscores, full stops and slashes.
+    /// </remarks>
     internal static class RegistryDirectory
     {
         private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
@@ -55,10 +60,25 @@ namespace Packmoji.Indexer
 
         private static string Local(string directory, string path) => Path.Combine(directory, path.Replace('/', Path.DirectorySeparatorChar));
 
+        // Whether a name is made of what the names in a registry's paths are made of. It need not be
+        // a name a registry has: one that is not is refused by name, and this is what lets it be named.
+        private static bool IsPlain(string name) =>
+            name.Length is > 0 and <= 255 && name.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_' or '.');
+
         // In order of name at every level, so that what is wrong is said in the same order on every machine.
         private static void Walk(string directory, string under, List<RegistryPackage> packages, List<RefusedReleases> refused, List<string> problems, Dictionary<string, byte[]> read)
         {
-            foreach (var entry in Directory.EnumerateFileSystemEntries(directory).Order(StringComparer.Ordinal))
+            var entries = Directory.EnumerateFileSystemEntries(directory).Order(StringComparer.Ordinal).ToList();
+
+            // Counted, and not shown. Nothing under such a name is read, so every path that is
+            // printed is made of names that were held to this.
+            var unshown = entries.RemoveAll(entry => !IsPlain(Path.GetFileName(entry)));
+            if (unshown > 0)
+            {
+                problems.Add($"{(under.Length == 0 ? "The directory" : under)} holds {Said.Count(unshown, "thing")} whose name could not be part of a registry's path. Such a name is not repeated here, for it may not be fit to print.");
+            }
+
+            foreach (var entry in entries)
             {
                 var path = under + Path.GetFileName(entry);
                 var attributes = File.GetAttributes(entry);

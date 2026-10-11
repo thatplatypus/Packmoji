@@ -285,6 +285,54 @@ namespace Packmoji.Indexer.Tests
                 """.ReplaceLineEndings("\n"));
         }
 
+        // The name of a file is whatever made the file chose, and what a check prints is read by the
+        // workflow's runner, which takes a line for a command to itself when it begins "::" after
+        // any space, or holds "##[" anywhere. So a name is repeated only when it is made of what a
+        // registry's own paths are made of. Any other is counted, and nothing under it is read.
+        [Theory]
+        [InlineData("a\n::warning title=planted::the job that writes would print this.json")]
+        [InlineData("::warning::this begins a line")]
+        [InlineData("##[error]this is anywhere in one")]
+        [InlineData("with a space.json")]
+        [InlineData("tab\there.json")]
+        [InlineData("caf\u00E9.json")]
+        [InlineData("semi;colon")]
+        public async Task A_name_that_could_not_be_part_of_a_registrys_path_is_counted_and_never_repeated(string name)
+        {
+            Assert.SkipWhen(OperatingSystem.IsWindows(), "Windows gives no file some of these names.");
+            var (before, after) = await BegunAsync();
+            File.WriteAllText(Path.Combine(after, name), "{}");
+            File.WriteAllText(Path.Combine(after, "v1", "packages", "thatplatypus", name), "{}");
+            File.WriteAllText(Path.Combine(after, "v1", "packages", "thatplatypus", name + "2"), "{}");
+            Directory.CreateDirectory(Path.Combine(after, "v1", name));
+            File.WriteAllText(Path.Combine(after, "v1", name, "crypto.json"), "{}");
+            File.WriteAllText(Message, "left from another time");
+
+            var status = await CheckAsync(before, after);
+
+            status.ShouldBe(1);
+            _desk.Error.ShouldBe(
+                """
+                What the run made cannot be read as a registry.
+                  The directory holds 1 thing whose name could not be part of a registry's path. Such a name is not repeated here, for it may not be fit to print.
+                  v1/ holds 1 thing whose name could not be part of a registry's path. Such a name is not repeated here, for it may not be fit to print.
+                  v1/packages/thatplatypus/ holds 2 things whose name could not be part of a registry's path. Such a name is not repeated here, for it may not be fit to print.
+
+                """.ReplaceLineEndings("\n"));
+            File.ReadAllText(Message).ShouldBeEmpty();
+        }
+
+        [Fact]
+        public async Task A_name_that_is_plain_and_is_no_file_of_a_registry_is_still_said()
+        {
+            var (before, after) = await BegunAsync();
+            File.WriteAllText(Path.Combine(after, "v1", "Notes_of-mine.TXT"), "hello");
+
+            (await CheckAsync(before, after)).ShouldBe(1);
+
+            _desk.Error.ShouldBe("What the run made cannot be read as a registry.\n  v1/Notes_of-mine.TXT is not a file of a registry.\n");
+        }
+
         [Fact]
         public async Task The_words_of_a_commit_need_not_be_asked_for()
         {
