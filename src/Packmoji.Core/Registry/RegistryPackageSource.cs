@@ -29,8 +29,12 @@ namespace Packmoji.Core.Registry
         {
             ArgumentNullException.ThrowIfNull(name);
             ArgumentNullException.ThrowIfNull(version);
+
+            // How far a version is verified is what pmj itself does with it, which is to hold its
+            // bytes to a digest. What a registry says of an attestation is for a pmj that can check
+            // one: a lockfile that said so today would say what nobody did.
             return (await PackageAsync(name, cancellationToken))?.Find(version) is { } held
-                ? new PublishedVersion(name, version, held.Status, held.Source, held.Sha256, held.Verified, held.Dependencies)
+                ? new PublishedVersion(name, version, held.Status, held.Source, held.Sha256, VerificationLevel.Checksum, held.Dependencies)
                 : null;
         }
 
@@ -108,15 +112,9 @@ namespace Packmoji.Core.Registry
                     : $"ask for a version the registry holds; a release is in the registry within the hour of being made{refused}; {AskGitHubItself}");
         }
 
-        // How a version came to be asked about, to follow a reason: what holds it, and what leads to it.
+        // How a version came to be asked about, to follow a reason: what holds it, and what leads to it. There is always one of the two.
         private static string Asked(string? held, string? chain) =>
-            (held, chain) switch
-            {
-                (null, null) => "",
-                (null, _) => $"; it is asked for: {chain}",
-                (_, null) => $"; {held}",
-                _ => $"; {held}, and it is asked for: {chain}",
-            };
+            "; " + string.Join(", and ", new[] { held, chain is null ? null : $"it is asked for: {chain}" }.Where(part => part is not null));
 
         private async Task<RegistryPackage?> PackageAsync(PackageName name, CancellationToken cancellationToken)
         {

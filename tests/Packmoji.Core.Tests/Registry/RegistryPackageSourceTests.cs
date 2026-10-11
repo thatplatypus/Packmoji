@@ -104,6 +104,22 @@ namespace Packmoji.Core.Tests.Registry
             (await Find(new RegistryPackageSource(files), "@thatplatypus/crypto", "1.0.0")).ShouldNotBeNull().Status.ShouldBe(status);
         }
 
+        // How far a version is verified is what whoever uses it has done, and pmj holds bytes to a
+        // digest. What a registry says of an attestation is for a pmj that can check one: until
+        // then a lockfile that said so would say what nobody did.
+        [Fact]
+        public async Task A_version_a_registry_calls_attested_is_verified_as_far_as_pmj_verifies_which_is_by_its_checksum()
+        {
+            var files = new MemoryRegistryFiles().Hold(State(Package("@thatplatypus/crypto", Version("1.0.0") with { Verified = VerificationLevel.Attestation })));
+            var manifest = Project.Named("@someone/app", ["@thatplatypus/crypto@1.0"], []);
+
+            var graph = (await Resolver.ResolveAsync(manifest, null, new RegistryPackageSource(files), Packmoji.Core.Identity.ScopeLimit.None, TestContext.Current.CancellationToken)).ShouldSucceed();
+
+            graph.Packages.ShouldHaveSingleItem().Published.Verified.ShouldBe(VerificationLevel.Checksum);
+            LockfileWriter.Write(graph.ToLockfile(manifest)).ShouldContain("\"verified\": \"checksum\"");
+            LockfileWriter.Write(graph.ToLockfile(manifest)).ShouldNotContain("attestation");
+        }
+
         [Fact]
         public async Task The_versions_of_a_package_are_those_that_may_still_be_begun_with_lowest_first()
         {
@@ -330,6 +346,28 @@ namespace Packmoji.Core.Tests.Registry
             var missing = result.ShouldFailWith(DiagnosticCodes.ResolveVersionMissing).ShouldBeComplete();
             missing.Reason.ShouldBe("https://registry.example/v1/packages/thatplatypus/crypto.json holds no version of it; it is asked for: @someone/app → @thatplatypus/crypto@1.0");
             missing.Fix.ShouldBe("ask for a version the registry holds; a release is in the registry within the hour of being made; to ask GitHub itself, run the command again with --direct");
+        }
+
+        [Fact]
+        public async Task Where_a_refusal_would_be_recorded_is_told_from_the_latest_version_the_registry_holds()
+        {
+            var first = Version("1.0.0") with { Source = Sample.Repository("github.com/thatplatypus/crypto") };
+            var files = new MemoryRegistryFiles().Hold(State(Package("@thatplatypus/crypto", first, Version("2.0.0"))));
+            var manifest = Project.Named("@someone/app", ["@thatplatypus/crypto@1.5"], []);
+
+            var result = await Resolver.ResolveAsync(manifest, null, new RegistryPackageSource(files), Packmoji.Core.Identity.ScopeLimit.None, TestContext.Current.CancellationToken);
+
+            result.ShouldFailWith(DiagnosticCodes.ResolveVersionMissing).Fix.ShouldContain("which https://registry.example/v1/refused/thatplatypus/grapevine.json says;");
+        }
+
+        [Fact]
+        public async Task Of_a_package_it_was_never_asked_about_a_registry_has_nothing_to_say()
+        {
+            var source = new RegistryPackageSource(await IndexedAsync(Released()));
+            var explains = (IExplainsMissing)source;
+
+            explains.Missing(Sample.Name("@thatplatypus/crypto"), Sample.Version("9.9.9"), "a chain").ShouldBeNull();
+            explains.MissingThoughLocked(Sample.Name("@thatplatypus/crypto"), Sample.Version("9.9.9"), null).ShouldBeNull();
         }
 
         [Fact]

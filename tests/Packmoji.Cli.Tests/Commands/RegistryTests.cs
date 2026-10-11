@@ -479,8 +479,16 @@ namespace Packmoji.Cli.Tests.Commands
 
             var run = await sandbox.RunAsync("install");
 
+            // In the resolver's own words, which say what led to it. The place that reads the
+            // registry would refuse it too, and would not know what led there.
             run.Status.ShouldBe(1);
-            run.Error.ShouldStartWith("error[scope.not-allowed]: \"@thatplatypus/crypto\" is outside the scopes pmj is limited to here.");
+            run.Error.ShouldBe(
+                """
+                error[scope.not-allowed]: "@thatplatypus/crypto" is outside the scopes pmj is limited to here.
+                  why: "@someone/wrapper" 1.0.0 depends on it (@someone/app → @someone/wrapper@1.0.0 → @thatplatypus/crypto@1.0), and PACKMOJI_SCOPES allows only someone
+                  fix: depend only on packages of that scope; the list is set by whoever runs pmj here
+
+                """.ReplaceLineEndings(Environment.NewLine));
             sandbox.GitHub.RegistryReads.ShouldBe(["v1/packages/someone/wrapper.json"]);
             sandbox.GitHub.Downloads.ShouldBeEmpty();
         }
@@ -592,6 +600,76 @@ namespace Packmoji.Cli.Tests.Commands
             using var json = JsonDocument.Parse(run.Output);
             json.RootElement.GetProperty("ok").GetBoolean().ShouldBeFalse();
             json.RootElement.GetProperty("diagnostics")[0].GetProperty("code").GetString().ShouldBe("registry.unreachable");
+        }
+
+        [Fact]
+        public async Task What_is_locked_and_not_in_the_cache_is_held_to_the_registrys_record_before_anything_is_downloaded()
+        {
+            using var sandbox = await WithARegistryAsync();
+            (await sandbox.RunAsync("add", "@thatplatypus/grapevine")).Status.ShouldBe(0);
+            sandbox.ForgetCache();
+            var downloads = sandbox.GitHub.Downloads.Count();
+            var other = Packmoji.Core.Lockfiles.Sha256Digest.Of("other bytes"u8);
+            sandbox.Rerecord("@thatplatypus/crypto", "1.0.0", version => version with { Sha256 = other });
+
+            var run = await sandbox.RunAsync("install", "--locked");
+
+            run.Status.ShouldBe(1);
+            run.Error.ShouldStartWith("error[lock.mismatch]: packmoji.lock does not agree with what is published for \"@thatplatypus/crypto\" 1.0.0.");
+            run.Error.ShouldContain($"and what is published has {other}");
+            sandbox.GitHub.Downloads.Count().ShouldBe(downloads, "nothing is fetched for a lockfile that the registry does not bear out");
+            sandbox.Cached().ShouldBeEmpty();
+        }
+
+        [Fact]
+        public async Task What_was_locked_on_GitHub_itself_and_is_not_in_the_registry_is_said_to_be_that_by_an_install_that_has_to_fetch_it()
+        {
+            using var sandbox = await WithARegistryAsync();
+            sandbox.Release("github.com/thatplatypus/sockets_more", "@thatplatypus/sockets_more", "1.0.0");
+            (await sandbox.RunAsync("add", "@thatplatypus/sockets_more", "--direct")).Status.ShouldBe(0);
+
+            var fromTheCache = await sandbox.RunAsync("install", "--locked");
+            sandbox.ForgetCache();
+            var fetching = await sandbox.RunAsync("install", "--locked");
+            var direct = await sandbox.RunAsync("install", "--locked", "--direct");
+
+            fromTheCache.Status.ShouldBe(0, "bytes that are locked and are in the cache are the version, whatever the registry holds");
+            fetching.Status.ShouldBe(1);
+            fetching.Error.ShouldStartWith("error[package.not-found]: \"@thatplatypus/sockets_more\" is not in the registry.");
+            fetching.Error.ShouldContain("packmoji.lock holds 1.0.0 of it");
+            direct.Error.ShouldBeEmpty();
+            direct.Status.ShouldBe(0);
+        }
+
+        // The cache answers for what is locked only where nothing is chosen. A command that chooses
+        // asks the registry about every version, and that is where it learns what has changed.
+        [Fact]
+        public async Task A_command_that_chooses_versions_learns_of_a_quarantine_though_the_cache_holds_the_bytes()
+        {
+            using var sandbox = await WithARegistryAsync();
+            (await sandbox.RunAsync("add", "@thatplatypus/grapevine")).Status.ShouldBe(0);
+            sandbox.Rerecord("@thatplatypus/crypto", "1.0.0", version => Marked(version, VersionStatus.Quarantined));
+            var manifest = sandbox.Read("packmoji.json");
+            var downloads = sandbox.GitHub.Downloads.Count();
+
+            var run = await sandbox.RunAsync("add", "@thatplatypus/deflate");
+
+            run.Status.ShouldBe(1);
+            run.Error.ShouldStartWith("error[resolve.quarantined]: Version 1.0.0 of \"@thatplatypus/crypto\" is quarantined.");
+            sandbox.Read("packmoji.json").ShouldBe(manifest);
+            sandbox.GitHub.Downloads.Count().ShouldBe(downloads);
+        }
+
+        [Fact]
+        public async Task An_option_that_is_written_wrongly_is_a_mistake_in_the_command_and_no_fault_of_pmj()
+        {
+            using var sandbox = await WithARegistryAsync();
+
+            var run = await sandbox.RunAsync("add", "@thatplatypus/grapevine", "--direct=maybe");
+
+            run.Status.ShouldBe(2);
+            run.Error.ShouldBe("error: Unrecognized command or argument 'maybe'." + Environment.NewLine + "Run pmj add --help to see how it is used." + Environment.NewLine);
+            sandbox.GitHub.Requests.ShouldBeEmpty();
         }
 
         // Grapevine added through a registry, and nothing counted of what that asked.

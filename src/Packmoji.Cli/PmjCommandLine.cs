@@ -55,10 +55,10 @@ namespace Packmoji.Cli
             ArgumentNullException.ThrowIfNull(host);
 
             var parsed = Parse(args, host);
-            if (parsed.Errors.Count == 0 && host.Registry is not null && parsed.GetValue<bool>(DirectOption))
+            if (parsed.GetValue<bool>(DirectOption))
             {
                 // Each command is built over the host it will run on, so the command line is read
-                // again over a host that has no registry.
+                // again over a host that has no registry. With none named, that is the same host.
                 host = host.Direct();
                 parsed = Parse(args, host);
             }
@@ -250,7 +250,7 @@ namespace Packmoji.Cli
         // Whether the command that was run was told where to look, by the option that only some commands have.
         private static bool GaveRepository(ParseResult parsed) =>
             parsed.CommandResult.Command.Options.FirstOrDefault(option => option.Name == RepositoryOption.Name) is { } repository
-            && parsed.GetResult(repository) is { Implicit: false };
+            && parsed.GetResult(repository) is not null;
 
         private static Option<bool> Json() =>
             new(JsonOption) { Description = "Answer a tool: one JSON object on standard output, with what was found and any problems in it." };

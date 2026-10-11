@@ -64,7 +64,7 @@ namespace Packmoji.Cli.Commands
 
                         // A registry that cannot be read for one package cannot be read for the next. A
                         // file of it that does not read is that file's fault alone, and the rest are still asked for.
-                        readable = failure.Diagnostic.Code is not (DiagnosticCodes.RegistryUnreachable or DiagnosticCodes.ConfigInvalid);
+                        readable = failure.Diagnostic.Code is not DiagnosticCodes.RegistryUnreachable;
                     }
                 }
 

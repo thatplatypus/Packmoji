@@ -132,7 +132,7 @@ namespace Packmoji.Cli.Tests
             status.ShouldBe(1);
             Errors(host).ShouldStartWith($"error[config.invalid]: {variable} is not an address pmj can use.");
             Errors(host).ShouldContain($"  why: {why}");
-            Errors(host).ShouldContain("  fix: ");
+            Errors(host).ShouldContain("  fix: set it to an address such as https://github.example.com, or unset it: without PACKMOJI_GITHUB and PACKMOJI_GITHUB_API, pmj speaks to github.com");
             Errors(host).ShouldNotContain("ghp_a-");
             sandbox.GitHub.Requests.ShouldBeEmpty();
             sandbox.Has("packmoji.lock").ShouldBeFalse();
@@ -276,7 +276,8 @@ namespace Packmoji.Cli.Tests
             problem.Message.ShouldBe("PACKMOJI_REGISTRY is not an address pmj can use.");
             problem.Reason.ShouldStartWith(why);
             problem.Fix.ShouldBe("set it to the address that a registry's v1 is under, such as https://raw.githubusercontent.com/thatplatypus/Packmoji/registry, or unset it: without PACKMOJI_REGISTRY, pmj finds packages on GitHub itself");
-            (problem.Message + problem.Reason + problem.Fix + host.Registry!.Address).ShouldNotContain("a-password");
+            (problem.Message + problem.Reason + problem.Fix).ShouldNotContain("a-password");
+            host.Registry!.Address.ShouldBeEmpty("an address that cannot be used is not said again");
             sandbox.GitHub.Requests.ShouldBeEmpty();
         }
 
@@ -380,6 +381,25 @@ namespace Packmoji.Cli.Tests
             }
 
             sandbox.GitHub.Requests.Count.ShouldBe(asked);
+        }
+
+        [Theory]
+        [InlineData("PACKMOJI_REGISTRY", "not an address")]
+        [InlineData("PACKMOJI_DIRECT", "0")]
+        public async Task Verify_says_once_what_it_was_told_of_a_registry_and_cannot_use_and_still_holds_the_releases_to_the_lockfile(string variable, string value)
+        {
+            using var sandbox = Sandbox.WithGrapevine();
+            sandbox.Project("@someone/app");
+            (await sandbox.RunAsync("add", "@thatplatypus/grapevine")).Status.ShouldBe(0);
+            sandbox.GitHub.Requests.Clear();
+            var host = sandbox.Host((variable, value), ("PACKMOJI_HOME", sandbox.Home));
+
+            var status = await PmjCommandLine.RunAsync(["verify"], host, TestContext.Current.CancellationToken);
+
+            status.ShouldBe(1);
+            (Errors(host).Split("error[config.invalid]").Length - 1).ShouldBe(1);
+            (Errors(host).Split("error[").Length - 1).ShouldBe(1);
+            sandbox.GitHub.Downloads.Count().ShouldBe(3);
         }
 
         private const string AFile = "v1/packages/thatplatypus/crypto.json";

@@ -75,6 +75,51 @@ namespace Packmoji.Core.Tests.Registry
         }
 
         [Fact]
+        public async Task What_the_cache_holds_under_the_digest_and_is_not_those_bytes_is_downloaded_again()
+        {
+            var host = Released();
+            var recorded = await RecordedAsync(await IndexedAsync(host), "@thatplatypus/grapevine", "0.3.0");
+            var store = new MemoryAssetStore();
+            await store.KeepAsync(recorded.Name, recorded.Version, recorded.Sha256, "spoiled"u8.ToArray(), TestContext.Current.CancellationToken);
+
+            await RegistryFetch.FetchAsync(recorded, host, store, TestContext.Current.CancellationToken);
+
+            host.Downloads.ShouldBe([$"{G} grapevine-v0.3.0"]);
+            var kept = await store.FindAsync(recorded.Name, recorded.Version, recorded.Sha256, TestContext.Current.CancellationToken);
+            Sha256Digest.Of(kept.ShouldNotBeNull().Span).ShouldBe(recorded.Sha256);
+        }
+
+        [Fact]
+        public async Task The_order_a_manifest_names_what_it_needs_in_is_no_difference_from_the_record()
+        {
+            var host = Released().Package(G, "@thatplatypus/grapevine", "0.4.0", "@thatplatypus/deflate@0.1", "@thatplatypus/crypto@1.0");
+            var recorded = await RecordedAsync(await IndexedAsync(host), "@thatplatypus/grapevine", "0.4.0");
+            var store = new MemoryAssetStore();
+
+            await RegistryFetch.FetchAsync(recorded with { Dependencies = recorded.Dependencies.Reverse().ToList() }, host, store, TestContext.Current.CancellationToken);
+            await RegistryFetch.FetchAsync(recorded, host, new MemoryAssetStore(), TestContext.Current.CancellationToken);
+
+            store.Kept.ShouldHaveSingleItem();
+        }
+
+        [Fact]
+        public async Task A_record_that_names_what_a_version_needs_and_asks_another_version_of_it_is_refused()
+        {
+            var host = Released();
+            var recorded = await RecordedAsync(await IndexedAsync(host), "@thatplatypus/grapevine", "0.3.0");
+            var lied = recorded with
+            {
+                Dependencies = [new Dependency(Sample.Name("@thatplatypus/crypto"), Sample.Requirement("1.2")), new Dependency(Sample.Name("@thatplatypus/deflate"), Sample.Requirement("0.1"))],
+            };
+            var store = new MemoryAssetStore();
+
+            var diagnostic = await ShouldStop(() => RegistryFetch.FetchAsync(lied, host, store, TestContext.Current.CancellationToken), DiagnosticCodes.RegistryMismatch);
+
+            diagnostic.Reason.ShouldBe("the registry says it needs @thatplatypus/crypto@1.2, @thatplatypus/deflate@0.1, and the manifest in its archive says @thatplatypus/crypto@1.0, @thatplatypus/deflate@0.1");
+            store.Kept.ShouldBeEmpty();
+        }
+
+        [Fact]
         public async Task Bytes_that_are_not_the_ones_the_registry_recorded_are_refused_and_are_not_kept()
         {
             var host = Released();
@@ -182,6 +227,22 @@ namespace Packmoji.Core.Tests.Registry
 
             check.ShouldSucceed();
             files.Asked.Order(StringComparer.Ordinal).ShouldBe(["v1/packages/thatplatypus/crypto.json", "v1/packages/thatplatypus/deflate.json", "v1/packages/thatplatypus/grapevine.json"]);
+        }
+
+        [Fact]
+        public async Task What_the_cache_holds_under_a_locked_digest_and_is_not_those_bytes_does_not_answer_for_the_version()
+        {
+            var (_, files, lockfile, _) = await LockedAsync();
+            var spoiled = new MemoryAssetStore();
+            foreach (var package in lockfile.Packages)
+            {
+                await spoiled.KeepAsync(package.Name, package.Version, package.Sha256, "spoiled"u8.ToArray(), TestContext.Current.CancellationToken);
+            }
+
+            var check = await LockCheck.CheckAsync(lockfile, new LockedFromCache(lockfile, spoiled, new RegistryPackageSource(files)), TestContext.Current.CancellationToken);
+
+            check.ShouldSucceed();
+            files.Asked.Count.ShouldBe(3, "what is in the cache is not the bytes that were locked, so the registry is asked");
         }
 
         [Fact]
