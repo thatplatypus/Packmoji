@@ -276,12 +276,27 @@ namespace Packmoji.Core.Tests.Registry
         [InlineData("name.reserved", "the name Json is one of the compiler's own packages")]
         [InlineData("name.reserved", "the name json and more is one of the compiler's own packages")]
         [InlineData("name.reserved", "the name json is one of the compiler's own packages, they say")]
+        [InlineData("name.reserved", "the name is one of the compiler's own packages")]
+        [InlineData("release.invalid", "the manifest in its archive is that of")]
         [InlineData("release.invalid", "the name json is one of the compiler's own packages")]
         public void A_new_refusal_for_any_other_reason_or_under_another_code_is_refused_and_its_words_are_not_repeated(string code, string why)
         {
             var after = new RegistryState(Before.Packages, [Refused(Grapevine, Refusal("crypto-v9.0.0", why, code: code))]);
 
             ShouldBreak(after).ShouldBe($"the reason crypto-v9.0.0 in {Grapevine} is refused for is not one of the registry's own under the code it is given");
+        }
+
+        // What is found is read from between the two ends of a sentence. Were only its length taken
+        // from the end, as many characters as the end has could be anything at all.
+        [Fact]
+        public void Words_that_stand_where_the_end_of_a_reason_would_and_are_not_it_are_refused()
+        {
+            const string end = " is one of the compiler's own packages";
+            var why = "the name json" + new string('!', end.Length);
+            var after = new RegistryState(Before.Packages, [Refused(Grapevine, Refusal("crypto-v9.0.0", why, code: "name.reserved"))]);
+
+            RefusalReasons.IsOne("name.reserved", "the name json" + end).ShouldBeTrue();
+            ShouldBreak(after).ShouldStartWith("the reason crypto-v9.0.0 in ");
         }
 
         [Fact]

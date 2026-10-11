@@ -62,8 +62,7 @@ namespace Packmoji.Indexer
 
         // Whether a name is made of what the names in a registry's paths are made of. It need not be
         // a name a registry has: one that is not is refused by name, and this is what lets it be named.
-        private static bool IsPlain(string name) =>
-            name.Length is > 0 and <= 255 && name.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_' or '.');
+        private static bool IsPlain(string name) => name.All(character => char.IsAsciiLetterOrDigit(character) || character is '-' or '_' or '.');
 
         // In order of name at every level, so that what is wrong is said in the same order on every machine.
         private static void Walk(string directory, string under, List<RegistryPackage> packages, List<RefusedReleases> refused, List<string> problems, Dictionary<string, byte[]> read)

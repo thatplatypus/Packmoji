@@ -346,6 +346,31 @@ namespace Packmoji.Indexer.Tests
             File.ReadAllText(Message).ShouldBeEmpty();
         }
 
+        // Every character of ASCII that the names in a registry's paths are not made of, one to a
+        // name: none of them is let through, whatever a reader of the output would make of it.
+        [Fact]
+        public async Task No_character_but_a_letter_a_digit_a_hyphen_an_underscore_or_a_full_stop_makes_a_name_that_is_repeated()
+        {
+            Assert.SkipWhen(OperatingSystem.IsWindows(), "Windows gives no file some of these names.");
+            var (before, after) = await BegunAsync();
+            var others = Enumerable.Range(1, 127).Select(code => (char)code).Where(character => !char.IsAsciiLetterOrDigit(character) && character is not ('-' or '_' or '.' or '/')).ToList();
+            foreach (var character in others)
+            {
+                File.WriteAllText(Path.Combine(after, "v1", $"a{character}b.json"), "{}");
+            }
+
+            others.Count.ShouldBe(61);
+            var status = await CheckAsync(before, after);
+
+            status.ShouldBe(1);
+            _desk.Error.ShouldBe(
+                """
+                What the run made cannot be read as a registry.
+                  v1/ holds 61 things whose name could not be part of a registry's path. Such a name is not repeated here, for it may not be fit to print.
+
+                """.ReplaceLineEndings("\n"));
+        }
+
         [Fact]
         public async Task A_name_that_is_plain_and_is_no_file_of_a_registry_is_still_said()
         {

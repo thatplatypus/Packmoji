@@ -84,16 +84,16 @@ namespace Packmoji.Core.Registry
                 return false;
             }
 
-            // Written as it is written: what parses and is not in its one form is not what a run wrote.
+            // Each of the three is written in one way and read strictly, so what reads as one is one as a run would write it.
             var found = why[before.Length..(why.Length - after.Length)];
             return words switch
             {
-                OtherPackage => PackageName.TryParse(found, out var name, out _) && name.ToString() == found,
-                OtherVersion => SemanticVersion.TryParse(found, out var version, out _) && version.ToString() == found,
+                OtherPackage => PackageName.TryParse(found, out _, out _),
+                OtherVersion => SemanticVersion.TryParse(found, out _, out _),
 
                 // A name that is written as a package's is, and that no package may have.
                 ReservedName => PackageName.IsValidBareName(found) && !PackageName.TryParse($"@a/{found}", out _, out _),
-                _ => RepositoryRef.TryParse(found, out var repository, out _) && repository.ToString() == found,
+                _ => RepositoryRef.TryParse(found, out _, out _),
             };
         }
     }
