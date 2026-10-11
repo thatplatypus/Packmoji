@@ -28,12 +28,12 @@ namespace Packmoji.Cli.Tests.Scripts
             run.Status.ShouldBe(0);
         }
 
+        // Each is made from the version as it stands, so that raising the version leaves every one of
+        // them what it is here: the version with no v, with more after it, with a capital.
+        public static TheoryData<string> OtherTags => ["v9.9.9", PmjHost.Version, $"v{PmjHost.Version}-rc.1", $"v{PmjHost.Version}.0", $"V{PmjHost.Version}", ""];
+
         [Theory]
-        [InlineData("v9.9.9")]
-        [InlineData("0.1.0")]
-        [InlineData("v0.1.0-rc.1")]
-        [InlineData("V0.1.0")]
-        [InlineData("")]
+        [MemberData(nameof(OtherTags))]
         public async Task Any_other_tag_is_refused_and_both_are_named(string tag)
         {
             var run = await RunAsync(tag);
