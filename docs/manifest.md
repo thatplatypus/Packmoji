@@ -340,7 +340,7 @@ The codes that begin with `compiler.`, `build.`, `built.`, `packages.` and `run.
 
 | Code | Raised when |
 |---|---|
-| `file.too-large` | A manifest is over 1 MiB, or a lockfile is over 4 MiB |
+| `file.too-large` | A manifest is over 1 MiB, or a lockfile or a registry's file of a package is over 4 MiB |
 | `json.syntax` | A file is not strict JSON, is not UTF-8, is empty, or holds merge conflict markers |
 | `json.duplicate-key` | A key appears twice in one object |
 | `json.wrong-type` | A value is of the wrong kind, such as a number where a string belongs |
@@ -421,3 +421,4 @@ The codes that begin with `compiler.`, `build.`, `built.`, `packages.` and `run.
 | `run.not-an-app` | `pmj run` was run in a library, which has no program to run |
 | `run.failed` | The program was built and could not be started |
 | `scope.not-allowed` | A package that the project asks for, locks or comes to need is of a scope that `PACKMOJI_SCOPES` does not allow |
+| `registry.invalid` | A file of a registry breaks a rule of its format, or is not the file of what it was read as |
