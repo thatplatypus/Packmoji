@@ -14,11 +14,12 @@ dotnet build Packmoji.sln -c Release
 
 if [[ "${1:-}" == "--coverage" ]]; then
   # Where a test run leaves its results depends on the SDK: beside each test project in one, and
-  # in the working directory in another, where the two test projects write over each other's
+  # in the working directory in another, where the test projects write over each other's
   # report. So the place is given here, and the report is made by the tests of Core alone.
   results="$PWD/artifacts/coverage"
   rm -rf "$results"
   dotnet test --project tests/Packmoji.Cli.Tests -c Release --no-build
+  dotnet test --project tests/Packmoji.Indexer.Tests -c Release --no-build
   dotnet test --project tests/Packmoji.Core.Tests -c Release --no-build \
     --results-directory "$results" \
     --coverage --coverage-output-format cobertura --coverage-output coverage.cobertura.xml
