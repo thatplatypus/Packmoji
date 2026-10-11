@@ -29,8 +29,8 @@ On 2026-10-10 the workflow was run on a branch, for no tag, and what it kept was
 
 - **The digests check,** with `sha256sum` on Linux and with `shasum` on macOS. A program with one byte added is refused by both.
 - **The Linux program asks for glibc 2.34 at the newest.** It starts on Ubuntu 22.04, which has 2.35, and in `mcr.microsoft.com/dotnet/aspnet:10.0`, the image Blazemoji runs it in. On Ubuntu 20.04, which has 2.31, it does not start: ``version `GLIBC_2.34' not found``.
-- **The macOS program starts on another Mac** once it is marked as a program. It is signed by the linker for the machine alone, which is all an arm64 program needs.
-- **On Windows Server 2025 every test ran and passed but 49,** which need a shell, a symbolic link, or the compiler. Seven failed at first, each for how the test itself read a path or deleted a file there: nothing in `pmj` had to change for them.
+- **The macOS program starts on another Mac** once it is marked as a program. The linker signed it ad hoc, with no identity, which is all an arm64 program needs to start. It says of itself that it needs macOS 12 or newer.
+- **On Windows Server 2025 every test ran and passed but those that need a shell, a symbolic link, or the compiler.** Seven failed at first, each for how the test itself read a path or deleted a file there: nothing in `pmj` had to change for them.
 - **One thing in `pmj` was wrong there.** Started from a console whose code page is not UTF-8, which is every console of Windows that nobody has changed, it wrote `src/lib.??` through a pipe for `src/lib.🍇`. .NET writes in the console's code page whatever it writes to. The same was had on a Mac by naming Latin-1 in the environment. Both are tested now: the script that runs the native program runs it as on such a machine.
 
 ## Why
