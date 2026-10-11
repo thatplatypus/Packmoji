@@ -76,6 +76,7 @@ These were seen on 2026-10-11, and are what the design stands on.
 - **Letting anyone ask for a repository to be indexed,** by a topic on the repository, an issue, or a small endpoint. Each has to be defended against whoever asks for a thousand.
 - **A log of events as a file.** The commits are that log, and nobody can edit them unseen.
 - **The indexer as a command of `pmj`.** It would put the registry's keeper in every copy of the tool.
+- **Holding each added version to GitHub's own list in the job that commits.** A misled run could then add only what GitHub lists. The job that may write would read from the network, which it does not: all it reads is what the first job made.
 
 ## Consequences
 
@@ -85,5 +86,7 @@ These were seen on 2026-10-11, and are what the design stands on.
 - **GitHub turns the schedule off after 60 days in which nothing happens in the repository.** It is turned on again by hand.
 - **`pmj` does not read the registry yet.** Until it does, and until it reads one with nothing said, the address is the branch's own.
 - **Withdrawing a version is not decided.** A version whose release was deleted stays as it is, and a run says that the release is gone.
+- **A misled run can take a version's number.** What it adds is held to the rules and not to GitHub's list. A version it adds before any release carries it is quarantined when the real release comes, and a person's commit to the branch is what puts it right.
+- **The repositories take turns at what a run may download.** Whoever is listed could otherwise keep everyone after them waiting, by releasing enough.
 - **A run asks GitHub once for every hundred releases of each listed repository,** and the workflow's token may ask 1,000 times an hour. That is room for some hundreds of repositories, and not for thousands.
 - **Search needs a file that lists every package,** which nothing writes yet.

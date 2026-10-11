@@ -60,6 +60,16 @@ jobs:
         GITHUB_TOKEN: ${{ github.token }}
       run: dotnet run --project src/Packmoji.Indexer -c Release -- run --registry "$RUNNER_TEMP/made/registry" --repositories registry-repositories.txt
 
+    # REHEARSAL ONLY, and never for merging: what a first job that was misled might leave for the
+    # second. A name and a value that the runner would take for commands to itself when printed.
+    - name: REHEARSAL ONLY - plant what a misled run might
+      run: |
+        made="$RUNNER_TEMP/made/registry/v1/packages/thatplatypus"
+        printf '{}' > "$made/##[error]planted by the rehearsal as a name.json"
+        sed -i 's/"status": "active"/"status": "##[warning]planted by the rehearsal as a status"/' "$made/crypto.json"
+        grep -c 'planted by the rehearsal' "$made/crypto.json"
+        ls "$made"
+
     # Beside the registry and not in it, so that there is always something to keep: a registry
     # that holds nothing is no file at all, and the job that follows has to be told that too.
     - name: Say which run made it
@@ -103,6 +113,11 @@ jobs:
 
     # It is read as data, by the registry's own reader, and none of it is run. A registry that
     # holds nothing is no directory at all, so one is made for it.
+    #
+    # What the check prints repeats what the first job's files say, and the runner takes a line of
+    # a step's output for a command to itself when it begins "::" or holds "##[". So commands are
+    # stopped for as long as the check prints, with a word that is made here and that the first
+    # job never saw. The check is the last thing run, so the step ends as the check ended.
     - name: Hold it to the registry as it stood
       run: |
         mkdir -p "$RUNNER_TEMP/made/registry"

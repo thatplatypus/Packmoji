@@ -203,6 +203,7 @@ For each listed repository, and each claim in it:
 - **A repository that cannot be reached is left as it was,** and the others are still done.
 - **A repository that is taken off the list keeps its versions.** They are not looked at again.
 - **A run downloads at most 64 files and 256 MiB.** What is over is left for the next run.
+- **The repositories take turns at that.** One file is downloaded for each in its order, and then for each again, round and round. So the releases of one repository, however many they are, do not keep another's waiting.
 - **A run that finds nothing new writes nothing.**
 
 ## What never changes
@@ -236,7 +237,11 @@ The workflow [`Registry`](../.github/workflows/registry.yml) runs every hour, wh
 
 - **What reads strangers' archives may write nothing.** The token that commits the registry is a token for the repository `pmj` itself is released from.
 - **What may write runs nothing of what it was handed.** It reads it as data, with the registry's own reader, and refuses a file that is not one of the two kinds, a link, a version or a package that is gone, a record that changed, and a status that went anywhere but to quarantined.
+- **It holds each file to the byte as well.** A reader passes over a key it does not know, and a check that did the same would let a run write anything beside what is read. So a file is either exactly as it stood, or exactly what the registry writes of what it holds, and a new package's file holds a version.
+- **It holds each new reason to the registry's own.** What a run refuses, it refuses for one of the reasons under [Why a release is refused](#why-a-release-is-refused), which says at most a name, a version or a repository that is written as one is. Any other words stop the commit, and are not repeated.
+- **What it prints is never taken for a command.** A check repeats what the first job's files say, and a workflow's runner reads a step's output for commands to itself. So the second job stops those commands for as long as the check prints, and the name of a file is repeated only when it is made of what a registry's own paths are made of.
 - **So a run that was misled can add a version and can refuse one.** It cannot change which bytes a version is, and it cannot write outside the registry.
+- **A version that a misled run added stays, and takes the version's number.** The job that commits reads nothing but what the first job made, so it does not hold an added version to GitHub's own list. A record of a version that no release carries yet names bytes that nobody has. When the real release is made, its bytes are not those, and the version is quarantined. Putting that right takes a person's own commit to the branch.
 - **A commit follows the commit the registry was taken from, and is never forced.** A branch that moved in between refuses it, and the next run begins again.
 - **GitHub may run a schedule late, and may drop a run.** It turns a schedule off in a repository where nothing has happened for 60 days, and it is turned on again by hand.
 

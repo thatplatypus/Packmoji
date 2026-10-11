@@ -1,6 +1,8 @@
 using System.Globalization;
 using Packmoji.Core.Archives;
 using Packmoji.Core.Diagnostics;
+using Packmoji.Core.Identity;
+using Packmoji.Core.Versioning;
 
 namespace Packmoji.Core.Registry
 {
@@ -52,5 +54,47 @@ namespace Packmoji.Core.Registry
 
         /// <summary>A reason that says what was found, with it.</summary>
         public static string Of(string reason, object found) => string.Format(CultureInfo.InvariantCulture, reason, found);
+
+        private const string Found = "{0}";
+
+        /// <summary>
+        /// Whether words are a reason of the registry's own, under the code that goes with it: one
+        /// of the sentences here, and where it says what was found, a name, a version or a
+        /// repository that is written as one is. What commits a run's work holds a new reason to
+        /// this, so that a run that was misled can say nothing else where people will read it.
+        /// </summary>
+        public static bool IsOne(string code, string why)
+        {
+            ArgumentNullException.ThrowIfNull(code);
+            ArgumentNullException.ThrowIfNull(why);
+            return All.Any(reason => reason.Code == code && Says(reason.Words, why));
+        }
+
+        private static bool Says(string words, string why)
+        {
+            var at = words.IndexOf(Found, StringComparison.Ordinal);
+            if (at < 0)
+            {
+                return string.Equals(why, words, StringComparison.Ordinal);
+            }
+
+            var (before, after) = (words[..at], words[(at + Found.Length)..]);
+            if (why.Length <= before.Length + after.Length || !why.StartsWith(before, StringComparison.Ordinal) || !why.EndsWith(after, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            // Each of the three is written in one way and read strictly, so what reads as one is one as a run would write it.
+            var found = why[before.Length..(why.Length - after.Length)];
+            return words switch
+            {
+                OtherPackage => PackageName.TryParse(found, out _, out _),
+                OtherVersion => SemanticVersion.TryParse(found, out _, out _),
+
+                // A name that is written as a package's is, and that no package may have.
+                ReservedName => PackageName.IsValidBareName(found) && !PackageName.TryParse($"@a/{found}", out _, out _),
+                _ => RepositoryRef.TryParse(found, out _, out _),
+            };
+        }
     }
 }

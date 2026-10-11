@@ -45,7 +45,7 @@ namespace Packmoji.Cli.Tests.Scripts
         [Fact]
         public void The_checks_run_for_a_pull_request_to_main_for_main_itself_and_by_hand()
         {
-            Workflow("ci.yml").ShouldContain("\non:\n  pull_request:\n    branches: [ \"main\" ]\n  push:\n    branches: [ \"main\", \"m4-registry-rehearsal\" ]\n  workflow_dispatch:\n\n");
+            Workflow("ci.yml").ShouldContain("\non:\n  pull_request:\n    branches: [ \"main\" ]\n  push:\n    branches: [ \"main\" ]\n  workflow_dispatch:\n\n");
         }
 
         [Fact]
@@ -166,7 +166,7 @@ namespace Packmoji.Cli.Tests.Scripts
         {
             Workflow("registry.yml").ShouldContain(
                 "\non:\n  schedule:\n    # Every hour, and not on the hour, which is when GitHub's own queue is longest.\n    - cron: \"17 * * * *\"\n"
-                + "  push:\n    branches: [ \"main\", \"m4-registry-rehearsal\" ]\n    paths: [ \"registry-repositories.txt\" ]\n  workflow_dispatch:\n\n");
+                + "  push:\n    branches: [ \"main\" ]\n    paths: [ \"registry-repositories.txt\" ]\n  workflow_dispatch:\n\n");
         }
 
         [Fact]
@@ -230,7 +230,34 @@ namespace Packmoji.Cli.Tests.Scripts
             registry.ShouldNotContain("continue-on-error");
             registry.ShouldNotContain("\n    if:");
             registry.ShouldNotContain("\n      if:");
-            registry.ShouldNotContain("|| true");
+            registry.ShouldNotContain("||");
+        }
+
+        // What the check prints repeats what the first job's files say, and the runner takes a line
+        // of a step's output for a command to itself when it begins "::" or holds "##[". The first
+        // job is the one that may have been misled, so the job that may write stops commands for as
+        // long as the check prints, with a word made there, which the first job never saw.
+        [Fact]
+        public void The_job_that_writes_stops_the_runners_commands_for_as_long_as_the_check_prints()
+        {
+            var write = Job(Workflow("registry.yml"), "write");
+            string[] inOrder =
+            [
+                "        marker=\"$(od -An -N16 -tx1 /dev/urandom | tr -d ' \\n')\"\n",
+                "        [ \"${#marker}\" -eq 32 ]\n",
+                "        echo \"::stop-commands::$marker\"\n",
+                "        trap 'echo \"::$marker::\"' EXIT\n",
+                "        dotnet run --project src/Packmoji.Indexer -c Release -- check --before \"$RUNNER_TEMP/before\" --after \"$RUNNER_TEMP/made/registry\" --message \"$RUNNER_TEMP/words\"\n",
+            ];
+
+            var at = inOrder.Select(line => write.IndexOf(line, StringComparison.Ordinal)).ToList();
+
+            at.ShouldAllBe(index => index > 0);
+            at.ShouldBe(at.Order().ToList(), "each line follows the one before it");
+
+            // The check is the last thing the step runs, so the step ends as the check ended.
+            write[(at[^1] + inOrder[^1].Length)..].TrimStart('\n').ShouldStartWith("    # The commit follows");
+            Regex.Matches(Workflow("registry.yml"), "stop-commands").Count.ShouldBe(1);
         }
 
         [Fact]
@@ -238,7 +265,7 @@ namespace Packmoji.Cli.Tests.Scripts
         {
             var registry = Workflow("registry.yml");
 
-            registry.ShouldContain("\nenv:\n  REGISTRY_BRANCH: registry-rehearsal\n");
+            registry.ShouldContain("\nenv:\n  REGISTRY_BRANCH: registry\n");
             Regex.Matches(registry, "REGISTRY_BRANCH").Count.ShouldBe(1);
             foreach (var script in new[] { "registry-tree.sh", "registry-commit.sh" })
             {
@@ -261,9 +288,8 @@ namespace Packmoji.Cli.Tests.Scripts
             var branch = Regex.Match(registry, @"\n  REGISTRY_BRANCH: (\S+)\n").Groups[1].Value;
 
             branch.ShouldNotBeEmpty();
-            branch.ShouldBe("registry-rehearsal");
-            guide.ShouldContain("On the branch `registry` of ");
-            guide.ShouldContain("\nhttps://raw.githubusercontent.com/thatplatypus/Packmoji/registry/v1/packages/");
+            guide.ShouldContain($"On the branch `{branch}` of ");
+            guide.ShouldContain($"\nhttps://raw.githubusercontent.com/thatplatypus/Packmoji/{branch}/v1/packages/");
             Regex.IsMatch(registry, "\n    - cron: \"[0-9]+ \\* \\* \\* \\*\"\n").ShouldBeTrue("the schedule is no longer once an hour");
             guide.ShouldContain("runs every hour, when the list changes, and when it is started by hand");
             guide.ShouldContain("a new release is in the registry within the hour");
