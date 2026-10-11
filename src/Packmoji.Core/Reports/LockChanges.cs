@@ -11,32 +11,35 @@ namespace Packmoji.Core.Reports
         /// both hold the same versions.
         /// </summary>
         /// <param name="before">Null when there was no lockfile, and then everything is added.</param>
-        public static IReadOnlyList<string> Between(Lockfile? before, Lockfile after)
+        public static IReadOnlyList<string> Between(Lockfile? before, Lockfile after) => Of(before, after).Select(change => change.Line).ToList();
+
+        /// <summary>The same changes as data, for a tool, in the same order.</summary>
+        /// <param name="before">Null when there was no lockfile, and then everything is added.</param>
+        public static IReadOnlyList<LockChange> Of(Lockfile? before, Lockfile after)
         {
             ArgumentNullException.ThrowIfNull(after);
             var was = (before?.Packages ?? []).ToDictionary(package => package.Name, package => package.Version);
             var now = after.Packages.ToDictionary(package => package.Name, package => package.Version);
-
-            var lines = new List<string>();
+            var changes = new List<LockChange>();
             foreach (var name in was.Keys.Union(now.Keys).Order())
             {
                 var had = was.TryGetValue(name, out var old);
                 var has = now.TryGetValue(name, out var current);
                 if (had && has && old != current)
                 {
-                    lines.Add($"~ {name} {old} to {current}");
+                    changes.Add(new LockChange(LockChangeKind.Moved, name, old, current));
                 }
                 else if (has && !had)
                 {
-                    lines.Add($"+ {name} {current}");
+                    changes.Add(new LockChange(LockChangeKind.Added, name, null, current));
                 }
                 else if (had && !has)
                 {
-                    lines.Add($"- {name} {old}");
+                    changes.Add(new LockChange(LockChangeKind.Removed, name, old, null));
                 }
             }
 
-            return lines;
+            return changes;
         }
     }
 }

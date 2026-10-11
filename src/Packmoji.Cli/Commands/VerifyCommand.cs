@@ -36,7 +36,7 @@ namespace Packmoji.Cli.Commands
             var held = 0;
 
             // Asked of a store that holds nothing, so that every package is downloaded again and nothing is kept.
-            var releases = new DirectPackageSource(host.Releases, new NoStore(), project.Manifest, lockfile);
+            var releases = new DirectPackageSource(project.Releases, new NoStore(), project.Manifest, lockfile);
             var reachable = true;
             foreach (var package in lockfile.Packages.OrderBy(package => package.Name).ThenBy(package => package.Version))
             {

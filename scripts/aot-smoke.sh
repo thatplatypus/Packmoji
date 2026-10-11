@@ -2,12 +2,21 @@
 # Publishes pmj with Native AOT for one runtime and runs what was published, exactly as CI does.
 #   scripts/aot-smoke.sh osx-arm64
 #   scripts/aot-smoke.sh linux-x64
-# A runtime can only be published on its own operating system and architecture.
+#   scripts/aot-smoke.sh win-x64
+# A runtime can only be published on its own operating system and architecture. On Windows this is
+# run by the bash that comes with Git.
 #
 # The native pmj is then put through what a person does with it: it makes a library and packs it,
 # and makes an application that adds the library, installs it on a machine with an empty cache, and
 # verifies it. GitHub is stood in for by the packed file served from this machine, so nothing here
-# reaches the network. It needs python3, for that server alone.
+# reaches the network. It needs Python 3, for that server alone.
+#
+# On the way it is run once on a machine that limits the scopes it may depend on, where the
+# library is refused and GitHub is asked nothing, and once as a tool runs it, for one JSON object.
+#
+# Every run of pmj here is as on a machine whose own characters are not UTF-8. What it says
+# through a pipe has to be UTF-8 all the same, and each of its two streams is held to that where
+# it names a source file.
 #
 # The server answers a download as GitHub does, by sending pmj on to another address, and it keeps
 # which requests came with a token. So this is also where pmj is held, over real HTTP, to following
@@ -18,13 +27,29 @@
 # this runs on. What that shows is the native binary starting programs, reading what they print,
 # running what was built with its own streams, and ending as the program ended. The real compiler
 # is scripts/real-compiler.sh's to run.
+#
+# On Windows that last part is left out, and pmj is held to saying that there is no compiler: none
+# runs there, and the tools that stand in for one are scripts for a shell, which Windows does not
+# start as programs.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-rid="${1:?usage: scripts/aot-smoke.sh <runtime identifier, such as osx-arm64 or linux-x64>}"
+rid="${1:?usage: scripts/aot-smoke.sh <runtime identifier, such as osx-arm64, linux-x64 or win-x64>}"
 dotnet publish src/Packmoji.Cli -c Release -r "$rid"
 
-pmj="$PWD/src/Packmoji.Cli/bin/Release/net10.0/$rid/publish/pmj"
+case "$rid" in
+  win-*) windows="yes"; program="pmj.exe" ;;
+  *) windows=""; program="pmj" ;;
+esac
+native="$PWD/src/Packmoji.Cli/bin/Release/net10.0/$rid/publish/$program"
+
+# pmj is run here as on a machine whose own characters are not UTF-8. What it says is read through
+# a pipe, as a tool reads it, and has to be UTF-8 there all the same: the name of a source file is
+# not ASCII. Elsewhere than on Windows a machine says which characters are its own in its
+# environment, and that is set here. On Windows it is the code page of the console, set further down.
+pmj() {
+  LC_ALL=en_US.ISO8859-1 "$native" "$@"
+}
 expected="$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Directory.Build.props)"
 
 fail() {
@@ -32,7 +57,13 @@ fail() {
   exit 1
 }
 
-version="$("$pmj" --version)"
+# pmj ends a line as its machine does, and on Windows that is with a carriage return before the
+# line feed. It is no part of a line that is looked for here.
+plain() {
+  tr -d '\r'
+}
+
+version="$(pmj --version)"
 echo "pmj --version: $version"
 case "$version" in
   "$expected"*) ;;
@@ -41,36 +72,64 @@ esac
 
 # Captured first and searched afterwards: a pipe into grep -q would end pmj early, and with
 # pipefail that is a failure.
-help="$("$pmj" --help)"
+help="$(pmj --help)"
 case "$help" in
   *"Packmoji, the package manager for Emojicode."*) ;;
   *) fail "--help did not print pmj's description" ;;
 esac
 
 status=0
-"$pmj" frobnicate > /dev/null 2>&1 || status=$?
+pmj frobnicate > /dev/null 2>&1 || status=$?
 [ "$status" -eq 2 ] || fail "an unknown command ended with status $status, and not with 2"
 
 work="$(mktemp -d)"
+# Written as Windows writes a path, which pmj and Python need there and this bash reads as well.
+[ -z "$windows" ] || work="$(cygpath -m "$work")"
 server=""
 cleanup() {
   if [ -n "$server" ]; then
     kill "$server" 2> /dev/null || true
     wait "$server" 2> /dev/null || true
   fi
+  [ -z "$codepage" ] || chcp.com "$codepage" > /dev/null 2>&1 || true
   chmod -R u+w "$work" 2> /dev/null || true
   rm -rf "$work"
 }
 trap cleanup EXIT
 
-# A library, made and packed by the native pmj.
+# The code page of the console is set to one that is not UTF-8, and put back when this ends. Where
+# there is no console there is none to set, and pmj then writes UTF-8 with nothing done.
+codepage=""
+if [ -n "$windows" ]; then
+  codepage="$(chcp.com 2> /dev/null | tr -dc '0-9')" || codepage=""
+  [ -z "$codepage" ] || chcp.com 437 > /dev/null
+fi
+
+# A library, made and packed by the native pmj. What pmj says of it names its source file, and
+# that name has to arrive as UTF-8.
 cd "$work"
-"$pmj" new @smoke/greeter --lib > /dev/null
+made="$(pmj new @smoke/greeter --lib | plain)"
+case "$made" in
+  *"  src/lib.🍇"*) ;;
+  *) echo "$made" >&2; fail "pmj new did not name the library's source file, src/lib.🍇, in UTF-8" ;;
+esac
 cd greeter
-packed="$("$pmj" pack)"
+packed="$(pmj pack | plain)"
 echo "$packed"
 digest="$(echo "$packed" | sed -n 's/^  sha256 //p')"
 [ "${#digest}" -eq 64 ] || fail "pmj pack did not print a digest"
+
+# A problem goes to standard error, which is a pipe of its own to a tool. A library whose source
+# file is gone is told the file's name, and that has to arrive as UTF-8 too.
+cd "$work"
+pmj new @smoke/gone --lib > /dev/null
+rm "gone/src/lib.🍇"
+status=0
+(cd gone && pmj pack) > /dev/null 2> "$work/gone.said" || status=$?
+plain < "$work/gone.said" > "$work/gone.err"
+[ "$status" -eq 1 ] || { cat "$work/gone.err" >&2; fail "pmj pack ended with status $status for a library whose source file is gone"; }
+grep -qx 'error\[entry.not-found\]: The entry file "src/lib.🍇" was not found.' "$work/gone.err" || { cat "$work/gone.err" >&2; fail "pmj pack did not name the missing source file, src/lib.🍇, in UTF-8 on standard error"; }
+cd "$work/greeter"
 
 # The release that would carry it, laid out as GitHub's addresses are, and served from here.
 release="$work/site/smoke/greeter/releases/download/greeter-v0.1.0"
@@ -104,7 +163,8 @@ class Files(http.server.SimpleHTTPRequestHandler):
     # Whether a token came is kept, and never the token.
     def note(self, kind):
         token = "yes" if self.headers.get("Authorization") else "no"
-        with open(asked, "a") as log:
+        # A line ends as it does here on every machine: whole lines of this file are looked for.
+        with open(asked, "a", newline="\n") as log:
             log.write(f"{kind} {self.path.split('?')[0]} token={token}\n")
 
     def do_GET(self):
@@ -135,7 +195,18 @@ threading.Thread(target=files.serve_forever, daemon=True).start()
 print(f"Serving on port {github.server_port} .", flush=True)
 github.serve_forever()
 PYTHON
-python3 -u "$work/github.py" "$work/site" "$work/asked.log" > "$work/server.log" 2>&1 &
+
+# Python by the name python3 or, as on Windows, python. A program of that name that does not run
+# is passed over: Windows keeps one that only says where Python can be had.
+python=""
+for named in python3 python; do
+  if "$named" -c "" > /dev/null 2>&1; then
+    python="$named"
+    break
+  fi
+done
+[ -n "$python" ] || fail "Python 3 was not found, and the server that stands in for GitHub is written in it"
+"$python" -u "$work/github.py" "$work/site" "$work/asked.log" > "$work/server.log" 2>&1 &
 server=$!
 
 # Waited for by what it does and not by the clock, for how long a process takes to start on a
@@ -148,7 +219,7 @@ while [ -z "$port" ] && kill -0 "$server" 2> /dev/null && [ $((SECONDS - waited)
   port="$(sed -n 's/.* port \([0-9][0-9]*\) .*/\1/p' "$work/server.log" | head -1)"
 done
 if [ -z "$port" ]; then
-  echo "The server that stands in for GitHub, run by $(command -v python3), said this in $((SECONDS - waited)) seconds:" >&2
+  echo "The server that stands in for GitHub, run by $(command -v "$python"), said this in $((SECONDS - waited)) seconds:" >&2
   cat "$work/server.log" >&2
   fail "the server that stands in for GitHub did not start"
 fi
@@ -160,9 +231,9 @@ export GITHUB_TOKEN="smoke-token-that-is-no-ones"
 
 # An application that depends on it.
 cd "$work"
-"$pmj" new @smoke/app > /dev/null
+pmj new @smoke/app > /dev/null
 cd app
-"$pmj" add @smoke/greeter 2>&1 | tee "$work/said.log"
+pmj add @smoke/greeter 2>&1 | tee "$work/said.log"
 grep -q "\"sha256\": \"$digest\"" packmoji.lock || fail "the lockfile does not hold the digest that pmj pack printed"
 
 # The token went to the API. It went with no download, and not on to where a download was sent.
@@ -175,12 +246,44 @@ if grep -q "smoke-token" "$work/said.log" packmoji.lock packmoji.json; then fail
 
 # On a machine that has fetched nothing, the lockfile alone is enough, and may not change.
 chmod -R u+w "$PACKMOJI_HOME" && rm -rf "$PACKMOJI_HOME"
-"$pmj" install --locked
+
+# First on a machine that limits the scopes pmj may depend on, to one the package is not of: it is
+# refused, and though nothing is in the cache, nothing is asked of GitHub about it.
+asked="$(wc -l < "$work/asked.log")"
+status=0
+PACKMOJI_SCOPES=elsewhere pmj install --locked > /dev/null 2> "$work/scope.said" || status=$?
+plain < "$work/scope.said" > "$work/scope.err"
+[ "$status" -eq 1 ] || { cat "$work/scope.err" >&2; fail "pmj install ended with status $status under a limit that does not allow the package"; }
+grep -qx 'error\[scope.not-allowed\]: "@smoke/greeter" is outside the scopes pmj is limited to here.' "$work/scope.err" || fail "the package was not refused for its scope"
+[ "$(wc -l < "$work/asked.log")" = "$asked" ] || fail "GitHub was asked something about a package that is not allowed"
+[ ! -e "$PACKMOJI_HOME/cache" ] || fail "a package that is not allowed was fetched"
+
+pmj install --locked
 unpacked="$PACKMOJI_HOME/cache/smoke/greeter/0.1.0/$digest/src/lib.🍇"
 [ -f "$unpacked" ] || fail "the library's source was not unpacked into the cache at $unpacked"
 
-"$pmj" tree
-"$pmj" verify
+pmj tree
+pmj verify
+
+# A tool that restores a project is answered with one object, which says what is locked.
+answer="$(pmj install --locked --json 2> "$work/json.err")"
+case "$answer" in
+  '{'*'"ok": true'*'"written": false'*'"changes": []'*'"name": "@smoke/greeter"'*"\"sha256\": \"$digest\""*) ;;
+  *) echo "$answer" >&2; fail "pmj install --json did not answer with what is locked" ;;
+esac
+[ ! -s "$work/json.err" ] || { cat "$work/json.err" >&2; fail "pmj install --json wrote to standard error"; }
+
+if [ -n "$windows" ]; then
+  for command in build run; do
+    status=0
+    pmj "$command" > /dev/null 2> "$work/$command.said" || status=$?
+    plain < "$work/$command.said" > "$work/$command.err"
+    [ "$status" -eq 1 ] || { cat "$work/$command.err" >&2; fail "pmj $command ended with status $status on a machine with no compiler"; }
+    grep -qx 'error\[compiler.not-found\]: The Emojicode compiler was not found.' "$work/$command.err" || { cat "$work/$command.err" >&2; fail "pmj $command did not say that there is no compiler"; }
+  done
+  echo "pmj runs as a native binary for $rid ($(wc -c < "$native" | tr -d ' ') bytes), and builds nothing there"
+  exit 0
+fi
 
 # The tools of a build, stood in for. Each writes what it is asked to write, and the program the
 # linker makes says what it was given and ends with a status of its own.
@@ -226,7 +329,7 @@ export EMOJICODEC="$tools/emojicodec" CXX="$tools/c++" AR="$tools/ar" EMOJICODE_
 
 # The native pmj starts each of them, reads what it printed, and puts what was built where it belongs.
 status=0
-"$pmj" build > "$work/built.log" 2> "$work/built.err" || status=$?
+pmj build > "$work/built.log" 2> "$work/built.err" || status=$?
 [ "$status" -eq 0 ] || { cat "$work/built.err" >&2; fail "pmj build ended with status $status"; }
 cat "$work/built.log"
 grep -qx "Building @smoke/greeter 0.1.0" "$work/built.log" || fail "the library was not built"
@@ -237,7 +340,7 @@ for made in "packages/greeter/🏛" packages/greeter/libgreeter.a packages/greet
 done
 
 # A tool is answered with one object, and what was built is not built again.
-answer="$("$pmj" build --dependencies-only --json 2> /dev/null)"
+answer="$(pmj build --dependencies-only --json 2> /dev/null)"
 case "$answer" in
   '{'*'"ok": true'*'"bareName": "greeter"'*'"built": false'*) ;;
   *) echo "$answer" >&2; fail "pmj build --json did not answer with the package, built before" ;;
@@ -245,9 +348,9 @@ esac
 
 # The program is run with pmj's own streams, is given what follows the two dashes, and pmj ends as it ended.
 status=0
-said="$("$pmj" run -- one "two words" 2> "$work/run.err")" || status=$?
+said="$(pmj run -- one "two words" 2> "$work/run.err")" || status=$?
 [ "$said" = "the program was given: one two words" ] || fail "pmj run printed \"$said\", and not what the program says"
 [ "$status" -eq 3 ] || fail "pmj run ended with status $status, and not with the program's 3"
 grep -qx "Built the application target/debug/app." "$work/run.err" || fail "what pmj run says of the build is not on standard error"
 
-echo "pmj runs as a native binary for $rid ($(wc -c < "$pmj" | tr -d ' ') bytes)"
+echo "pmj runs as a native binary for $rid ($(wc -c < "$native" | tr -d ' ') bytes)"

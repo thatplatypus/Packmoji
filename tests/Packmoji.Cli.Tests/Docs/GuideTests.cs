@@ -53,6 +53,38 @@ namespace Packmoji.Cli.Tests.Docs
             }
         }
 
+        private static string OnWindows()
+        {
+            var guide = Guide("cli.md");
+            var start = guide.IndexOf("\n## pmj on Windows\n", StringComparison.Ordinal);
+            start.ShouldBeGreaterThan(0, "the guide has no section on Windows");
+            return guide[start..guide.IndexOf("\n## ", start + 1, StringComparison.Ordinal)];
+        }
+
+        // A command that is added has to be said to work there or not: nothing of it is tried on Windows until it is.
+        [Fact]
+        public void The_guide_says_of_every_command_what_it_does_on_Windows()
+        {
+            using var sandbox = new Sandbox();
+            var section = OnWindows();
+
+            foreach (var command in PmjCommandLine.Build(sandbox.Host()).Subcommands)
+            {
+                section.ShouldContain($"`{command.Name}`");
+            }
+        }
+
+        // What goes to a console is left to the console, which on Windows shows a question mark for
+        // what its code page does not hold. Whoever meets that looks under Windows, and finds what to do.
+        [Fact]
+        public void The_guide_says_under_Windows_what_a_console_shows_of_a_character_its_code_page_does_not_hold()
+        {
+            var section = OnWindows();
+
+            section.ShouldContain("question mark");
+            section.ShouldContain("`chcp 65001`");
+        }
+
         [Fact]
         public void Every_way_pmj_ends_is_in_the_guide_with_its_number()
         {
@@ -106,6 +138,17 @@ namespace Packmoji.Cli.Tests.Docs
         }
 
         [Fact]
+        public async Task The_answer_of_a_command_that_locks_in_the_guide_is_what_an_update_of_the_first_project_gives()
+        {
+            using var sandbox = Sandbox.WithGrapevine();
+            await sandbox.RunAsync("new", "@you/site");
+            await sandbox.RunInAsync("site", "add", "@thatplatypus/grapevine");
+            sandbox.Release(Sandbox.Grapevine, "@thatplatypus/grapevine", "0.3.1", "@thatplatypus/crypto@1.0", "@thatplatypus/deflate@0.1");
+
+            ShouldShow(Guide("cli.md"), await sandbox.RunInAsync("site", "update", "--json"));
+        }
+
+        [Fact]
         public async Task The_answer_for_a_tool_in_the_guide_is_what_a_build_of_the_first_project_gives()
         {
             using var sandbox = Sandbox.WithGrapevine();
@@ -116,7 +159,7 @@ namespace Packmoji.Cli.Tests.Docs
 
             // The guide's project is in someone's home, and its compiler where the installer puts it.
             run.Error.ShouldBeEmpty();
-            var answer = run.Output.Replace(sandbox.PathOf("site"), "/home/you/site").Replace(sandbox.ToolsDirectory, "/usr/local/bin").Replace(Path.DirectorySeparatorChar, '/');
+            var answer = PlainText.Slashed(run.Output).Replace(PlainText.Slashed(sandbox.PathOf("site")), "/home/you/site").Replace(PlainText.Slashed(sandbox.ToolsDirectory), "/usr/local/bin");
             Shape(Guide("cli.md")).ShouldContain(Shape(answer).TrimEnd('\n'));
         }
 
@@ -135,7 +178,7 @@ namespace Packmoji.Cli.Tests.Docs
 
             (await sandbox.RunAsync("build")).Status.ShouldBe(0);
 
-            sandbox.Asked.Distinct().Order(StringComparer.Ordinal).ShouldBe(["AR", "CC", "CXX", "EMOJICODEC", "EMOJICODE_INCLUDE", "EMOJICODE_PACKAGES_PATH", "PATH"]);
+            sandbox.Asked.Distinct().Order(StringComparer.Ordinal).ShouldBe(["AR", "CC", "CXX", "EMOJICODEC", "EMOJICODE_INCLUDE", "EMOJICODE_PACKAGES_PATH", "PACKMOJI_SCOPES", "PATH"]);
             foreach (var variable in sandbox.Asked.Distinct())
             {
                 Guide("cli.md").ShouldContain($"`{variable}`");

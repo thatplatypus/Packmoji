@@ -100,25 +100,7 @@ namespace Packmoji.Core.Reports
             WriteAsked(json, "dependencies", lockfile.Root.Dependencies, locked);
             WriteAsked(json, "devDependencies", lockfile.Root.DevDependencies, locked);
 
-            json.WriteStartArray("packages");
-            foreach (var package in ReportJson.InOrder(lockfile))
-            {
-                json.WriteStartObject();
-                ReportJson.WritePackage(json, package);
-                json.WriteStartArray("dependencies");
-                foreach (var dependency in package.Dependencies.OrderBy(dependency => dependency.Name).ThenBy(dependency => dependency.Version))
-                {
-                    json.WriteStartObject();
-                    json.WriteString("name", dependency.Name.ToString());
-                    json.WriteString("version", dependency.Version.ToString());
-                    json.WriteEndObject();
-                }
-
-                json.WriteEndArray();
-                json.WriteEndObject();
-            }
-
-            json.WriteEndArray();
+            ReportJson.WritePackages(json, lockfile);
             json.WriteEndObject();
             return json.ToString();
         }

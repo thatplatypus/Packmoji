@@ -6,6 +6,45 @@ Packages are found on GitHub directly, as releases of their repositories. There 
 
 `pmj` builds with the Emojicode compiler, which it does not bring with it. [How pmj builds](building.md) says what a build needs and what it does.
 
+## Getting pmj
+
+A release of Packmoji on GitHub carries `pmj` for three machines, and one file of digests:
+
+| File | Holds |
+|---|---|
+| `pmj-<version>-linux-x64` | `pmj` for Linux on x86-64 with glibc 2.35 or newer, which is Ubuntu 22.04 and what came after it |
+| `pmj-<version>-osx-arm64` | `pmj` for macOS on Apple silicon |
+| `pmj-<version>-win-x64.exe` | `pmj` for Windows on x86-64 |
+| `pmj-<version>.sha256` | The SHA-256 of each of the three, a line for each, as `sha256sum` writes and checks them |
+
+Each of the first three is the program itself: one file, with nothing to unpack, which needs no .NET. Fetch the one for your machine and the digests, hold the program to its digest, and mark it as a program:
+
+```sh
+version=0.1.0
+machine=linux-x64
+from=https://github.com/thatplatypus/Packmoji/releases/download/v$version
+
+curl -fsSLO "$from/pmj-$version-$machine"
+curl -fsSLO "$from/pmj-$version.sha256"
+sha256sum --check --ignore-missing "pmj-$version.sha256"
+chmod +x "pmj-$version-$machine"
+```
+
+Then put it, under the name `pmj`, in a directory of your `PATH`.
+
+- **On macOS the machine is `osx-arm64`,** and the digest is checked with `shasum -a 256 --check --ignore-missing`.
+- **On Windows the file is `pmj-<version>-win-x64.exe`,** and there is nothing to mark. PowerShell holds it to its digest so:
+
+```powershell
+$version = "0.1.0"
+$expected = (Select-String -Path "pmj-$version.sha256" -Pattern "win-x64\.exe$").Line.Split(" ")[0]
+if ((Get-FileHash "pmj-$version-win-x64.exe" -Algorithm SHA256).Hash -ne $expected) { throw "this is not the program the release holds" }
+```
+
+- **A digest that comes with a program shows that the program arrived whole, and not who made it.** A tool that fetches `pmj` keeps the digest it expects with its own code, taken once from the release's own `pmj-<version>.sha256`, and holds the program to that.
+- **No program is signed.** macOS holds back a program that a browser fetched, until the mark the browser left on it is taken away: `xattr -d com.apple.quarantine pmj`. `curl` leaves no such mark.
+- **What `pmj` does on Windows is less than elsewhere:** see [pmj on Windows](#pmj-on-windows).
+
 ## A first project
 
 ```
@@ -84,7 +123,7 @@ What is written is a manifest, an entry file under `src`, a `.gitignore` for `ta
 ### pmj add
 
 ```
-pmj add <@scope/name>[@<requirement>] [--dev] [--repository <github.com/owner/repo>]
+pmj add <@scope/name>[@<requirement>] [--dev] [--repository <github.com/owner/repo>] [--json]
 ```
 
 - **With no requirement, `add` asks for the latest version, written in full.** The latest is the highest version that is not a pre-release.
@@ -105,7 +144,7 @@ A package the project already depends on:
 ### pmj remove
 
 ```
-pmj remove <@scope/name> [--repository <github.com/owner/repo>]...
+pmj remove <@scope/name> [--repository <github.com/owner/repo>]... [--json]
 ```
 
 Takes the package out of whichever table has it, and resolves what is left. The lockfile then holds only what something still needs.
@@ -113,7 +152,7 @@ Takes the package out of whichever table has it, and resolves what is left. The 
 ### pmj install
 
 ```
-pmj install [--locked] [--repository <github.com/owner/repo>]...
+pmj install [--locked] [--repository <github.com/owner/repo>]... [--json]
 ```
 
 - **When `packmoji.lock` still answers `packmoji.json`, nothing is chosen.** Each locked package is fetched and held to the digest the lockfile records. A package whose locked bytes are already in the cache is not asked of GitHub at all, so `install` then works with no network.
@@ -123,7 +162,7 @@ pmj install [--locked] [--repository <github.com/owner/repo>]...
 ### pmj update
 
 ```
-pmj update [<@scope/name>...] [--dry-run] [--repository <github.com/owner/repo>]...
+pmj update [<@scope/name>...] [--dry-run] [--repository <github.com/owner/repo>]... [--json]
 ```
 
 A build never moves to a newer version by itself, so this is how you move it.
@@ -239,10 +278,11 @@ error[package.not-found]: No release of "@thatplatypus/crypto" was found.
 
 - **Every code is listed** in [the manifest reference](manifest.md#diagnostics), and those of a resolution are explained in [How pmj chooses versions](resolution.md).
 - **There is no color and no prompt.** `pmj` never waits for an answer, so it behaves the same in a terminal and in CI.
+- **Through a pipe or into a file, it is UTF-8 on every machine,** whatever characters the machine calls its own: that is where a tool reads it, and the name of a source file is not ASCII. What goes to a console is written as the console asks.
 
 ### For a tool: --json
 
-`pmj tree --json`, `pmj verify --json` and `pmj build --json` put one JSON object on standard output, and nothing else there.
+`pmj tree`, `pmj verify`, `pmj build`, and the four commands that lock packages, `pmj add`, `pmj remove`, `pmj install` and `pmj update`, each take `--json`. With it they put one JSON object on standard output, and nothing else there.
 
 - **`ok`** is false when any problem is an error.
 - **`diagnostics`** holds the problems. With `--json` they are not also printed to standard error.
@@ -321,6 +361,66 @@ A problem in `diagnostics`:
 - **`packages`** is every locked package once, in order of name. A build holds one version of a package, so a name is enough to find one.
 
 `pmj verify --json` gives `ok`, `diagnostics`, `omittedDiagnostics`, and `packages`: every package that was held to the lockfile, each with its `name`, `version`, `source`, `sha256` and `verified`. A package that is not what the lockfile holds is named in a problem's text.
+
+`pmj add`, `pmj remove`, `pmj install` and `pmj update` answer alike: whether the project's files were written, what the lockfile holds that it did not hold before, and every package it holds now. `pmj update --json`, for the project above once grapevine 0.3.1 is released:
+
+```json
+{
+  "ok": true,
+  "diagnostics": [],
+  "omittedDiagnostics": 0,
+  "written": true,
+  "changes": [
+    {
+      "change": "moved",
+      "name": "@thatplatypus/grapevine",
+      "from": "0.3.0",
+      "to": "0.3.1"
+    }
+  ],
+  "packages": [
+    {
+      "name": "@thatplatypus/crypto",
+      "version": "1.0.0",
+      "source": "github.com/thatplatypus/grapevine",
+      "sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+      "verified": "checksum",
+      "dependencies": []
+    },
+    {
+      "name": "@thatplatypus/deflate",
+      "version": "0.1.0",
+      "source": "github.com/thatplatypus/grapevine",
+      "sha256": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+      "verified": "checksum",
+      "dependencies": []
+    },
+    {
+      "name": "@thatplatypus/grapevine",
+      "version": "0.3.1",
+      "source": "github.com/thatplatypus/grapevine",
+      "sha256": "98fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855e3b0c442",
+      "verified": "checksum",
+      "dependencies": [
+        {
+          "name": "@thatplatypus/crypto",
+          "version": "1.0.0"
+        },
+        {
+          "name": "@thatplatypus/deflate",
+          "version": "0.1.0"
+        }
+      ]
+    }
+  ]
+}
+```
+
+- **`written`** says whether the command wrote the project's files. It is false for `update --dry-run`, and for a command that had nothing to resolve, such as `install` with a lockfile that already answers the manifest. A command that resolved has written, even when what it wrote is what was there: `changes` is then empty.
+- **`changes`** is in order of name, and empty when the lockfile holds the same versions as before. For `update --dry-run` it is what would change.
+- **`change`** is `added`, `removed` or `moved`. `from` is the version before and `to` the version now: a package that was added has no `from`, and one that was removed no `to`. A package can move down as well as up.
+- **`packages`** is every package the lockfile now holds, or would hold, each as `pmj tree --json` gives one.
+- **A command that could not do what it was asked answers with `ok`, `diagnostics` and `omittedDiagnostics` alone,** and has written nothing. `pmj install --locked --json` with a lockfile that is missing, or that no longer answers the manifest, answers so with `lock.out-of-date`.
 
 `pmj build --json`, for the project above:
 
@@ -409,16 +509,20 @@ Each file `pmj` writes is written whole beside its place and then put there in o
 | `PACKMOJI_GITHUB` | Another address for `https://github.com`, where releases are downloaded from |
 | `PACKMOJI_GITHUB_API` | Another address for `https://api.github.com`, where versions are listed |
 | `PACKMOJI_DIRECT` | Accepted, as `--direct` is. Finding packages on GitHub directly is the only way there is yet |
+| `PACKMOJI_SCOPES` | The scopes `pmj` may depend on, with commas between them, as in `thatplatypus,emojicode`. Not set, any scope |
 | `EMOJICODEC` | The Emojicode compiler that a build uses. Without it, the first `emojicodec` on `PATH` |
 | `EMOJICODE_PACKAGES_PATH` | Where the compiler's own packages are, which a program is linked with. The compiler reads it too. Without it, `/usr/local/EmojicodePackages` |
 | `EMOJICODE_INCLUDE` | Where the compiler's headers are, which native code is compiled against. Without it, `/usr/local/include/emojicode` |
 | `CXX`, `CC`, `AR` | The C++ compiler, which also links a program, the C compiler, and the archiver. Without them, `c++`, `cc` and `ar` on `PATH` |
 
 - **A token is sent to the API's address and to nothing else.** It is never sent with a download, and it is in nothing `pmj` prints or writes. Space and line ends around it are no part of it.
+- **`PACKMOJI_SCOPES` is for a machine that runs other people's projects,** such as a website that lets a visitor write a manifest. A package of a scope that is not in the list is refused, with `scope.not-allowed`, wherever it is met: when `packmoji.json` asks for it, when `packmoji.lock` holds it, when `pmj add` is given it, and when a package that is allowed depends on it. Nothing is asked of GitHub about it, since a scope is the owner its packages are released by.
+- **Every command that reads what a project depends on holds to the list:** `add`, `remove`, `install`, `update`, `tree`, `verify`, `build` and `run`. A project that already asks for a package outside it is refused by `remove` too, and its manifest is mended by hand. Once the manifest no longer asks for it, `pmj install` locks the project again without it: a lockfile that no longer answers the manifest is not held to the list, since nothing of it is used.
+- **A scope is written as a package's name has it, without the `@`.** A list that cannot be read stops those commands, with `config.invalid`, before either file of the project is read: a limit that was mistyped is never taken for no limit. That holds for a variable that is set to nothing, which is what a missing setting leaves on a server. To have no limit, do not set the variable.
 - **The two addresses are for a GitHub of your own, and for tests.** Each begins with `http://` or `https://`, and they are set together or not at all: with one alone, `pmj` would download from one GitHub and list versions from another. A token goes to whatever address you give for the API.
 - **Each of the four programs is one program, with no arguments:** a path, or a name that is looked for in the directories of `PATH`. A variable that is set to nothing says nothing.
 - **A build reads the six of them only when it needs them.** A package of Emojicode alone needs no C++ compiler, and a command that does not build needs none of this.
-- **What `pmj` is told here and cannot use stops it,** with `config.invalid`, before anything is asked of anyone: an address that is not one, one address without the other, or a token that could not be sent. It is never passed over for what `pmj` does when nothing is said. A command that needs nothing of GitHub is not stopped, such as `pmj new`, or `pmj install` when the cache holds what is locked.
+- **What `pmj` is told here and cannot use stops it,** with `config.invalid`, before anything is asked of anyone: an address that is not one, one address without the other, or a token that could not be sent. It is never passed over for what `pmj` does when nothing is said. An address or a token that cannot be used stops only a command that asks something of GitHub: `pmj new` is not stopped by one, and neither is `pmj install` when the cache holds what is locked. A list of scopes that cannot be read stops every command that reads what a project depends on, whatever the cache holds.
 
 ## How a package is found
 
@@ -492,10 +596,24 @@ A package is compiled once for the whole machine, and what was built is kept bes
 
 [How pmj builds](building.md#once-for-the-whole-machine) says exactly what a key holds.
 
+## pmj on Windows
+
+On Windows `pmj` manages packages, and builds nothing.
+
+- **`new`, `init`, `add`, `remove`, `install`, `update`, `tree`, `pack` and `verify` do there what they do everywhere,** with `--json` and with `PACKMOJI_SCOPES`.
+- **`build` and `run` end with `compiler.not-found`.** No Emojicode compiler runs on Windows, and `pmj` brings none.
+- **The two files of a project are the same bytes there as anywhere.** `packmoji.json` and `packmoji.lock` are written with `/` in every path and a line feed at the end of every line.
+- **What `pmj` prints for a person ends its lines as Windows does. A JSON answer does not:** its lines end with a line feed on every machine.
+- **At a console whose code page is not UTF-8, a character that code page does not hold is shown as a question mark:** `src/main.??` for `src/main.🍇`. That is every console nobody has changed. `chcp 65001` sets a console to UTF-8. Through a pipe or into a file `pmj` writes UTF-8 whatever the console's code page is, so a tool that runs `pmj` is not touched by this.
+- **`pmj pack` packs the files as they are on the disk.** Git on Windows can check a file out with other line ends than the repository holds, and a package packed from such a checkout is not the bytes that another machine would pack. A `.gitattributes` with `* text=auto eol=lf` keeps the files the same everywhere.
+
 ## What pmj does not do yet
 
 | Not yet | Comes with |
 |---|---|
+| `build` and `run` on Windows | An Emojicode compiler that runs there |
+| `pmj` for other machines: Linux on ARM, macOS on Intel, Windows on ARM | Later |
+| A signed program, and an installer | Later |
 | `test` | Later. Emojicode has no way of its own to say what a package's tests are, and one has to be chosen first |
 | Building several packages at once, and compiling a project only when it has changed | Later |
 | A registry, and `search` and `info` | The registry |

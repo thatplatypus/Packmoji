@@ -17,12 +17,14 @@ namespace Packmoji.Cli.Commands
         /// <param name="packages">The packages to raise, each as it was typed. Every dependency when none is named.</param>
         /// <param name="dryRun">Whether to say what would change and write nothing.</param>
         /// <param name="repositories">Repositories to look in as well, each as it was typed.</param>
-        public static async Task<int> RunAsync(PmjHost host, IReadOnlyList<string> packages, bool dryRun, IReadOnlyList<string> repositories, CancellationToken cancellationToken)
+        /// <param name="json">Whether to answer a tool, with one JSON object that says what changed in the lockfile, or would.</param>
+        public static async Task<int> RunAsync(PmjHost host, IReadOnlyList<string> packages, bool dryRun, IReadOnlyList<string> repositories, bool json, CancellationToken cancellationToken)
         {
+            var reply = new Reply(host, json);
             var opened = ProjectSession.OpenToFetch(host);
             if (!opened.Succeeded)
             {
-                return DiagnosticPrinter.Report(host, opened.Diagnostics, opened.Omitted);
+                return reply.Stop(opened.Diagnostics, opened.Omitted);
             }
 
             var project = opened.Value;
@@ -52,7 +54,7 @@ namespace Packmoji.Cli.Commands
             refused.AddRange(alsoLookIn.Diagnostics);
             if (refused.Count > 0)
             {
-                return DiagnosticPrinter.Report(host, refused);
+                return reply.Stop(refused);
             }
 
             var every = (project.Manifest.Dependencies ?? []).Concat(project.Manifest.DevDependencies ?? []).Select(dependency => dependency.Name);
@@ -64,7 +66,7 @@ namespace Packmoji.Cli.Commands
                 var asked = ManifestEditor.Find(manifest, name, out var dev)!;
                 if (await source.ListVersionsAsync(name, cancellationToken) is not { } listed)
                 {
-                    return DiagnosticPrinter.Report(host, DirectPackageSource.NotFound(name, null, source.LookedIn(name)));
+                    return reply.Stop(DirectPackageSource.NotFound(name, null, source.LookedIn(name)));
                 }
 
                 if (VersionCatalog.LatestOnLine(listed.Versions, asked.Requirement) is { } latest && VersionRequirement.TryParse(latest.ToString(), out var higher, out _))
@@ -76,14 +78,13 @@ namespace Packmoji.Cli.Commands
 
             if (raised.Count == 0 && project.IsLocked)
             {
-                host.Out.WriteLine("Every requirement already asks for the latest version on its line.");
-                return ExitStatus.Success;
+                return project.Unchanged("Every requirement already asks for the latest version on its line.", json);
             }
 
             var changed = ProjectSession.Checked(manifest);
             if (!changed.Succeeded)
             {
-                return DiagnosticPrinter.Report(host, changed.Diagnostics, changed.Omitted);
+                return reply.Stop(changed.Diagnostics, changed.Omitted);
             }
 
             // With nothing raised there is still a lockfile to bring up to the manifest, and nothing to say of the manifest.
@@ -93,8 +94,8 @@ namespace Packmoji.Cli.Commands
                     Environment.NewLine,
                     [$"{(dryRun ? "Would raise" : "Raised")} {raised.Count} requirement{(raised.Count == 1 ? "" : "s")} in {ManifestReader.FileName}:", .. raised]);
             return dryRun
-                ? await project.PreviewAsync(changed.Value, source, said, cancellationToken)
-                : await project.ResolveAsync(changed.Value, source, said, cancellationToken);
+                ? await project.PreviewAsync(changed.Value, source, said, json, cancellationToken)
+                : await project.ResolveAsync(changed.Value, source, said, json, cancellationToken);
         }
     }
 }

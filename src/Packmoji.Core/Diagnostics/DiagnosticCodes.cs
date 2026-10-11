@@ -86,5 +86,7 @@ namespace Packmoji.Core.Diagnostics
         public const string PackagesForeign = "packages.foreign";
         public const string RunNotAnApp = "run.not-an-app";
         public const string RunFailed = "run.failed";
+
+        public const string ScopeNotAllowed = "scope.not-allowed";
     }
 }

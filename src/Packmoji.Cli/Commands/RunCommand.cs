@@ -16,6 +16,14 @@ namespace Packmoji.Cli.Commands
         /// <param name="arguments">What the program is given, each as it was written after the two dashes.</param>
         public static async Task<int> RunAsync(PmjHost host, bool release, IReadOnlyList<string> arguments, CancellationToken cancellationToken)
         {
+            // The manifest is read here for the project's kind, before the build opens the project.
+            // A limit on scopes that cannot be read is said before any file is, as it is by the build.
+            var allowed = host.Scopes();
+            if (!allowed.Succeeded)
+            {
+                return DiagnosticPrinter.Report(host, allowed.Diagnostics);
+            }
+
             var manifest = ProjectFiles.ReadManifest(host.WorkingDirectory);
             if (!manifest.Succeeded)
             {

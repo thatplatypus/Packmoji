@@ -14,7 +14,11 @@ namespace Packmoji.Core.Tests.Diagnostics
             .ToArray();
 
         [Fact]
-        public void There_are_the_80_codes_of_the_four_designs() => Codes.Length.ShouldBe(80);
+        public void There_are_the_81_codes_of_the_five_designs() => Codes.Length.ShouldBe(81);
+
+        [Fact]
+        public void The_code_for_a_package_outside_the_allowed_scopes_is_spelled_as_a_tool_matches_it() =>
+            DiagnosticCodes.ScopeNotAllowed.ShouldBe("scope.not-allowed");
 
         [Fact]
         public void No_two_codes_are_the_same() => Codes.Distinct(StringComparer.Ordinal).Count().ShouldBe(Codes.Length);

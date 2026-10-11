@@ -14,7 +14,7 @@ Packmoji is being built one milestone at a time. What works today:
 - **Dependencies, with no registry.** `pmj add`, `remove`, `install` and `update` find packages on GitHub directly, as releases of their repositories, and lock the exact bytes. `pmj tree` shows what is locked, and `pmj verify` checks it again.
 - **Packing.** `pmj pack` writes the one file a release carries, the same bytes from the same files on every machine.
 - **Building.** `pmj build` compiles what a project depends on with the Emojicode compiler, C and C++ included, each package once for the whole machine, and then the project. `pmj run` builds an application and runs it.
-- **One native binary.** `pmj` publishes with Native AOT and needs no .NET where it runs.
+- **One native binary.** `pmj` publishes with Native AOT and needs no .NET where it runs. A release carries it for Linux and Windows on x86-64 and for macOS on Apple silicon, each with its digest: [Getting pmj](docs/cli.md#getting-pmj). On Windows it manages packages and does not build.
 
 What does not work yet: `pmj test`, and the registry, `publish` and attestations, which follow.
 
@@ -44,11 +44,24 @@ You need the .NET 10 SDK. The exact version is pinned in `global.json`.
 ```sh
 scripts/check.sh               # build everything and run every test
 scripts/check.sh --coverage    # the same, and print Packmoji.Core's line coverage
-scripts/aot-smoke.sh osx-arm64 # publish pmj as a native binary and run it (or linux-x64, on Linux)
+scripts/aot-smoke.sh osx-arm64 # publish pmj as a native binary and run it (or linux-x64 on Linux, or win-x64 on Windows)
 scripts/real-compiler.sh       # build the sample projects with the released compiler, in a container (needs Docker)
 ```
 
-CI runs exactly these scripts. Every test but those of the last has a compiler that is made up, so the first three need no Emojicode.
+CI runs exactly these scripts: all of them on Linux, the native program on macOS as well, and the tests and the native program on Windows, with the bash that comes with Git. Every test but those of the last has a compiler that is made up, so the first three need no Emojicode.
+
+## Releasing
+
+A release is made by the workflow `.github/workflows/release.yml`, and by nothing else.
+
+1. Set `<Version>` in `Directory.Build.props`, and merge that.
+2. Run the workflow **Release** by hand, from the Actions tab or with `gh workflow run release.yml`. It builds `pmj` for the three machines, runs each, and keeps the four files of a release with the run. It releases nothing: it is a rehearsal. To look at what it kept, find the run with `gh run list --workflow release.yml` and fetch the files with `gh run download <run> -n assets -D <an empty directory>`.
+3. Tag the commit that was merged, and push the tag, which is `v` and the version: `git switch main && git pull && git tag v0.1.0 && git push origin v0.1.0`. The same workflow then builds the three programs again, runs each, and makes the release.
+
+- **What a run by hand kept is not what a release carries.** A tag builds the programs again, and a program built twice is not the same bytes twice. The digests of a release are the ones the release itself carries, in `pmj-<version>.sha256` and in its notes. A tool that pins a digest takes it from there, and never from a run by hand.
+- **A tag that is not the version stops the workflow before it builds anything,** and a release that is there already is never changed.
+
+[Record 0011](docs/decisions/0011-released-programs.md) says why, and what the three scripts the workflow runs are for: `scripts/release-tag.sh`, `scripts/glibc-floor.sh` and `scripts/release-assets.sh`.
 
 ## Layout
 

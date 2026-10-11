@@ -1,7 +1,9 @@
 using System.Reflection;
 using Packmoji.Cli.Building;
+using Packmoji.Cli.Projects;
 using Packmoji.Core.Diagnostics;
 using Packmoji.Core.Direct;
+using Packmoji.Core.Identity;
 using Packmoji.GitHub;
 
 namespace Packmoji.Cli
@@ -44,6 +46,20 @@ namespace Packmoji.Cli
         /// not say where they are.
         /// </summary>
         public string InstallRoot { get; init; } = "/usr/local";
+
+        /// <summary>
+        /// The scopes this pmj may depend on, as its environment says, or why what it says cannot be
+        /// used. A list that cannot be read is never taken for no list: the limit is there for a
+        /// machine that runs other people's projects.
+        /// </summary>
+        internal Outcome<ScopeLimit> Scopes() =>
+            ScopeLimit.TryParse(Variable(ScopeLimit.Variable), out var limit, out var reason)
+                ? Outcome<ScopeLimit>.Of(limit)
+                : Outcome<ScopeLimit>.Failed(new Diagnostic(
+                    DiagnosticCodes.ConfigInvalid,
+                    $"{ScopeLimit.Variable} is not a list of scopes.",
+                    reason,
+                    $"write the scopes that are allowed with commas between them, as in {ScopeLimit.Variable}=thatplatypus,emojicode; to allow every scope, do not set it"));
 
         /// <summary>The version of pmj, as <c>pmj --version</c> gives it.</summary>
         public static string Version { get; } =

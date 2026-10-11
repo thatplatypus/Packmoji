@@ -420,3 +420,4 @@ The codes that begin with `compiler.`, `build.`, `built.`, `packages.` and `run.
 | `packages.foreign` | A folder in the project's `packages/` has a locked package's name and was not put there by `pmj` |
 | `run.not-an-app` | `pmj run` was run in a library, which has no program to run |
 | `run.failed` | The program was built and could not be started |
+| `scope.not-allowed` | A package that the project asks for, locks or comes to need is of a scope that `PACKMOJI_SCOPES` does not allow |

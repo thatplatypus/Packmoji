@@ -40,8 +40,9 @@ namespace Packmoji.Core.Tests.TestSupport
 
         public PublishedVersion Get(string name, string version) => _published[(Sample.Name(name), Sample.Version(version))];
 
-        public Task<ResolveResult> Resolve(Manifest manifest, Lockfile? existing = null) =>
-            Resolver.ResolveAsync(manifest, existing, this, TestContext.Current.CancellationToken);
+        /// <param name="allowed">The scopes the resolution is limited to. None when it is not said.</param>
+        public Task<ResolveResult> Resolve(Manifest manifest, Lockfile? existing = null, ScopeLimit? allowed = null) =>
+            Resolver.ResolveAsync(manifest, existing, this, allowed ?? ScopeLimit.None, TestContext.Current.CancellationToken);
 
         public ValueTask<PublishedVersion?> FindAsync(PackageName name, SemanticVersion version, CancellationToken cancellationToken)
         {

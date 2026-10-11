@@ -41,7 +41,7 @@ namespace Packmoji.Cli.Tests
             using var _ = sandbox;
             File.SetAttributes(archive, FileAttributes.Normal);
             File.WriteAllBytes(archive, TestPackage.Archive("@thatplatypus/crypto", "1.0.0", Sandbox.Grapevine, "@thatplatypus/deflate@0.1"));
-            Directory.Delete(Path.ChangeExtension(Path.ChangeExtension(Path.ChangeExtension(archive, null), null), null), recursive: true);
+            Sandbox.Forget(Path.ChangeExtension(Path.ChangeExtension(Path.ChangeExtension(archive, null), null), null));
             sandbox.GitHub.Unreachable = true;
 
             var run = await sandbox.RunAsync("install");

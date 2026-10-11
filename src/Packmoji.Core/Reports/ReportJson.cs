@@ -49,6 +49,34 @@ namespace Packmoji.Core.Reports
             json.WriteString("verified", VerificationLevels.Name(package.Verified));
         }
 
+        /// <summary>
+        /// Writes <c>packages</c> into the object that is open: every package a lockfile holds, in
+        /// order, each with what it depends on. Every answer that lists locked packages lists them
+        /// with this, so that a tool reads a package one way.
+        /// </summary>
+        public static void WritePackages(CanonicalJsonWriter json, Lockfile lockfile)
+        {
+            json.WriteStartArray("packages");
+            foreach (var package in InOrder(lockfile))
+            {
+                json.WriteStartObject();
+                WritePackage(json, package);
+                json.WriteStartArray("dependencies");
+                foreach (var dependency in package.Dependencies.OrderBy(dependency => dependency.Name).ThenBy(dependency => dependency.Version))
+                {
+                    json.WriteStartObject();
+                    json.WriteString("name", dependency.Name.ToString());
+                    json.WriteString("version", dependency.Version.ToString());
+                    json.WriteEndObject();
+                }
+
+                json.WriteEndArray();
+                json.WriteEndObject();
+            }
+
+            json.WriteEndArray();
+        }
+
         public static IEnumerable<LockedPackage> InOrder(Lockfile lockfile) =>
             lockfile.Packages.OrderBy(package => package.Name).ThenBy(package => package.Version);
     }

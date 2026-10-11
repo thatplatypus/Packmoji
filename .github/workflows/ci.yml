@@ -1,7 +1,12 @@
 # Checks every pull request, and main after a merge. The checks need no secret.
 #
 # Each job runs a script that also runs on a developer's machine, so a failure here can be
-# had again at a desk: scripts/check.sh, scripts/aot-smoke.sh and scripts/real-compiler.sh.
+# had again at a desk: scripts/check.sh, scripts/aot-smoke.sh, scripts/glibc-floor.sh and
+# scripts/real-compiler.sh.
+#
+# Windows is held to what pmj does there, which is to manage packages. No Emojicode compiler runs
+# on it, so the native program builds nothing there, and the tests that stand a shell in for a
+# compiler are skipped.
 name: CI
 
 on:
@@ -21,9 +26,22 @@ concurrency:
 
 jobs:
   tests:
-    name: Build and test
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Build and test
+            os: ubuntu-latest
+            check: scripts/check.sh --coverage
+          - name: Build and test (Windows)
+            os: windows-latest
+            check: scripts/check.sh
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
     steps:
     - name: Checkout
       uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -33,8 +51,8 @@ jobs:
       with:
         global-json-file: global.json
 
-    - name: Build, test and report coverage
-      run: scripts/check.sh --coverage
+    - name: Build and test
+      run: ${{ matrix.check }}
 
   real-compiler:
     name: The real compiler
@@ -55,12 +73,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          # The Ubuntu a release is built on, for the reason release.yml gives.
+          - os: ubuntu-22.04
             rid: linux-x64
           - os: macos-latest
             rid: osx-arm64
+          - os: windows-latest
+            rid: win-x64
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
     steps:
     - name: Checkout
       uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -77,3 +101,9 @@ jobs:
 
     - name: Publish pmj natively and run it
       run: scripts/aot-smoke.sh ${{ matrix.rid }}
+
+    # Here and not only when a release is made, so that what would stop a release stops the
+    # pull request that brought it.
+    - name: Hold the program to the C library a release promises to start on
+      if: runner.os == 'Linux'
+      run: scripts/glibc-floor.sh src/Packmoji.Cli/bin/Release/net10.0/${{ matrix.rid }}/publish/pmj 2.35

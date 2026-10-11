@@ -7,40 +7,42 @@ namespace Packmoji.Cli.Commands
     internal static class RemoveCommand
     {
         /// <param name="repositories">Repositories to look in as well, each as it was typed.</param>
-        public static async Task<int> RunAsync(PmjHost host, string package, IReadOnlyList<string> repositories, CancellationToken cancellationToken)
+        /// <param name="json">Whether to answer a tool, with one JSON object that says what changed in the lockfile.</param>
+        public static async Task<int> RunAsync(PmjHost host, string package, IReadOnlyList<string> repositories, bool json, CancellationToken cancellationToken)
         {
+            var reply = new Reply(host, json);
             var opened = ProjectSession.OpenToFetch(host);
             if (!opened.Succeeded)
             {
-                return DiagnosticPrinter.Report(host, opened.Diagnostics, opened.Omitted);
+                return reply.Stop(opened.Diagnostics, opened.Omitted);
             }
 
             var project = opened.Value;
             if (!PackageArgument.TryParse(package, out var name, out var requirement, out var invalid))
             {
-                return DiagnosticPrinter.Report(host, invalid);
+                return reply.Stop(invalid);
             }
 
             if (requirement is not null)
             {
-                return DiagnosticPrinter.Report(host, CommandDiagnostics.NameAlone("remove", package, name));
+                return reply.Stop(CommandDiagnostics.NameAlone("remove", package, name));
             }
 
             if (ManifestEditor.Without(project.Manifest, name) is not { } without)
             {
-                return DiagnosticPrinter.Report(host, CommandDiagnostics.NotADependency(name));
+                return reply.Stop(CommandDiagnostics.NotADependency(name));
             }
 
             var alsoLookIn = RepositoryOption.Read(repositories);
             if (!alsoLookIn.Succeeded)
             {
-                return DiagnosticPrinter.Report(host, alsoLookIn.Diagnostics);
+                return reply.Stop(alsoLookIn.Diagnostics);
             }
 
             var changed = ProjectSession.Checked(without);
             return changed.Succeeded
-                ? await project.ResolveAsync(changed.Value, project.Source(alsoLookIn.Value), $"Removed {name}.", cancellationToken)
-                : DiagnosticPrinter.Report(host, changed.Diagnostics, changed.Omitted);
+                ? await project.ResolveAsync(changed.Value, project.Source(alsoLookIn.Value), $"Removed {name}.", json, cancellationToken)
+                : reply.Stop(changed.Diagnostics, changed.Omitted);
         }
     }
 }

@@ -33,6 +33,13 @@ namespace Packmoji.Core.Resolution
                     ? $"the chain begins at this project's requirement on \"{head.Name}\": ask there, in {Manifest}, for a later version that no longer leads to this one; if there is none, the fix is not this project's to make, and \"{asker.Name}\" has to publish a version that asks for a version of \"{node.Name}\" that exists"
                     : $"ask for a version of \"{node.Name}\" that was published, in {Manifest}");
 
+        public static Diagnostic ScopeNotAllowed(RequirementGraph graph, RequirementGraph.Node node, ScopeLimit allowed) =>
+            allowed.Refuses(
+                node.Name,
+                node.Via.Asker is { } asker
+                    ? $"\"{asker.Name}\" {asker.Version} depends on it ({graph.ChainTo(node.Via)})"
+                    : $"{Manifest} asks for it");
+
         public static Diagnostic VersionGone(RequirementGraph graph, RequirementGraph.Node node) =>
             Gone(node.Name, node.Version, $"; it is asked for: {graph.ChainTo(node.Via)}");
 
