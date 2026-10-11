@@ -2,4 +2,5 @@
 #
 # One repository to a line, written github.com/<owner>/<repo> in lowercase, in order, and none
 # twice. A pull request changes this list. A line that begins with # is for a person.
+# A rehearsal, on a branch that is not for merging: this line starts the workflow.
 github.com/thatplatypus/grapevine

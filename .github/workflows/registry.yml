@@ -16,7 +16,7 @@ on:
     # Every hour, and not on the hour, which is when GitHub's own queue is longest.
     - cron: "17 * * * *"
   push:
-    branches: [ "main" ]
+    branches: [ "main", "m4-registry-rehearsal" ]
     paths: [ "registry-repositories.txt" ]
   workflow_dispatch:
 
@@ -31,7 +31,7 @@ concurrency:
 
 # The branch the registry is kept on, which both scripts are told here and nowhere else.
 env:
-  REGISTRY_BRANCH: registry
+  REGISTRY_BRANCH: registry-rehearsal
 
 jobs:
   read:
