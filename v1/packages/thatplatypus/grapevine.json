@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "name": "@thatplatypus/grapevine",
+  "versions": [
+    {
+      "version": "0.1.0",
+      "status": "active",
+      "source": "github.com/thatplatypus/grapevine",
+      "sha256": "10972d8e76708f1db449304a5702ccc02f9c646c414876604c5cf5d32cd35742",
+      "size": 810579,
+      "verified": "checksum",
+      "immutable": true,
+      "published": "2026-10-11T15:33:16Z",
+      "indexed": "2026-10-11T22:09:11Z",
+      "dependencies": {
+        "@thatplatypus/crypto": "0.1",
+        "@thatplatypus/deflate": "0.1"
+      }
+    }
+  ]
+}
