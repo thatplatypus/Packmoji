@@ -83,7 +83,16 @@ namespace Packmoji.Core.Registry
                     }
                     else if (refused != was?.Find(tag))
                     {
-                        changes.Add((Refused, $"refused {tag} in {repository}: {refused.Why}"));
+                        // What a run refuses, it refuses in the registry's own words. Words that are
+                        // not are not repeated here: they may be anything.
+                        if (RefusalReasons.IsOne(refused.Code, refused.Why))
+                        {
+                            changes.Add((Refused, $"refused {tag} in {repository}: {refused.Why}"));
+                        }
+                        else
+                        {
+                            broken.Add($"the reason {tag} in {repository} is refused for is not one of the registry's own under the code it is given");
+                        }
                     }
                 }
             }

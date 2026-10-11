@@ -36,8 +36,14 @@ namespace Packmoji.Core.Tests.Registry
 
         public static RegistryPackage Package(string name, params RegistryVersion[] versions) => new(Sample.Name(name), versions);
 
-        public static RefusedRelease Refusal(string tag, string why = "its file is not an archive as pmj pack writes one", string sha256 = RegistryFixture.Sha) =>
-            new(tag, Sample.ShaOf(sha256), Time("2026-10-12T08:17:03Z"), "archive.invalid", why);
+        /// <summary>A refusal as a run records one: under the code that goes with the reason, or under <c>archive.invalid</c> for words that are no reason of the registry's.</summary>
+        public static RefusedRelease Refusal(string tag, string why = "its file is not an archive as pmj pack writes one", string sha256 = RegistryFixture.Sha, string? code = null) =>
+            new(
+                tag,
+                Sample.ShaOf(sha256),
+                Time("2026-10-12T08:17:03Z"),
+                code ?? RefusalReasons.All.Select(reason => reason.Code).Distinct().FirstOrDefault(known => RefusalReasons.IsOne(known, why)) ?? "archive.invalid",
+                why);
 
         public static RefusedReleases Refused(string repository, params RefusedRelease[] releases) => new(Sample.Repository(repository), releases);
 

