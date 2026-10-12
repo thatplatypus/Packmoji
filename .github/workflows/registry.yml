@@ -13,8 +13,8 @@ name: Registry
 
 on:
   schedule:
-    # Every hour, and not on the hour, which is when GitHub's own queue is longest.
-    - cron: "17 * * * *"
+    # Once a day, and not on the hour, which is when GitHub's own queue is longest. The time is UTC.
+    - cron: "17 9 * * *"
   push:
     branches: [ "main" ]
     paths: [ "registry-repositories.txt" ]

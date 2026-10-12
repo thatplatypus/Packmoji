@@ -162,10 +162,10 @@ namespace Packmoji.Cli.Tests.Scripts
 
         // A schedule runs on the default branch alone, so nothing here can be started for another.
         [Fact]
-        public void The_registry_is_kept_every_hour_when_its_list_changes_and_by_hand()
+        public void The_registry_is_kept_once_a_day_when_its_list_changes_and_by_hand()
         {
             Workflow("registry.yml").ShouldContain(
-                "\non:\n  schedule:\n    # Every hour, and not on the hour, which is when GitHub's own queue is longest.\n    - cron: \"17 * * * *\"\n"
+                "\non:\n  schedule:\n    # Once a day, and not on the hour, which is when GitHub's own queue is longest. The time is UTC.\n    - cron: \"17 9 * * *\"\n"
                 + "  push:\n    branches: [ \"main\" ]\n    paths: [ \"registry-repositories.txt\" ]\n  workflow_dispatch:\n\n");
         }
 
@@ -281,7 +281,7 @@ namespace Packmoji.Cli.Tests.Scripts
         }
 
         [Fact]
-        public void The_guide_to_the_registry_names_the_branch_the_hour_and_the_two_jobs_as_the_workflow_has_them()
+        public void The_guide_to_the_registry_names_the_branch_how_often_it_is_kept_and_the_two_jobs_as_the_workflow_has_them()
         {
             var guide = File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "docs", "registry.md")).ReplaceLineEndings("\n");
             var registry = Workflow("registry.yml");
@@ -290,9 +290,9 @@ namespace Packmoji.Cli.Tests.Scripts
             branch.ShouldNotBeEmpty();
             guide.ShouldContain($"On the branch `{branch}` of ");
             guide.ShouldContain($"\nhttps://raw.githubusercontent.com/thatplatypus/Packmoji/{branch}/v1/packages/");
-            Regex.IsMatch(registry, "\n    - cron: \"[0-9]+ \\* \\* \\* \\*\"\n").ShouldBeTrue("the schedule is no longer once an hour");
-            guide.ShouldContain("runs every hour, when the list changes, and when it is started by hand");
-            guide.ShouldContain("a new release is in the registry within the hour");
+            Regex.IsMatch(registry, "\n    - cron: \"[0-9]+ [0-9]+ \\* \\* \\*\"\n").ShouldBeTrue("the schedule is no longer once a day");
+            guide.ShouldContain("runs once a day, when the list changes, and when it is started by hand");
+            guide.ShouldContain("a new release is in the registry within a day");
             guide.ShouldContain("\n| `read` | Read this repository | ");
             guide.ShouldContain("\n| `write` | Write to this repository | ");
             Job(registry, "read").ShouldNotBeEmpty();

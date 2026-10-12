@@ -22,7 +22,7 @@ Record 0007 says what finding packages on GitHub directly cannot do. A package i
 - **Every version is held at every run,** by the digest GitHub lists for each file of a release. A difference is confirmed by downloading the file before a version is quarantined.
 - **The workflow is two jobs.** One asks GitHub, reads archives, and has no right to write. One has the right to write, reads what the first made as data, holds it to the rules and to the registry as it stood, and commits it.
 - **A commit follows the commit the registry was taken from, and is never forced.**
-- **It runs every hour, when the list changes, and when it is started by hand.**
+- **It runs once a day, when the list changes, and when it is started by hand.**
 - **A reader passes over a key it does not know.** A change that an older `pmj` could not read gets a directory of its own, `v2`.
 - **The program that keeps the registry is not part of `pmj`.** It is `src/Packmoji.Indexer`, with two commands: `run` and `check`.
 
@@ -63,6 +63,7 @@ These were seen on 2026-10-11, and are what the design stands on.
 - **GitHub's own digests, because they hold every version for the price of the list** that is asked for anyway. A sample would hold a few. The bytes are still what decides: nothing is quarantined until they have been seen.
 - **Two jobs, because the token that commits the registry is a token for the repository `pmj` is released from.** What reads a stranger's archive must not hold it. And what holds it checks the work again, in other code than did it: a run that was misled, by a mistake or by an archive made to mislead it, can add a version and can refuse one, and cannot change which bytes a version is.
 - **Never forced, so that a person's commit to the branch is never written over.**
+- **Once a day, on the owner's word.** Packages are not released, and not looked for, so often that an hour matters. Whoever needs a release indexed sooner starts a run by hand, and whoever needs to use one sooner asks GitHub itself with `--direct`.
 - **A reader that passes over what it does not know, because every `pmj` ever released reads the registry.** The manifest's rule, that an unknown key is an error, would stop each of them the day a key was added.
 - **Reasons from a fixed set, because a reason is shown to people and printed by tools,** and what an archive holds is a stranger's text.
 
@@ -70,23 +71,25 @@ These were seen on 2026-10-11, and are what the design stands on.
 
 - **The brief's server.** It answers at once when a release is made, and it can search. Its cost is above.
 - **Blob storage.** The same files. The job that writes needs an identity there, and blobs keep no history, so the record of changes would have to be designed. A branch gives both.
-- **A repository of its own.** It keeps the token that writes the registry away from the tool altogether, and the hourly runs out of the tool's list of runs. It is where the registry goes if this one comes to be too small for both.
+- **A repository of its own.** It keeps the token that writes the registry away from the tool altogether, and the daily runs out of the tool's list of runs. It is where the registry goes if this one comes to be too small for both.
 - **A folder on `main`.** The two histories would be one, and hard to part again.
 - **One file for the whole registry.** It is the least to build. Every command would download every package's history, and the day that is too much is a new format.
 - **Letting anyone ask for a repository to be indexed,** by a topic on the repository, an issue, or a small endpoint. Each has to be defended against whoever asks for a thousand.
 - **A log of events as a file.** The commits are that log, and nobody can edit them unseen.
 - **The indexer as a command of `pmj`.** It would put the registry's keeper in every copy of the tool.
+- **Every hour.** It was how the registry was kept on its first day. A release was in the registry within the hour, for 24 runs a day in this repository's list of runs.
 - **Holding each added version to GitHub's own list in the job that commits.** A misled run could then add only what GitHub lists. The job that may write would read from the network, which it does not: all it reads is what the first job made.
 
 ## Consequences
 
-- **A release is in the registry within the hour, and not at once.** GitHub may run a schedule late or drop a run, and what it serves of a branch may be five minutes old. A run can be started by hand.
+- **A release is in the registry within a day, and not at once.** GitHub may run a schedule late or drop a run, and what it serves of a branch may be five minutes old. A run can be started by hand.
 - **The registry cannot be asked why it refused a release.** The file of what was refused says, at the next run.
-- **Each run is two jobs in this repository's list of runs,** 24 times a day.
+- **Each run is two jobs in this repository's list of runs,** once a day.
 - **GitHub turns the schedule off after 60 days in which nothing happens in the repository.** It is turned on again by hand.
 - **`pmj` reads the registry only when it is told where it is:** record 0013. Until it reads one with nothing said, the address is the branch's own.
 - **Withdrawing a version is not decided.** A version whose release was deleted stays as it is, and a run says that the release is gone.
 - **A misled run can take a version's number.** What it adds is held to the rules and not to GitHub's list. A version it adds before any release carries it is quarantined when the real release comes, and a person's commit to the branch is what puts it right.
 - **The repositories take turns at what a run may download.** Whoever is listed could otherwise keep everyone after them waiting, by releasing enough.
+- **What is over a run's limit waits a day.** A run downloads at most 64 files and 256 MiB, so a repository that is listed with more releases than that is indexed over several days, or over several runs started by hand.
 - **A run asks GitHub once for every hundred releases of each listed repository,** and the workflow's token may ask 1,000 times an hour. That is room for some hundreds of repositories, and not for thousands.
 - **Search needs a file that lists every package,** which nothing writes yet.

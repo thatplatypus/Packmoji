@@ -212,15 +212,15 @@ namespace Packmoji.Core.Tests.Registry
             var notFound = result.ShouldFailWith(DiagnosticCodes.PackageNotFound);
             notFound.Message.ShouldBe("\"@thatplatypus/sockets_more\" is not in the registry.");
             notFound.Reason.ShouldBe("https://registry.example/v1/packages/thatplatypus/sockets_more.json is not there; it is asked for: @someone/app → @thatplatypus/sockets_more@1.0");
-            notFound.Fix.ShouldBe("check that https://registry.example is the address a registry's v1 is under, for one that is not answers the same way; if it is, and the package's repository is on the registry's list, a release is in the registry within the hour; to ask GitHub itself, run the command again with --direct");
+            notFound.Fix.ShouldBe("check that https://registry.example is the address a registry's v1 is under, for one that is not answers the same way; if it is, and the package's repository is on the registry's list, a release is in the registry within a day; to ask GitHub itself, run the command again with --direct");
             notFound.Fix.ShouldContain("--direct");
         }
 
         [Fact]
         public async Task Of_a_version_that_is_not_in_the_registry_though_its_package_is_a_resolution_says_that_and_not_that_it_was_never_published()
         {
-            // A release may be an hour old, or may have been refused: that the registry does not
-            // hold a version is all a registry can say of it.
+            // A release may be newer than the last run, or may have been refused: that the registry
+            // does not hold a version is all a registry can say of it.
             var files = await IndexedAsync(Released());
             var manifest = Project.Named("@someone/app", ["@thatplatypus/crypto@1.1"], []);
 
@@ -229,7 +229,7 @@ namespace Packmoji.Core.Tests.Registry
             var missing = result.ShouldFailWith(DiagnosticCodes.ResolveVersionMissing).ShouldBeComplete();
             missing.Message.ShouldBe("Version 1.1.0 of \"@thatplatypus/crypto\" is not in the registry.");
             missing.Reason.ShouldBe("https://registry.example/v1/packages/thatplatypus/crypto.json holds 3 versions of it, and this is not one of them; it is asked for: @someone/app → @thatplatypus/crypto@1.1");
-            missing.Fix.ShouldBe("ask for a version the registry holds; a release is in the registry within the hour of being made, unless the registry refused it, which https://registry.example/v1/refused/thatplatypus/grapevine.json says; to ask GitHub itself, run the command again with --direct");
+            missing.Fix.ShouldBe("ask for a version the registry holds; a release is in the registry within a day of being made, unless the registry refused it, which https://registry.example/v1/refused/thatplatypus/grapevine.json says; to ask GitHub itself, run the command again with --direct");
         }
 
         [Fact]
@@ -346,7 +346,7 @@ namespace Packmoji.Core.Tests.Registry
 
             var missing = result.ShouldFailWith(DiagnosticCodes.ResolveVersionMissing).ShouldBeComplete();
             missing.Reason.ShouldBe("https://registry.example/v1/packages/thatplatypus/crypto.json holds no version of it; it is asked for: @someone/app → @thatplatypus/crypto@1.0");
-            missing.Fix.ShouldBe("ask for a version the registry holds; a release is in the registry within the hour of being made; to ask GitHub itself, run the command again with --direct");
+            missing.Fix.ShouldBe("ask for a version the registry holds; a release is in the registry within a day of being made; to ask GitHub itself, run the command again with --direct");
         }
 
         [Fact]

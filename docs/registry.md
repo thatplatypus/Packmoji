@@ -202,7 +202,7 @@ For each listed repository, and each claim in it:
 - **An indexed version whose release has been deleted stays as it is.** The run says that the release is gone.
 - **A repository that cannot be reached is left as it was,** and the others are still done.
 - **A repository that is taken off the list keeps its versions.** They are not looked at again.
-- **A run downloads at most 64 files and 256 MiB.** What is over is left for the next run.
+- **A run downloads at most 64 files and 256 MiB.** What is over is left for the next run, which is a day later unless one is started by hand.
 - **The repositories take turns at that.** One file is downloaded for each in its order, and then for each again, round and round. So the releases of one repository, however many they are, do not keep another's waiting.
 - **A run that finds nothing new writes nothing.**
 
@@ -224,11 +224,11 @@ github.com/thatplatypus/grapevine
 - **One repository to a line,** written `github.com/<owner>/<repo>` in lowercase, in order, and none twice.
 - **The repository has to be public.**
 - **Once the pull request is merged, the registry is kept again at once,** and every release the repository already has is looked at.
-- **After that, a new release is in the registry within the hour.** There is nothing to tell the registry, and nothing to sign up for.
+- **After that, a new release is in the registry within a day.** There is nothing to tell the registry, and nothing to sign up for.
 
 ## How it is kept
 
-The workflow [`Registry`](../.github/workflows/registry.yml) runs every hour, when the list changes, and when it is started by hand. It is two jobs.
+The workflow [`Registry`](../.github/workflows/registry.yml) runs once a day, when the list changes, and when it is started by hand. It is two jobs.
 
 | Job | May | Does |
 |---|---|---|
